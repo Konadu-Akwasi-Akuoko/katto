@@ -130,9 +130,9 @@ Found a vulnerability? Please report it privately — see [SECURITY.md](SECURITY
 
 <a href="https://www.star-history.com/#Konadu-Akwasi-Akuoko/katto&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Konadu-Akwasi-Akuoko/katto&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Konadu-Akwasi-Akuoko/katto&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Konadu-Akwasi-Akuoko/katto&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=konadu-akwasi-akuoko/katto&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=konadu-akwasi-akuoko/katto&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=konadu-akwasi-akuoko/katto&type=Date" />
   </picture>
 </a>
 
