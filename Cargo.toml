@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/katto-engine", "crates/katto-cli", "src-tauri"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["Akwasi Konadu Akuoko"]
 license = "MIT"
