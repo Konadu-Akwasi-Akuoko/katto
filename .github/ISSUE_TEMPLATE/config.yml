@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and discussions
+    url: https://github.com/Konadu-Akwasi-Akuoko/katto/discussions
+    about: Have a question, idea, or want to chat about the project? Open a discussion.
+  - name: Security vulnerabilities
+    url: https://github.com/Konadu-Akwasi-Akuoko/katto/security/advisories/new
+    about: Please report security issues privately, not as public issues.

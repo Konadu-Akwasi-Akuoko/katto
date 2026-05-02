@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# superpowers
+docs/superpowers
+
+# skills and agents
+skills
+agents
+
+# output
+output
+
+# Rust / Cargo (root-level fallback; src-tauri has its own too)
+target/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS / editor scratch
+Thumbs.db
