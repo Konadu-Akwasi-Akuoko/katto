@@ -1857,12 +1857,24 @@ dependencies = [
 name = "katto"
 version = "0.1.0"
 dependencies = [
+ "katto-engine",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
 ]
+
+[[package]]
+name = "katto-cli"
+version = "0.1.0"
+dependencies = [
+ "katto-engine",
+]
+
+[[package]]
+name = "katto-engine"
+version = "0.1.0"
 
 [[package]]
 name = "keyboard-types"
