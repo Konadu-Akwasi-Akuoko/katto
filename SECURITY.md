@@ -12,7 +12,7 @@ Instead, use one of the following private channels:
 
 1. **GitHub Security Advisories** (preferred) — open a private advisory at
    https://github.com/Konadu-Akwasi-Akuoko/katto/security/advisories/new
-2. **Email** — send a report to **akwasikonadueverlasting@gmail.com** with the subject line `katto security report`.
+2. **Email** — send a report to **akwasikonadueverlasting+katto@gmail.com** with the subject line `katto security report`.
 
 Please include:
 
