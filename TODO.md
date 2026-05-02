@@ -10,12 +10,12 @@ Order is dependency-driven: each milestone unblocks the next. Do not start a mil
 
 The current repo is a single-crate Tauri scaffold. The spec wants a Cargo workspace with the engine as a library, a CLI binary, and the Tauri app as a third member sharing the engine.
 
-- [ ] Convert root `Cargo.toml` into a workspace manifest with members: `crates/katto-engine`, `crates/katto-cli`, `src-tauri`
-- [ ] Create `crates/katto-engine` (library crate, no UI deps)
-- [ ] Create `crates/katto-cli` (binary crate, depends on `katto-engine`)
-- [ ] Update `src-tauri/Cargo.toml` to depend on `katto-engine` via workspace path
-- [ ] Verify `cargo build --workspace` succeeds and the existing Tauri dev shell still launches (`bun run tauri dev`)
-- [ ] Pin a Rust toolchain (`rust-toolchain.toml`, stable)
+- [x] Convert root `Cargo.toml` into a workspace manifest with members: `crates/katto-engine`, `crates/katto-cli`, `src-tauri`
+- [x] Create `crates/katto-engine` (library crate, no UI deps)
+- [x] Create `crates/katto-cli` (binary crate, depends on `katto-engine`)
+- [x] Update `src-tauri/Cargo.toml` to depend on `katto-engine` via workspace path
+- [x] Verify `cargo build --workspace` succeeds and the existing Tauri dev shell still launches (`bun run tauri dev`)
+- [x] Pin a Rust toolchain (`rust-toolchain.toml`, stable)
 
 **Done when:** workspace builds clean; Tauri app still runs the default scaffold; `cargo run -p katto-cli -- --help` prints clap-generated help.
 
