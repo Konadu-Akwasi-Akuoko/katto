@@ -7,7 +7,7 @@ https://www.contributor-covenant.org/version/2/1/code_of_conduct/code_of_conduct
 
 ## Reporting
 
-If you experience or witness behavior that violates the Code of Conduct, please report it privately to the maintainer at **akwasikonadueverlasting@gmail.com**. All reports will be reviewed and investigated promptly and confidentially.
+If you experience or witness behavior that violates the Code of Conduct, please report it privately to the maintainer at **[akuoko_konadu](https://x.com/akuoko_konadu/)**. All reports will be reviewed and investigated promptly and confidentially.
 
 ## Enforcement
 
