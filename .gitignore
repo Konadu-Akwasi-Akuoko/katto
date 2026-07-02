@@ -43,3 +43,6 @@ target/
 
 # OS / editor scratch
 Thumbs.db
+
+# clean audio output
+clean-audio-out/
