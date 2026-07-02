@@ -1,0 +1,57 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(./src-tauri/gen/**)",
+      "Edit(./src/lib/ipc/bindings.gen.ts)",
+      "Edit(./Cargo.lock)",
+      "Edit(./bun.lock)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ],
+    "allow": [
+      "Bash(cargo fmt *)",
+      "Bash(cargo clippy *)",
+      "Bash(cargo test *)",
+      "Bash(cargo insta *)",
+      "Bash(cargo check *)",
+      "Bash(bun install)",
+      "Bash(bun run *)",
+      "Bash(bunx *)",
+      "Bash(just *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-generated.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format-on-edit.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-gate.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

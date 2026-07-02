@@ -23,12 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 
-# superpowers
-docs/superpowers
+# superpowers (private local specs — intentionally uncommitted)
+/docs/superpowers
 
-# skills and agents
-skills
-agents
+# local-only skills and agents at repo root (NOT .claude/skills or .claude/agents)
+/skills
+/agents
 
 # output
 output
