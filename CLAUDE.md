@@ -1,9 +1,57 @@
-## Spec
+# katto — Studio OS
 
-**Current direction — Studio OS (read this first):**
-@docs/superpowers/specs/2026-07-02-studio-os-design.md — the approved design + all locked decisions for katto's evolution into the owner's personal, macOS-only Studio OS. It defines the immediate deliverable (the `prd/` folder) and the five-phase roadmap, and supersedes the cross-platform/public-product framing below.
+Personal, macOS-only, menu-bar-resident Tauri 2 app running the owner's entire YouTube
+production workflow: planning → SD ingest → AI rough cut → NLE export → assets → thumbnails,
+with every AI task visible in a Claude session dock. One user, one Mac. Not a public product.
 
-Original cut-editor core spec (still normative where §12 of the doc above says so):
-@docs/superpowers/specs/app_design_rough_cut.md
+## Source of truth
 
-A read-only reference mirror of the owner's hyper-frames skills/agents/tools lives at `hyper-frames/` (see its README).
+- **`prd/` is the in-repo source of truth.** Start at `prd/index.md` (doc map, feature→phase
+  matrix, status). Each `prd/phase-N.md` is a complete PRD — implement a phase from its PRD
+  without re-deriving decisions. Locked decisions + rationale: `prd/README.md`.
+- The original design specs live in `docs/superpowers/` which is **gitignored (local-only,
+  private)** — never reference it as if committed; the PRDs distill everything needed from it.
+  Same for root `agents/` (cut-decider prompt) and `skills/` (clean-audio reference pipeline):
+  local-only inputs, ported into the repo when their phase implements them.
+- `hyper-frames/` is a read-only reference mirror of the owner's skills/agents/tools repo.
+  Where a katto module overlaps it (studio DB schema, promote flow, cut-video ffmpeg math,
+  audio-editor UX, curation judgment), read the mirror first and reuse its schemas verbatim.
+
+## Workspace
+
+- `crates/katto-engine` — pure Rust library (media pipeline, validators, emitters). Never
+  depends on tauri or UI concerns.
+- `crates/katto-cli` — thin CLI over the engine.
+- `src-tauri` — the Tauri app crate (`katto`, lib `katto_lib`); thin IPC shell over the engine.
+- `src/` — React 19 + TypeScript + Vite frontend. Package manager: **bun** (never npm/yarn).
+
+Dependency direction is one-way: app → engine, cli → engine.
+
+## Commands
+
+- **Gate: `just check`** (fmt-check + clippy `-D warnings` + cargo test + tsc). CI mirrors it
+  1:1. Never claim work done without it passing. Run from the workspace root.
+- Dev app: `bun run tauri dev`. Frontend only: `bun run dev`.
+
+## Invariants (non-negotiable)
+
+- Rational time (`Rational {num, den}`) end-to-end in the engine; floats only at UI and
+  model/transcript boundaries.
+- Media bytes never cross `invoke` — asset protocol only. JS owns live edit state; debounced
+  auto-save is the only interactive bridge call; long ops stream via `Channel<T>`.
+- Folders are truth; SQLite is an index reconciled on launch.
+- Nothing fails silently: every background op is a `jobs` row + `events` row.
+- No numeric scoring/ranking anywhere in planning or curation — AI suggests, human decides.
+- Versioned exports (`timelines/*-vN`) are never overwritten; artifact writes are atomic
+  (`.tmp` → rename).
+- Conventional commits, one concern per commit, tests travel with their feature commit.
+
+## Guidance layout
+
+- Per-language style rules auto-load from `.claude/rules/` (rust, tauri-commands, frontend,
+  testing) — follow them; don't restate them here.
+- Procedures: `add-tauri-command`, `add-db-migration`, `add-feature-surface`,
+  `emitter-snapshot-change` skills. Invoke before doing those tasks by hand.
+- Hooks enforce formatting, protect generated files (`src-tauri/gen/`, `bindings.gen.ts`,
+  lockfiles, `.snap.new`), and gate turn-end on a fast check. Reviewer agents `rust-reviewer`
+  and `frontend-reviewer` run on the diff before a task is declared done.
