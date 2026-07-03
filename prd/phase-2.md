@@ -3,7 +3,7 @@
 ## Goal
 
 The planning spine: ideas captured from anywhere, triaged in a Backlog, promoted into real
-project folders on the SSD in one motion, visualized on a Board and Calendar, surfaced in the
+project folders in the studio root in one motion, visualized on a Board and Calendar, surfaced in the
 tray — with the filesystem, not the DB, as the source of truth.
 
 ## Why this order
@@ -16,8 +16,8 @@ inside them, the dock works in their folders). The promote flow fixes the slug c
 
 - Watching a video at lunch, I hit the global hotkey, type an idea, hit return — it's in the
   backlog without katto's window ever opening.
-- In the Backlog I discard weak ideas and promote a strong one; a project folder appears on the
-  SSD and a card appears on the Board, in one motion.
+- In the Backlog I discard weak ideas and promote a strong one; a project folder appears in the
+  studio root and a card appears on the Board, in one motion.
 - I set the shoot day and publish day; the Calendar shows my week and the tray says
   "shooting Thursday: NVMe deep dive".
 - I delete a project folder in Finder; the card is gone next launch. katto never "helpfully"
@@ -127,6 +127,6 @@ tracks katto's pipeline).
 
 ## Exit criteria
 
-Idea captured via the global hotkey from another app → promoted → real folder on the SSD +
+Idea captured via the global hotkey from another app → promoted → real folder in the studio root +
 card on the Board; Calendar shows its shoot date; tray shows "shooting <day>: <title>";
 `just check` green.

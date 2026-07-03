@@ -23,7 +23,7 @@ Every feature from the approved design (§3–§9), mapped. Nothing dropped.
 
 | Design area | Feature | Phase |
 |---|---|---|
-| §3 Project model | Studio root on external SSD, picker at onboarding | 1 |
+| §3 Project model | Studio root (any dir; external SSD recommended), picker at onboarding | 1 |
 | §3 | "Drive disconnected" state + reconnect hint | 1 |
 | §3 | Project folder anatomy + `project.json` manifest | 2 |
 | §3 | Folder-is-truth scan/reconcile on launch | 2 |
@@ -53,6 +53,7 @@ Every feature from the approved design (§3–§9), mapped. Nothing dropped.
 | §6 | Waveform (wavesurfer v7) | 5 |
 | §6 | Undo/redo persisted across sessions; 200 ms debounced auto-save | 5 |
 | §6/§7 | FCPXML 1.11 export **with rescue track**; versioned `timelines/`; "Open in Final Cut" | 5 |
+| §7 | NLE target (`default_nle`): seeded at first export, sticky last-used default | 5 |
 | §7 | MP4 render (deterministic filtergraph) + SRT/VTT captions | 5 |
 | §7 | CLI (`katto cut/import/transcribe/plan/render/export/auth status`) | 4–5 |
 | §7 | Resolve Studio scripting-API import ("Open in Resolve") | 7 |
@@ -65,7 +66,7 @@ Every feature from the approved design (§3–§9), mapped. Nothing dropped.
 | §9 Thumbnails | PSD scaffold from bundled templates; open Photoshop; PNG folder watch | 7 |
 | §10 Shell | Tray (live state) · hide-to-tray · launch-at-login · single instance | 1 |
 | §10 | ⌘K palette covering every app action (registry grows per phase) | 1 (framework) → all |
-| §10 | Onboarding (root, ElevenLabs key, claude detection, NLE pref) | 1 |
+| §10 | Onboarding (root, ElevenLabs key, claude detection) | 1 |
 | §10 | Jobs framework ("nothing fails silently") | 1 |
 | §10 | Notifications with deep-link click-through | 2 |
 | §10 | Design-polish ("joy") pass | 7 |
