@@ -40,6 +40,47 @@ to what katto already uses, so novel utilities may not resolve. For rounding use
 components' own corners or `rounded-md` / `rounded-lg`: radii are modest (controls ~6px,
 cards ~10px) and **there are no full pills**.
 
+## Voice and anti-tells — this DS must NOT look AI-generated
+
+katto is a **characterful workshop**, not a dashboard and not a landing page: dense,
+keyboard-first, warm. Character comes from restraint, warmth, and grain — never decoration.
+If a layout reads as themed, decorated, or templated, it is wrong. The reference discipline is
+Raycast / Zed / Linear (quiet, dense, pro tools); the warmth is the ember accent and a faint
+grain, not ornament.
+
+**Never produce these — they read as AI-generated:**
+
+- Mono-uppercase-letterspaced **eyebrows / kickers / preheads**. Put the context in the heading
+  or a plain inline label, or omit it.
+- **An accent rail / coloured stripe down the side of a card.** Encode state ONCE — a chip or a
+  dot — never also a stripe. (A card with a "failed" chip must not also get a red left border.)
+- **Monospace as decorative texture.** `font-mono` is machine data ONLY (timecodes, file paths,
+  ids, rational time), always with `tabular-nums` — never for labels, headings, or chrome.
+- Interpunct `·` as separator filler; fake part-numbers or faux-metadata as decoration.
+- Bento grids; `01 / 02 / 03` numbered markers unless it's a real ordered sequence; emoji as
+  section markers or bullets.
+- Gradient heroes (especially purple→blue); glassmorphism / frosted panels.
+- Everything centered; everything `rounded-2xl`; full-pill buttons; flawless symmetry with no
+  texture.
+- Downloaded webfonts (Inter, Space Grotesk, thin-line Lucide, etc.). katto uses only native
+  Apple faces — serif New York, sans SF Pro, mono SF Mono — served by the OS.
+
+**Type discipline**: serif (`font-serif`) for display, titles, and the wordmark — that's the
+warmth; sans (SF Pro, the default) for all UI and body; mono (`font-mono`) for machine data
+only. Mono is for machines, never texture.
+
+**Native-app signals** (this is a macOS app, not a website): arrow cursor on controls (no hand
+pointer); `tabular-nums` wherever digits align; focus ring `2px solid var(--ember)` at 2px
+offset; disabled at ~45% opacity; modest radii (6px controls, 10px cards), no pills. A faint
+grain already lives in the surfaces (`Card` carries it) — never add a live `filter:` noise
+layer or a full-viewport overlay.
+
+**Copy voice**: write from the user's side of the screen, active voice. A control says exactly
+what it does ("Export to Final Cut"), then a result. Errors say what broke and how to fix it.
+Banned copy tells: "not just X, it's Y" negative parallelism, rule-of-three everywhere,
+"delve," "seamless / effortless / elevate / unlock," "in today's fast-paced world." Specific
+beats clever.
+
 ## Where the truth lives
 
 - `styles.css` (and its `@import`s, incl. `_ds_bundle.css`) — the single stylesheet; the
@@ -54,11 +95,11 @@ const { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, B
 
 <Card>
   <CardHeader>
-    <CardTitle>Rough Cut · draft-v3</CardTitle>
-    <CardDescription>AI-assembled from 4 SD cards · 18 clips kept</CardDescription>
+    <CardTitle>Rough Cut — draft-v3</CardTitle>
+    <CardDescription>AI-assembled from 4 SD cards, 18 clips kept</CardDescription>
   </CardHeader>
   <CardContent className="text-muted-foreground text-sm">
-    Duration 12:41 · 1080p ProRes
+    12:41, 1080p ProRes
   </CardContent>
   <CardFooter style={{ gap: 8 }}>
     <Button>Open in NLE</Button>
