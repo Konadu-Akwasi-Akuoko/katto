@@ -31,7 +31,8 @@ Dependency direction is one-way: app → engine, cli → engine.
 
 - **Gate: `just check`** (fmt-check + clippy `-D warnings` + cargo test + tsc). CI mirrors it
   1:1. Never claim work done without it passing. Run from the workspace root.
-- Dev app: `bun run tauri dev`. Frontend only: `bun run dev`.
+- Dev app: `bun run tauri dev`. Frontend only: `bun run dev`. **The owner runs the dev server
+  personally most of the time — don't start it yourself; assume it's already running or ask.**
 
 ## Invariants (non-negotiable)
 
