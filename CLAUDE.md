@@ -9,10 +9,13 @@ with every AI task visible in a Claude session dock. One user, one Mac. Not a pu
 - **`prd/` is the in-repo source of truth.** Start at `prd/index.md` (doc map, feature→phase
   matrix, status). Each `prd/phase-N.md` is a complete PRD — implement a phase from its PRD
   without re-deriving decisions. Locked decisions + rationale: `prd/README.md`.
-- The original design specs live in `docs/superpowers/` which is **gitignored (local-only,
-  private)** — never reference it as if committed; the PRDs distill everything needed from it.
-  Same for root `agents/` (cut-decider prompt) and `skills/` (clean-audio reference pipeline):
-  local-only inputs, ported into the repo when their phase implements them.
+- The original design specs live in `docs/superpowers/`, mostly **gitignored (local-only,
+  private)** — don't reference the private ones as if committed; the PRDs distill everything
+  needed from them. The one committed exception is
+  `docs/superpowers/specs/2026-07-03-katto-design-system.md` (the approved design-system spec,
+  referenced by `.claude/rules/design-system.md`). Same local-only rule for root `agents/`
+  (cut-decider prompt) and `skills/` (clean-audio reference pipeline): local-only inputs,
+  ported into the repo when their phase implements them.
 - `hyper-frames/` is a read-only reference mirror of the owner's skills/agents/tools repo.
   Where a katto module overlaps it (studio DB schema, promote flow, cut-video ffmpeg math,
   audio-editor UX, curation judgment), read the mirror first and reuse its schemas verbatim.

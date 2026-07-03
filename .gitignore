@@ -23,8 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
-# superpowers (private local specs — intentionally uncommitted)
-/docs/superpowers
+# superpowers (private local specs) — keep private EXCEPT the committed design-system spec
+/docs/superpowers/*
+!/docs/superpowers/specs
+/docs/superpowers/specs/*
+!/docs/superpowers/specs/2026-07-03-katto-design-system.md
 
 # local-only skills and agents at repo root (NOT .claude/skills or .claude/agents)
 /skills
@@ -46,3 +49,9 @@ Thumbs.db
 
 # clean audio output
 clean-audio-out/
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+.design-sync/compiled-tailwind.css
