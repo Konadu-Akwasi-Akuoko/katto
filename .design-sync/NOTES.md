@@ -56,6 +56,17 @@ Repo-specific gotchas for future syncs. Read this before re-running.
   `~/Library/Caches/ms-playwright` (macOS cache path, not `~/.cache`). Render check
   and capture pipeline run deterministically.
 
+## Calendar (added 2026-07-03)
+- Adapted from shadcn `new-york-v4` calendar (react-day-picker based), NOT the Base UI
+  `/base/` variant — katto is Radix + Tailwind v4, so the new-york-v4 source matches the
+  other 16. Restyled to katto: Phosphor `Caret*Icon` (never lucide), `@/components/ui/button`,
+  `font-serif` month caption, `tabular-nums` dates. Selection uses `bg-primary` (= ember).
+- Dependency: **react-day-picker v10** (`bun add react-day-picker`). v10 is API-compatible
+  with the shadcn v9 source (getDefaultClassNames, DayButton type, snake_case classNames keys,
+  Root/Chevron/DayButton/WeekNumber slots all present). `date-fns` was NOT needed.
+- Preview pins month to July 2026 so katto's "today" (the 3rd) shows the today marker next to
+  an ember-selected day. Uses controlled `useState` + `mode` (single/range) + `captionLayout`.
+
 ## Preview authoring learnings (proven across all 16)
 - Import components from bare `'katto'` (rewritten to `window.Katto.*`). Editor tsc
   flags "Cannot find module 'katto'" — expected, harmless (esbuild + react-jsx compiles).

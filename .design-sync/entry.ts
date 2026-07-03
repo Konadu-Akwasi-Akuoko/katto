@@ -2,6 +2,7 @@
 // converter bundles them all onto window.Katto. Not used by the app itself.
 export * from "../src/components/ui/badge";
 export * from "../src/components/ui/button";
+export * from "../src/components/ui/calendar";
 export * from "../src/components/ui/card";
 export * from "../src/components/ui/command";
 export * from "../src/components/ui/dialog";

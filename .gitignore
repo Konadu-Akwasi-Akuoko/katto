@@ -24,7 +24,7 @@ dist-ssr
 *.sw?
 
 # superpowers (private local specs — intentionally uncommitted)
-/docs/superpowers
+# /docs/superpowers
 
 # local-only skills and agents at repo root (NOT .claude/skills or .claude/agents)
 /skills

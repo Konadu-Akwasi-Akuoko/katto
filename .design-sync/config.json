@@ -12,6 +12,7 @@
   "componentSrcMap": {
     "Badge": "src/components/ui/badge.tsx",
     "Button": "src/components/ui/button.tsx",
+    "Calendar": "src/components/ui/calendar.tsx",
     "Card": "src/components/ui/card.tsx",
     "Command": "src/components/ui/command.tsx",
     "Dialog": "src/components/ui/dialog.tsx",
