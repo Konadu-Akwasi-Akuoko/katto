@@ -23,8 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
-# superpowers (private local specs — intentionally uncommitted)
-# /docs/superpowers
+# superpowers (private local specs) — keep private EXCEPT the committed design-system spec
+/docs/superpowers/*
+!/docs/superpowers/specs
+/docs/superpowers/specs/*
+!/docs/superpowers/specs/2026-07-03-katto-design-system.md
 
 # local-only skills and agents at repo root (NOT .claude/skills or .claude/agents)
 /skills
