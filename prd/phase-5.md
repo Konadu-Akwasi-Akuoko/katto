@@ -20,9 +20,10 @@ useful daily.
 - I drag a cut's edge on the timeline a few frames; it snaps to the nearest word boundary
   unless I hold Option.
 - Cmd+Z works across app restarts.
-- I export; `nvme-deep-dive-v3.fcpxml` lands in `timelines/` (v1 and v2 untouched); "Open in
-  Final Cut" hands me a timeline where every removed segment sits muted on a second track —
-  one click rescues any AI mistake.
+- I export; the first time, the dialog asks which NLE to open in (Final Cut) and remembers it;
+  `nvme-deep-dive-v3.fcpxml` lands in `timelines/` (v1 and v2 untouched); "Open in Final Cut"
+  hands me a timeline where every removed segment sits muted on a second track — one click
+  rescues any AI mistake.
 
 ## Scope with acceptance criteria
 
@@ -45,7 +46,8 @@ useful daily.
 | FCPXML 1.11 | Hand-written via quick-xml `Writer` behind a typed builder (serde fights the heterogeneous spine; DOCTYPE is manual anyway). One `<sequence>` at source frame rate; `tcFormat` DF for 29.97/59.94 else NDF; asset via percent-encoded `file:///` URL (`url::Url::from_file_path`); **every** `offset/duration/start/frameDuration` a rational `<num>/<den>s` in the format timebase — a decimal second anywhere is a validation failure |
 | Rescue track | Kept segments as `<asset-clip>`s on the primary spine; **every removed segment** emitted on a second, disabled/muted lane (connected clips, `enabled="0"` semantics) so recovery is one click in FCP — new emitter invariant with its own snapshot fixture |
 | Versioning | Exports land at `<project>/timelines/<slug>-v<N>.fcpxml`, N = max existing + 1; never overwrite; emitter output schema-validated before write; `events` row |
-| Open in FCP | `open -a "Final Cut Pro" <file>` post-export action |
+| NLE target | Export dialog surfaces the post-export target (Final Cut in this phase); defaults to the stored `default_nle`; **first export ever** (`default_nle` unset) forces a pick; the choice is persisted to `default_nle` and pre-selected next time; changing it writes back as the new sticky default |
+| Open in FCP | `open -a "Final Cut Pro" <file>` post-export action, launched against the selected NLE target |
 | MP4 render | cut-video pattern **verbatim** (normative source: `hyper-frames/tools/cut-video/src/cut_video/segments.py`): removed spans → coalesce → keep-windows walking 0→EOF, drop keeps ≤ 1-frame epsilon, error loud if everything removed; per-keep `[0:v]trim=S:E,setpts=PTS-STARTPTS[vi]` + `atrim/asetpts`, single `concat=n=N:v=1:a=1`; floats at 6 decimals for byte-identical graphs; graph written to a `filter_complex_script` **file** (argv-limit safe, validated against a 500+-cut fixture); always re-encode (`libx264 -crf 18 -preset medium -pix_fmt yuv420p`, aac audio, `+faststart`) — never `-c copy` |
 | SRT/VTT | Kept-only retiming: drop words inside cuts; shift others left by preceding cut total; group lines at sentence boundary or 42 chars; outputs next to the timeline export |
 | CLI | `katto render <bundle> -o out.mp4`, `katto export <bundle>` (FCPXML + SRT/VTT into `timelines/`) |
@@ -64,14 +66,15 @@ state; `partialize` document-only; drag coalescing via explicit `beginDrag/commi
 actions), `model/` (pure: toggle/apply/manual-cut/boundary-adjust producing new edits,
 kept-range computation for playback + retiming preview, snap math), `timeline-pane.tsx`
 (canvas), `waveform.tsx`, `transport.ts` (keyboard map), export dialog (format checkboxes,
-version preview, post-export "Open in Final Cut").
+version preview, NLE-target selector defaulting to the stored `default_nle` — required on
+first export, sticky thereafter — post-export "Open in Final Cut").
 
 ## Wiring / IPC
 
 | Command | Notes |
 |---|---|
 | `save_edits(bundle_path, edits: Edits) -> ()` | debounced client-side; atomic write |
-| `export_timeline(bundle_path) -> {fcpxml_path, srt_path, vtt_path, version}` | validates then writes versioned |
+| `export_timeline(bundle_path, nle_target: Nle) -> {fcpxml_path, srt_path, vtt_path, version}` | validates then writes versioned; persists `nle_target` as `default_nle` (sticky last-used) |
 | `render_mp4(bundle_path, out?, Channel<JobProgress>) -> job_id` | jobs framework |
 | `generate_thumbs(bundle_path, Channel<JobProgress>) -> job_id` | idempotent, regenerable |
 | `relocate_source(bundle_path, new_path) -> ()` | filename+duration match enforced |

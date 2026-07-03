@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-03
+
+### Added
+- Frontend design system: Tailwind v4 + shadcn + Phosphor scaffold on Workshop Ember OKLCH tokens (light + dark), a desktop app shell with a single scroll region, and a component showcase.
+- Enforced design-system rule (`.claude/rules/design-system.md`) and the desktop-shell invariant in `CLAUDE.md`.
+
 ## [0.2.1] — 2026-05-02
 
 ### Changed
@@ -24,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Continuous integration workflow.
 - Design specification at `docs/superpowers/specs/app_design_rough_cut.md`.
 
-[Unreleased]: https://github.com/Konadu-Akwasi-Akuoko/katto/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Konadu-Akwasi-Akuoko/katto/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Konadu-Akwasi-Akuoko/katto/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Konadu-Akwasi-Akuoko/katto/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Konadu-Akwasi-Akuoko/katto/releases/tag/v0.2.0

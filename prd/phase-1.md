@@ -10,18 +10,18 @@ phase builds on.
 
 Everything downstream needs the shell: the tray is where progress surfaces, the jobs/events
 framework is the "nothing fails silently" backbone (D18), the palette is the app's command
-spine, onboarding establishes the four facts katto cannot guess (studio root, ElevenLabs key,
-claude path, NLE preference). Building it first also forces the frontend toolchain and typed
+spine, onboarding establishes the three facts katto cannot guess (studio root, ElevenLabs key,
+claude path). Building it first also forces the frontend toolchain and typed
 IPC layer into place before any feature code exists to do it wrong.
 
 ## User stories
 
 - As the owner, I launch katto and it appears in the menu bar; clicking the tray icon toggles
   the main window; closing the window sends it back to the tray, still running.
-- On first run, a wizard walks me through picking the Studio root on my external SSD, pasting
-  my ElevenLabs key, confirming `claude` was found on PATH (or pasting an Anthropic key), and
-  picking Final Cut Pro as my NLE.
-- If my SSD is unplugged, the app tells me plainly and recovers the moment I reconnect.
+- On first run, a wizard walks me through picking the Studio root — an external SSD (recommended)
+  or a local folder; pointing it at my Mac's internal drive warns me but lets me proceed — pasting
+  my ElevenLabs key, and confirming `claude` was found on PATH (or pasting an Anthropic key).
+- If a removable Studio root is unplugged, the app tells me plainly and recovers the moment I reconnect.
 - I press ⌘K anywhere and see every available action.
 - Anything katto does in the background shows up as a job with live progress and lands in an
   activity feed I can read later.
@@ -36,11 +36,12 @@ IPC layer into place before any feature code exists to do it wrong.
 | SQLite bootstrap | DB created at `app_data_dir()/katto.db` with WAL + `busy_timeout=5000` + `synchronous=NORMAL`; full schema below applied via numbered migrations; migrations test green |
 | Events log | `record_event(kind, project_slug?, payload)` writer; `list_events(limit, before?)` query; append-only (no update/delete paths) |
 | Jobs framework | `Job` = row + state machine `queued→running→(done\|failed)`; progress 0–1 streamed over `Channel<JobProgress>`; terminal state writes an `events` row; tray menu mirrors the active job |
-| Settings | SQLite `settings` table (key/value); typed accessors for `studio_root`, `default_nle`, `idle_reap_minutes`, `onboarding_complete`; no plugin-store |
+| Settings | SQLite `settings` table (key/value); typed accessors for `studio_root`, `default_nle`, `idle_reap_minutes`, `onboarding_complete`; no plugin-store. `default_nle` is left UNSET by onboarding — it is seeded lazily at the first export (Phase 5) and sticky thereafter |
 | Keychain | `store_key(service, value)` / `key_present(service)` for `elevenlabs` and `anthropic` under service `katto`; values never returned to the frontend, never logged |
-| Studio-root mount check | On launch + volume events: root missing → app-wide "drive disconnected" banner state with the expected path; auto-clears on remount |
+| Studio-root picker | Any directory allowed; onboarding + Settings warn (non-blocking) when the chosen root resolves to the boot volume or has < 100 GB free — camera footage is large, external SSD recommended; the user may proceed regardless |
+| Studio-root mount check | On launch + volume events: root path unreachable → app-wide "drive disconnected" banner state with the expected path; auto-clears on remount (a root on the internal drive is effectively always present, so the banner is a no-op there) |
 | `claude` detection | `which claude` via login shell (`zsh -lc`); result cached in settings; re-run from Settings |
-| Onboarding wizard | Runs when `onboarding_complete` unset; four steps above; completing writes settings + keychain and lands on the Dashboard |
+| Onboarding wizard | Runs when `onboarding_complete` unset; three steps above; completing writes settings + keychain and lands on the Dashboard |
 | ⌘K palette | cmdk overlay; command registry module where features register `{id, title, keywords, action}`; Phase-1 commands: open settings, open dashboard, quit, sleep to tray, re-run claude detection |
 | Dashboard v1 | Events feed (latest 50), active-jobs list with progress bars, drive status card |
 | Frontend toolchain | Tailwind v4 (CSS-first `@theme` in `src/styles/main.css`), Biome v2, Vitest + RTL + `@tauri-apps/api/mocks` setup, TanStack Query + Zustand, shadcn CLI initialized (`components/ui/`), tauri-specta bindings generating `src/lib/ipc/bindings.gen.ts`, tsconfig gains `noUncheckedIndexedAccess` + `verbatimModuleSyntax`, `@/` alias |
@@ -62,7 +63,7 @@ src-tauri/src/
   jobs.rs + jobs/   # Job runtime: registry, progress channels, tray mirror
   commands.rs + commands/  # settings.rs, events.rs, jobs.rs, onboarding.rs
   keychain.rs       # keyring-core + apple-native-keyring-store wrapper
-  paths.rs          # studio-root resolution + mount check
+  paths.rs          # studio-root resolution + mount check + boot-volume/free-space warning
 ```
 
 Crates: `tauri 2.11` (pin minor; features `tray-icon`, `image-png`), `tauri-plugin-single-instance`
@@ -85,7 +86,7 @@ src/
   app/                # App.tsx (providers, shell layout), providers.tsx
   features/
     dashboard/        # events feed, jobs list, drive status card
-    onboarding/       # wizard (4 steps), gate component
+    onboarding/       # wizard (3 steps), gate component
     settings/         # settings page (root, NLE, idle-reap, keys, autostart, claude detect)
     palette/          # cmdk overlay + command registry (lib-like: features import register())
   components/ui/      # shadcn copy-in primitives

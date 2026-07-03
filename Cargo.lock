@@ -1855,7 +1855,7 @@ dependencies = [
 
 [[package]]
 name = "katto"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "katto-engine",
  "serde",
@@ -1867,14 +1867,14 @@ dependencies = [
 
 [[package]]
 name = "katto-cli"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "katto-engine",
 ]
 
 [[package]]
 name = "katto-engine"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",

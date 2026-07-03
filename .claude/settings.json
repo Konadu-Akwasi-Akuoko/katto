@@ -1,23 +1,8 @@
 {
   "permissions": {
     "deny": [
-      "Edit(./src-tauri/gen/**)",
-      "Edit(./src/lib/ipc/bindings.gen.ts)",
-      "Edit(./Cargo.lock)",
-      "Edit(./bun.lock)",
       "Read(./.env)",
       "Read(./.env.*)"
-    ],
-    "allow": [
-      "Bash(cargo fmt *)",
-      "Bash(cargo clippy *)",
-      "Bash(cargo test *)",
-      "Bash(cargo insta *)",
-      "Bash(cargo check *)",
-      "Bash(bun install)",
-      "Bash(bun run *)",
-      "Bash(bunx *)",
-      "Bash(just *)"
     ]
   },
   "hooks": {
