@@ -44,12 +44,20 @@ Dependency direction is one-way: app → engine, cli → engine.
 - No numeric scoring/ranking anywhere in planning or curation — AI suggests, human decides.
 - Versioned exports (`timelines/*-vN`) are never overwritten; artifact writes are atomic
   (`.tmp` → rename).
+- Desktop shell: the window never scrolls. `src/styles/main.css` locks `body`
+  (`overflow: hidden`, `overscroll-behavior: none`, `user-select: none`); `AppShell`
+  (`src/components/layout/app-shell.tsx`) is a fixed `100dvh` grid — titlebar + sidebar are
+  pinned and its single content pane (`[data-scroll-root]`, `overflow-y-auto min-h-0`) is the
+  only scroll region. Nest further scrollers inside it, never restore document scroll. The
+  residual macOS WKWebView elastic bounce is killed natively (`scrollView.bounces = false` via
+  `objc2`) in Phase 2.
 - Conventional commits, one concern per commit, tests travel with their feature commit.
 
 ## Guidance layout
 
 - Per-language style rules auto-load from `.claude/rules/` (rust, tauri-commands, frontend,
-  testing) — follow them; don't restate them here.
+  testing, design-system) — follow them; don't restate them here. The visual language
+  (`design-system`) has its full spec in `docs/superpowers/specs/2026-07-03-katto-design-system.md`.
 - Procedures: `add-tauri-command`, `add-db-migration`, `add-feature-surface`,
   `emitter-snapshot-change` skills. Invoke before doing those tasks by hand.
 - Hooks enforce formatting, protect generated files (`src-tauri/gen/`, `bindings.gen.ts`,
