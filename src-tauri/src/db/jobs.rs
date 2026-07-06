@@ -6,7 +6,7 @@ use crate::error::{Error, Result};
 /// A background job row. `status` moves `queued -> running -> (done | failed)`;
 /// no other transition is legal. This repository owns the DB state only; writing
 /// the terminal `events` row is the jobs runtime's job (a later slice).
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
 pub struct Job {
     pub id: String,
     pub kind: String,
@@ -147,10 +147,9 @@ fn transition(conn: &Connection, id: &str, to: &str) -> Result<()> {
         ("queued", "running") | ("running", "done") | ("running", "failed")
     );
     if !legal {
-        return Err(Error::JobTransition {
-            from,
-            to: to.to_string(),
-        });
+        return Err(Error::JobTransition(format!(
+            "invalid job transition: {from} -> {to}"
+        )));
     }
     conn.execute("UPDATE jobs SET status = ?2 WHERE id = ?1", params![id, to])?;
     Ok(())
@@ -201,7 +200,7 @@ mod tests {
         let conn = test_db();
         seed(&conn);
         let err = finish(&conn, "j1").unwrap_err();
-        assert!(matches!(err, Error::JobTransition { .. }));
+        assert!(matches!(err, Error::JobTransition(_)));
     }
 
     #[test]
@@ -212,7 +211,7 @@ mod tests {
         finish(&conn, "j1").unwrap();
         assert!(matches!(
             start(&conn, "j1").unwrap_err(),
-            Error::JobTransition { .. }
+            Error::JobTransition(_)
         ));
     }
 

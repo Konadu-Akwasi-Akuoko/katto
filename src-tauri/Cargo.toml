@@ -18,17 +18,22 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "specta"] }
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 katto-engine = {path ="../crates/katto-engine"}
-# rusqlite 0.40 needs rusqlite_migration 2.6, which requires Rust 1.95; pinned to
-# the 0.39 pair that builds on the current 1.92 toolchain. Bump both together.
-rusqlite = { version = "0.39", features = ["bundled"] }
-rusqlite_migration = "2.5.0"
+rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite_migration = "2.6"
 thiserror = { workspace = true }
+# specta/tauri-specta RCs require Rust 1.95+ (fmt::from_fn); pinned exact per the RC
+# churn caveat in the tauri-specta docs.
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+specta-typescript = "0.0.12"
+tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+tokio = { workspace = true, features = ["rt"] }

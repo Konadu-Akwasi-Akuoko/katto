@@ -1,38 +1,54 @@
-use serde::{Serialize, Serializer, ser::SerializeStruct};
+use serde::Serialize;
 
 /// The application error type crossing every command boundary.
 ///
-/// Serializes as a tagged `{ kind, message }` object so the frontend can switch
-/// on a stable `kind` slug without parsing human-facing text.
-#[derive(Debug, thiserror::Error)]
+/// Each variant carries a pre-formatted message string, and serde derives the
+/// tagged `{ kind, message }` wire shape (`kind` = snake_case variant name). The
+/// frontend switches on the stable `kind` slug. `specta::Type` (added alongside
+/// the command layer) types the same shape for the generated bindings, keeping
+/// Rust and TypeScript in lockstep without a hand-written impl.
+#[derive(Debug, thiserror::Error, Serialize, specta::Type)]
+#[serde(tag = "kind", content = "message", rename_all = "snake_case")]
 pub enum Error {
-    #[error("database error: {0}")]
-    Db(#[from] rusqlite::Error),
+    #[error("{0}")]
+    Db(String),
 
-    #[error("migration error: {0}")]
-    Migration(#[from] rusqlite_migration::Error),
+    #[error("{0}")]
+    Migration(String),
 
-    #[error("invalid job transition: {from} -> {to}")]
-    JobTransition { from: String, to: String },
+    #[error("{0}")]
+    JobTransition(String),
+
+    #[error("{0}")]
+    Io(String),
+
+    #[error("{0}")]
+    DbClosed(String),
 }
 
 impl Error {
-    /// Stable machine-readable discriminant paired with `message` on the wire.
-    fn kind(&self) -> &'static str {
-        match self {
-            Error::Db(_) => "db",
-            Error::Migration(_) => "migration",
-            Error::JobTransition { .. } => "job_transition",
-        }
+    /// The single dedicated DB writer thread is gone (its channel closed). Carries
+    /// a message so every variant keeps the uniform `{ kind, message }` wire shape.
+    pub fn db_closed() -> Self {
+        Error::DbClosed("the database writer is unavailable".to_string())
     }
 }
 
-impl Serialize for Error {
-    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("Error", 2)?;
-        state.serialize_field("kind", self.kind())?;
-        state.serialize_field("message", &self.to_string())?;
-        state.end()
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Self {
+        Error::Db(err.to_string())
+    }
+}
+
+impl From<rusqlite_migration::Error> for Error {
+    fn from(err: rusqlite_migration::Error) -> Self {
+        Error::Migration(err.to_string())
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::Io(err.to_string())
     }
 }
 

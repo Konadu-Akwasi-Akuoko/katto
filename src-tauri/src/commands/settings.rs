@@ -1,0 +1,167 @@
+use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
+use specta::Type;
+use tauri::State;
+
+use crate::db::settings as repo;
+use crate::error::Result;
+use crate::state::AppState;
+
+/// Minutes of inactivity before a dock session is reaped (Phase 6); default when
+/// the setting is unset.
+const DEFAULT_IDLE_REAP_MINUTES: u32 = 10;
+
+/// The app's settings as the frontend sees them, assembled from the key/value
+/// `settings` table. `default_nle` stays `None` until the first export seeds it
+/// (Phase 5). Keychain presence (`keys_present`) is added with the keychain slice.
+#[derive(Debug, Clone, Serialize, Type)]
+pub struct Settings {
+    pub studio_root: Option<String>,
+    pub default_nle: Option<String>,
+    pub idle_reap_minutes: u32,
+    pub onboarding_complete: bool,
+    pub claude_path: Option<String>,
+}
+
+/// Partial update — only the `Some` fields are written.
+#[derive(Debug, Clone, Deserialize, Type)]
+pub struct SettingsPatch {
+    pub studio_root: Option<String>,
+    pub default_nle: Option<String>,
+    pub idle_reap_minutes: Option<u32>,
+    pub onboarding_complete: Option<bool>,
+    pub claude_path: Option<String>,
+}
+
+fn read_settings(conn: &Connection) -> Result<Settings> {
+    Ok(Settings {
+        studio_root: repo::get(conn, "studio_root")?,
+        default_nle: repo::get(conn, "default_nle")?,
+        idle_reap_minutes: repo::get(conn, "idle_reap_minutes")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(DEFAULT_IDLE_REAP_MINUTES),
+        onboarding_complete: repo::get(conn, "onboarding_complete")?.as_deref() == Some("true"),
+        claude_path: repo::get(conn, "claude_path")?,
+    })
+}
+
+fn apply_patch(conn: &Connection, patch: &SettingsPatch) -> Result<()> {
+    if let Some(v) = &patch.studio_root {
+        repo::set(conn, "studio_root", v)?;
+    }
+    if let Some(v) = &patch.default_nle {
+        repo::set(conn, "default_nle", v)?;
+    }
+    if let Some(v) = patch.idle_reap_minutes {
+        repo::set(conn, "idle_reap_minutes", &v.to_string())?;
+    }
+    if let Some(v) = patch.onboarding_complete {
+        repo::set(
+            conn,
+            "onboarding_complete",
+            if v { "true" } else { "false" },
+        )?;
+    }
+    if let Some(v) = &patch.claude_path {
+        repo::set(conn, "claude_path", v)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
+    state.db.call(|conn| read_settings(conn)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_settings(state: State<'_, AppState>, patch: SettingsPatch) -> Result<Settings> {
+    state
+        .db
+        .call(move |conn| {
+            apply_patch(conn, &patch)?;
+            read_settings(conn)
+        })
+        .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::test_db;
+
+    fn empty_patch() -> SettingsPatch {
+        SettingsPatch {
+            studio_root: None,
+            default_nle: None,
+            idle_reap_minutes: None,
+            onboarding_complete: None,
+            claude_path: None,
+        }
+    }
+
+    #[test]
+    fn defaults_on_a_fresh_db() {
+        let conn = test_db();
+        let s = read_settings(&conn).unwrap();
+        assert_eq!(s.studio_root, None);
+        assert_eq!(s.default_nle, None);
+        assert_eq!(s.idle_reap_minutes, DEFAULT_IDLE_REAP_MINUTES);
+        assert!(!s.onboarding_complete);
+        assert_eq!(s.claude_path, None);
+    }
+
+    #[test]
+    fn idle_reap_parses_when_set_and_falls_back_on_garbage() {
+        let conn = test_db();
+        repo::set(&conn, "idle_reap_minutes", "15").unwrap();
+        assert_eq!(read_settings(&conn).unwrap().idle_reap_minutes, 15);
+
+        repo::set(&conn, "idle_reap_minutes", "not-a-number").unwrap();
+        assert_eq!(
+            read_settings(&conn).unwrap().idle_reap_minutes,
+            DEFAULT_IDLE_REAP_MINUTES
+        );
+    }
+
+    #[test]
+    fn onboarding_complete_maps_only_true() {
+        let conn = test_db();
+        repo::set(&conn, "onboarding_complete", "true").unwrap();
+        assert!(read_settings(&conn).unwrap().onboarding_complete);
+
+        repo::set(&conn, "onboarding_complete", "false").unwrap();
+        assert!(!read_settings(&conn).unwrap().onboarding_complete);
+    }
+
+    #[test]
+    fn apply_patch_writes_only_some_fields() {
+        let conn = test_db();
+        apply_patch(
+            &conn,
+            &SettingsPatch {
+                studio_root: Some("/Volumes/Studio".to_string()),
+                ..empty_patch()
+            },
+        )
+        .unwrap();
+        let s = read_settings(&conn).unwrap();
+        assert_eq!(s.studio_root.as_deref(), Some("/Volumes/Studio"));
+        assert_eq!(s.idle_reap_minutes, DEFAULT_IDLE_REAP_MINUTES);
+
+        apply_patch(
+            &conn,
+            &SettingsPatch {
+                idle_reap_minutes: Some(20),
+                onboarding_complete: Some(true),
+                ..empty_patch()
+            },
+        )
+        .unwrap();
+        let s = read_settings(&conn).unwrap();
+        assert_eq!(s.studio_root.as_deref(), Some("/Volumes/Studio"));
+        assert_eq!(s.idle_reap_minutes, 20);
+        assert!(s.onboarding_complete);
+    }
+}
