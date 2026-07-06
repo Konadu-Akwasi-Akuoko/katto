@@ -30,7 +30,7 @@ IPC layer into place before any feature code exists to do it wrong.
 
 | Feature | Acceptance criteria |
 |---|---|
-| Tray residency | Template icon (dark/light correct); left-click toggles main window; menu shows Open, current-project line (— for now), next-shoot-day line (— for now), Sleep to tray, Quit; menu items update live without rebuilding the tray; no Dock icon (`ActivationPolicy::Accessory`); window close hides instead of quitting |
+| Tray residency | Template icon (dark/light correct); `ActivationPolicy::Regular` — Dock icon + macOS app menu present (matches real Docker Desktop, which shows a Dock icon; supersedes the old Accessory decision — see D21); **left-click opens the tray menu** (does not touch the window); menu shows a dynamic **Show window / Hide window** item that flips with window state, current-project line (— for now), next-shoot-day line (— for now), Quit; menu items update live without rebuilding the tray; window opens **maximized** (fills the work area, not fullscreen); **closing destroys the WebView** (frees its RAM) while the app stays resident in the menu bar (`RunEvent::ExitRequested` → `prevent_exit` when `code` is `None`); reopening from the tray item, the Dock icon (`RunEvent::Reopen`), or a second launch recreates the maximized window; tray **Quit** (`app.exit`, `code` `Some`) exits fully |
 | Launch at login | Toggle in Settings; survives reboot when enabled from a bundled build |
 | Single instance | Second launch focuses the existing window |
 | SQLite bootstrap | DB created at `app_data_dir()/katto.db` with WAL + `busy_timeout=5000` + `synchronous=NORMAL`; full schema below applied via numbered migrations; migrations test green |
