@@ -24,6 +24,11 @@ type CommandResult<T> =
  * Unwrap a tauri-specta command result, returning its data or throwing
  * {@link IpcError}. Every `src/lib/ipc/<domain>.ts` wrapper funnels through this
  * so feature code never sees the `{ status }` envelope.
+ *
+ * Note: only Rust `Err` returns become {@link IpcError}. Infrastructure/JS-level
+ * invoke failures reject with a bare `Error` (the generated runtime re-throws
+ * those). The TanStack Query error handlers (frontend-toolchain slice) must
+ * handle both shapes, not assume every rejection has a `.kind`.
  */
 export async function unwrap<T>(result: Promise<CommandResult<T>>): Promise<T> {
 	const settled = await result;
