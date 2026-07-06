@@ -1,3 +1,5 @@
+pub mod db;
+pub mod error;
 mod tray;
 mod window;
 

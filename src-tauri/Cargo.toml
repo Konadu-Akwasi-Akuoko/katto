@@ -24,3 +24,11 @@ tauri-plugin-single-instance = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 katto-engine = {path ="../crates/katto-engine"}
+# rusqlite 0.40 needs rusqlite_migration 2.6, which requires Rust 1.95; pinned to
+# the 0.39 pair that builds on the current 1.92 toolchain. Bump both together.
+rusqlite = { version = "0.39", features = ["bundled"] }
+rusqlite_migration = "2.5.0"
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.27.0"
