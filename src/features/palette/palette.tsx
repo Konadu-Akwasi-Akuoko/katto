@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { toast } from "sonner";
 import {
 	CommandDialog,
 	CommandEmpty,
@@ -36,7 +37,11 @@ export function Palette() {
 	}
 
 	return (
-		<CommandDialog open={open} onOpenChange={setPaletteOpen} showCloseButton={false}>
+		<CommandDialog
+			open={open}
+			onOpenChange={setPaletteOpen}
+			showCloseButton={false}
+		>
 			<CommandInput placeholder="Type a command…" />
 			<CommandList>
 				<CommandEmpty>No matching command.</CommandEmpty>
@@ -48,7 +53,13 @@ export function Palette() {
 								value={`${command.title} ${command.keywords.join(" ")}`}
 								onSelect={() => {
 									setPaletteOpen(false);
-									void command.run();
+									void Promise.resolve(command.run()).catch(
+										(error: unknown) => {
+											toast.error("Command failed", {
+												description: String(error),
+											});
+										},
+									);
 								}}
 							>
 								{command.title}
