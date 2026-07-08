@@ -7,6 +7,7 @@ import { patchSettings } from "@/lib/ipc/settings";
 
 export function StepRoot({ onDone }: { onDone: () => void }) {
 	const [check, setCheck] = useState<RootCheck | null>(null);
+	const warnings = check ? rootWarnings(check) : [];
 
 	const pick = useMutation({
 		mutationFn: pickStudioRoot,
@@ -34,9 +35,9 @@ export function StepRoot({ onDone }: { onDone: () => void }) {
 				</Button>
 				{check && <span className="font-mono text-sm text-fg-muted">{check.path}</span>}
 			</div>
-			{check && rootWarnings(check).length > 0 && (
+			{warnings.length > 0 && (
 				<ul className="flex flex-col gap-1 text-sm text-warn">
-					{rootWarnings(check).map((warning) => (
+					{warnings.map((warning) => (
 						<li key={warning}>{warning}</li>
 					))}
 				</ul>
