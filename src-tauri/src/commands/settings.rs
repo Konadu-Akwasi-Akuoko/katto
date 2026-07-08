@@ -81,13 +81,16 @@ fn apply_patch(conn: &Connection, patch: &SettingsPatch) -> Result<()> {
 
 async fn read_keys_present() -> Result<KeysPresent> {
     tauri::async_runtime::spawn_blocking(|| {
-        Ok(KeysPresent {
-            elevenlabs: keychain::key_present(KeyService::Elevenlabs)?,
-            anthropic: keychain::key_present(KeyService::Anthropic)?,
-        })
+        // Presence is advisory — a keychain read failure (e.g. a denied
+        // dev-build prompt) must never take down the settings surface, so
+        // errors degrade to "absent" instead of failing the command.
+        KeysPresent {
+            elevenlabs: keychain::key_present(KeyService::Elevenlabs).unwrap_or(false),
+            anthropic: keychain::key_present(KeyService::Anthropic).unwrap_or(false),
+        }
     })
     .await
-    .map_err(|e| Error::Io(e.to_string()))?
+    .map_err(|e| Error::Io(e.to_string()))
 }
 
 #[tauri::command]
