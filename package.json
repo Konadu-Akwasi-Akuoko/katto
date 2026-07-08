@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "reset": "bun run reset:db && bun run reset:keys",
+    "reset:db": "rm -f \"$HOME/Library/Application Support/com.akwasikonaduakuoko.katto/\"katto.db* && echo 'db reset'",
+    "reset:keys": "security delete-generic-password -s katto -a elevenlabs >/dev/null 2>&1; security delete-generic-password -s katto -a anthropic >/dev/null 2>&1; echo 'keychain cleared'"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
