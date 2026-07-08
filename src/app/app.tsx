@@ -12,10 +12,11 @@ import { PlannerStub } from "@/features/planner/planner-stub";
 import { ProjectsStub } from "@/features/projects/projects-stub";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { queryClient } from "@/lib/query-client";
+import { applyTheme, storedTheme } from "@/lib/theme";
 import { useUiStore } from "@/stores/ui";
 
 export default function App() {
-	const [dark, setDark] = useState(true);
+	const [dark, setDark] = useState(() => storedTheme() === "dark");
 	const surface = useUiStore((s) => s.surface);
 
 	useEffect(() => {
@@ -23,9 +24,9 @@ export default function App() {
 	}, []);
 
 	function toggleTheme() {
-		const root = document.documentElement;
-		root.classList.toggle("dark");
-		setDark(root.classList.contains("dark"));
+		const next = dark ? "light" : "dark";
+		applyTheme(next);
+		setDark(next === "dark");
 	}
 
 	return (
