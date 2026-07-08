@@ -30,9 +30,11 @@ export function StudioRootSection({ settings }: { settings: Settings }) {
 		<section className="flex flex-col gap-3">
 			<h2 className="font-serif text-lg font-semibold">Studio root</h2>
 			<div className="flex items-center justify-between gap-4 text-sm">
-				<span className="font-mono text-fg-muted">
-					{settings.studio_root ?? "Not set"}
-				</span>
+				{settings.studio_root ? (
+					<span className="font-mono text-fg-muted">{settings.studio_root}</span>
+				) : (
+					<span className="text-fg-muted">Not set</span>
+				)}
 				<Button
 					variant="secondary"
 					onClick={() => repick.mutate()}

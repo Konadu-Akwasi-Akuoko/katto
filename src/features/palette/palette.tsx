@@ -20,7 +20,7 @@ export function Palette() {
 
 	useEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
-			if (event.key === "k" && (event.metaKey || event.ctrlKey)) {
+			if (event.key === "k" && event.metaKey && !event.repeat) {
 				event.preventDefault();
 				useUiStore.getState().togglePalette();
 			}

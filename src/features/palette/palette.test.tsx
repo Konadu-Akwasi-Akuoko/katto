@@ -28,6 +28,17 @@ describe("Palette", () => {
 		await waitFor(() => expect(useUiStore.getState().paletteOpen).toBe(false));
 	});
 
+	it("closes on a second meta+k press", async () => {
+		registerCommand({ id: "t", title: "Do the thing", keywords: [], group: "Test", run: vi.fn() });
+		const user = userEvent.setup();
+		render(<Palette />);
+
+		await user.keyboard("{Meta>}k{/Meta}");
+		expect(await screen.findByPlaceholderText("Type a command…")).toBeInTheDocument();
+		await user.keyboard("{Meta>}k{/Meta}");
+		await waitFor(() => expect(useUiStore.getState().paletteOpen).toBe(false));
+	});
+
 	it("shows the empty state when nothing matches", async () => {
 		registerCommand({ id: "t", title: "Do the thing", keywords: [], group: "Test", run: vi.fn() });
 		const user = userEvent.setup();
