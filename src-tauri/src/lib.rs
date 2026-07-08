@@ -2,6 +2,7 @@ pub mod broadcast;
 pub mod commands;
 pub mod db;
 pub mod error;
+pub mod jobs;
 pub mod keychain;
 pub mod paths;
 mod state;
