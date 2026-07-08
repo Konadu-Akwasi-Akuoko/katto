@@ -41,16 +41,16 @@ Update as work merges; keep in sync with the acceptance-criteria table below and
 - [x] Typed IPC: `get_settings` / `set_settings` / `list_events` / `list_jobs` / `job_transition` — `7c2b41b`
 - [x] App icons + menu-bar template — `fd94547`
 - [~] Jobs framework — row + state machine done; `Channel<JobProgress>` streaming + tray-mirror pending
-- [ ] Keychain commands (`store_key` / `key_present` for `elevenlabs` / `anthropic`)
+- [x] Keychain commands (`store_key` / `key_present` for `elevenlabs` / `anthropic`)
 - [ ] Launch-at-login toggle (autostart plugin) — Settings, survives reboot
-- [ ] Studio-root picker (any dir; boot-volume / <100 GB warning)
+- [~] Studio-root picker — picker + writable/boot-volume/<100 GB warnings done; Settings re-pick pending
 - [ ] Studio-root mount check + drive-disconnected banner
-- [ ] `claude` detection (`zsh -lc "which claude"`, cached in settings)
-- [ ] Onboarding wizard (root · ElevenLabs key · claude detection) → Dashboard  ← **next**
+- [x] `claude` detection (`zsh -lc "which claude"`, cached in settings)
+- [x] Onboarding wizard (root · ElevenLabs key · claude detection) → Dashboard
 - [~] ⌘K palette — `cmdk` component vendored; command registry + wiring pending
 - [ ] Dashboard v1 (events feed · active-jobs list · drive-status card)
-- [~] Frontend toolchain — Tailwind v4 + shadcn + bindings in place; Biome/Vitest/TanStack/Zustand wiring pending
-- [ ] Gate/CI extension — `just check` still `fmt-check clippy test tsc`; add `biome` + `vitest`, mirror in CI
+- [~] Frontend toolchain — Tailwind v4 + shadcn + bindings + Vitest/RTL + TanStack Query + `app/`+`features/` layout in place; Biome pending; Zustand installed, store pending
+- [~] Gate/CI extension — `just check` now includes `vitest` + real `bindings` recipe; `biome` + CI-root move pending
 - [ ] Exit criteria: installable `.app` in menu bar, onboarding persists, `just check` green
 
 ## Scope with acceptance criteria
