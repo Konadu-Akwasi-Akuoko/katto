@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useSettings } from "@/features/onboarding/hooks/use-settings";
+import { useSettings } from "@/hooks/use-settings";
 import { OnboardingWizard } from "@/features/onboarding/wizard";
 
 /**

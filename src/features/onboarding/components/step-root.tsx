@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { canContinue, rootWarnings } from "@/features/onboarding/model/root-warnings";
+import { canContinue, rootWarnings } from "@/lib/root-warnings";
 import { pickStudioRoot, type RootCheck } from "@/lib/ipc/onboarding";
 import { patchSettings } from "@/lib/ipc/settings";
 
