@@ -42,6 +42,20 @@ export const commands = {
 	 *  stay optional (Phase 1 runs no AI).
 	 */
 	completeOnboarding: () => typedError<null, Error>(__TAURI_INVOKE("complete_onboarding")),
+	/**
+	 *  Enable or disable launch-at-login, recording the change in the activity
+	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
+	 */
+	setAutostart: (enabled: boolean) => typedError<null, Error>(__TAURI_INVOKE("set_autostart", { enabled })),
+	/**  Whether launch-at-login is currently enabled at the OS level. */
+	getAutostart: () => typedError<boolean, Error>(__TAURI_INVOKE("get_autostart")),
+	/**
+	 *  Close the main window: the WebView is destroyed and katto stays resident
+	 *  in the tray (same path as clicking the window's close button).
+	 */
+	sleepToTray: () => typedError<null, Error>(__TAURI_INVOKE("sleep_to_tray")),
+	/**  Exit katto completely (same exit path as the tray's Quit item). */
+	quitApp: () => typedError<null, Error>(__TAURI_INVOKE("quit_app")),
 };
 
 /* Types */
@@ -54,7 +68,7 @@ export const commands = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string };
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string };
 
 /**  A row in the append-only activity log. */
 export type Event = {

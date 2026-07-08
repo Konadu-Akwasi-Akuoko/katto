@@ -30,6 +30,9 @@ pub enum Error {
 
     #[error("{0}")]
     Onboarding(String),
+
+    #[error("{0}")]
+    Autostart(String),
 }
 
 impl Error {

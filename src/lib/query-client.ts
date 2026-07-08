@@ -6,6 +6,7 @@ const TITLES: Partial<Record<IpcError["kind"], string>> = {
 	keychain: "Keychain write failed",
 	onboarding: "Can't finish yet",
 	db: "Database error",
+	autostart: "Launch-at-login change failed",
 };
 
 /**

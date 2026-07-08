@@ -23,6 +23,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::onboarding::key_present,
         commands::onboarding::detect_claude,
         commands::onboarding::complete_onboarding,
+        commands::shell::set_autostart,
+        commands::shell::get_autostart,
+        commands::shell::sleep_to_tray,
+        commands::shell::quit_app,
     ])
 }
 
@@ -49,6 +53,10 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::AppleScript,
+            None,
+        ))
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
