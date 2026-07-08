@@ -18,6 +18,11 @@ fn specta_builder() -> Builder<tauri::Wry> {
         commands::settings::set_settings,
         commands::events::list_events,
         commands::jobs::list_jobs,
+        commands::onboarding::pick_studio_root,
+        commands::onboarding::store_key,
+        commands::onboarding::key_present,
+        commands::onboarding::detect_claude,
+        commands::onboarding::complete_onboarding,
     ])
 }
 
@@ -43,6 +48,7 @@ pub fn run() {
             let _ = window::show_main(app);
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);

@@ -27,6 +27,9 @@ pub enum Error {
 
     #[error("{0}")]
     Keychain(String),
+
+    #[error("{0}")]
+    Onboarding(String),
 }
 
 impl Error {

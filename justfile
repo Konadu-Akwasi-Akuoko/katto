@@ -20,7 +20,6 @@ tsc:
 fmt:
     cargo fmt --all
 
-# Phase 1 adds: `biome` (lint/format), `vitest` (frontend tests), and a real
-# `bindings` recipe once the tauri-specta export exists. See prd/phase-1.md.
+# Regenerate src/lib/ipc/bindings.gen.ts from the command registry.
 bindings:
-    @echo "tauri-specta export lands in Phase 1 (prd/phase-1.md §Wiring)" && exit 1
+    cargo test -p katto --lib export_bindings

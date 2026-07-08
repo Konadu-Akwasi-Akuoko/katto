@@ -10,6 +10,38 @@ export const commands = {
 	listEvents: (limit: number, beforeId: number | null) => typedError<Event[], Error>(__TAURI_INVOKE("list_events", { limit, beforeId })),
 	/**  List jobs newest-first. When `active_only`, restrict to `queued`/`running`. */
 	listJobs: (activeOnly: boolean) => typedError<Job[], Error>(__TAURI_INVOKE("list_jobs", { activeOnly })).then((v) => ((v.status === "ok" ? { ...v, data: v.data.map(i=>i) } : v) as typeof v)),
+	/**
+	 *  Open the native folder picker and inspect the chosen directory. `None` when
+	 *  the user cancels. Nothing is persisted here — the wizard saves the path via
+	 *  `set_settings` when the step is confirmed.
+	 */
+	pickStudioRoot: () => typedError<{
+	path: string,
+	writable: boolean,
+	on_boot_volume: boolean,
+	/**  Whole gigabytes free, `None` if the filesystem query failed. */
+	free_gb: number | null,
+	low_free_space: boolean,
+} | null, Error>(__TAURI_INVOKE("pick_studio_root")),
+	/**
+	 *  Store a credential in the macOS keychain. The value is write-only: never
+	 *  echoed back, never logged. Presence is recorded in the activity log by
+	 *  service name only.
+	 */
+	storeKey: (service: KeyService, value: string) => typedError<null, Error>(__TAURI_INVOKE("store_key", { service, value })),
+	/**  Whether a credential exists for `service`, without exposing its value. */
+	keyPresent: (service: KeyService) => typedError<boolean, Error>(__TAURI_INVOKE("key_present", { service })),
+	/**
+	 *  `which claude` through a login shell, so the owner's PATH additions apply.
+	 *  A found path is cached in settings for later phases; not-found is a normal
+	 *  outcome, not an error.
+	 */
+	detectClaude: () => typedError<string | null, Error>(__TAURI_INVOKE("detect_claude")),
+	/**
+	 *  Finish the wizard: a saved studio root is the one hard requirement; keys
+	 *  stay optional (Phase 1 runs no AI).
+	 */
+	completeOnboarding: () => typedError<null, Error>(__TAURI_INVOKE("complete_onboarding")),
 };
 
 /* Types */
@@ -22,7 +54,7 @@ export const commands = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string };
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string };
 
 /**  A row in the append-only activity log. */
 export type Event = {
@@ -50,10 +82,30 @@ export type Job = {
 	finished_at: string | null,
 };
 
+/**
+ *  The credentials katto stores. Wire values are the snake_case names the
+ *  frontend sends.
+ */
+export type KeyService = "elevenlabs" | "anthropic";
+
 /**  Which credentials exist in the keychain — presence only, never values. */
 export type KeysPresent = {
 	elevenlabs: boolean,
 	anthropic: boolean,
+};
+
+/**
+ *  What onboarding/Settings show after the user picks a studio-root candidate.
+ *  Everything except `writable` is advisory — any directory is allowed; katto
+ *  warns and lets the owner proceed.
+ */
+export type RootCheck = {
+	path: string,
+	writable: boolean,
+	on_boot_volume: boolean,
+	/**  Whole gigabytes free, `None` if the filesystem query failed. */
+	free_gb: number | null,
+	low_free_space: boolean,
 };
 
 /**
