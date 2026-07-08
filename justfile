@@ -29,3 +29,15 @@ fmt:
 # Regenerate src/lib/ipc/bindings.gen.ts from the command registry.
 bindings:
     cargo test -p katto --lib export_bindings
+
+# Build the installable .app, signed with the stable dev identity when one
+# exists (same keychain-ACL rationale as scripts/macos-dev-sign.sh); ad-hoc
+# otherwise. Output: src-tauri/target/release/bundle/macos/katto.app
+bundle:
+    #!/bin/sh
+    set -eu
+    identity="${KATTO_DEV_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' 'NR == 1 && /"/ { print $2 }')}"
+    if [ -n "$identity" ]; then
+      export APPLE_SIGNING_IDENTITY="$identity"
+    fi
+    bun run tauri build --bundles app
