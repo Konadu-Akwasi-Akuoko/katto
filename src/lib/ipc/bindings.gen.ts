@@ -7,6 +7,11 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 export const commands = {
 	getSettings: () => typedError<Settings, Error>(__TAURI_INVOKE("get_settings")),
 	setSettings: (patch: SettingsPatch) => typedError<Settings, Error>(__TAURI_INVOKE("set_settings", { patch })),
+	/**
+	 *  Current studio-root reachability snapshot; broadcasts keep it fresh after
+	 *  this initial query.
+	 */
+	getDriveStatus: () => typedError<DriveStatus, Error>(__TAURI_INVOKE("get_drive_status")),
 	/**  Most-recent-first page of activity-log events. `before_id` pages backward. */
 	listEvents: (limit: number, beforeId: number | null) => typedError<Event[], Error>(__TAURI_INVOKE("list_events", { limit, beforeId })),
 	/**  List jobs newest-first. When `active_only`, restrict to `queued`/`running`. */
@@ -79,6 +84,16 @@ export const events = {
 };
 
 /* Types */
+/**
+ *  Snapshot of the studio root's reachability. `path: None` means no root is
+ *  configured yet (pre-onboarding) — reported as mounted so no banner shows.
+ */
+export type DriveStatus = {
+	mounted: boolean,
+	path: string | null,
+	free_gb: number | null,
+};
+
 /**  Broadcast on studio-root mount transitions (and once at watcher start). */
 export type DriveStatusChanged = {
 	mounted: boolean,
@@ -94,7 +109,7 @@ export type DriveStatusChanged = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string };
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string };
 
 /**  A row in the append-only activity log. */
 export type Event = {

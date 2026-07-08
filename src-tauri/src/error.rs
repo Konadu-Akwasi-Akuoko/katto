@@ -33,6 +33,9 @@ pub enum Error {
 
     #[error("{0}")]
     Autostart(String),
+
+    #[error("{0}")]
+    StudioRootUnmounted(String),
 }
 
 impl Error {

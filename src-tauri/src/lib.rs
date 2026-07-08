@@ -1,6 +1,7 @@
 pub mod broadcast;
 pub mod commands;
 pub mod db;
+pub mod drive;
 pub mod error;
 pub mod jobs;
 pub mod keychain;
@@ -19,6 +20,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         .commands(collect_commands![
             commands::settings::get_settings,
             commands::settings::set_settings,
+            commands::drive::get_drive_status,
             commands::events::list_events,
             commands::jobs::list_jobs,
             commands::jobs::subscribe_job_progress,
@@ -77,6 +79,7 @@ pub fn run() {
             let handle = app.handle();
             tray::create(handle)?;
             window::setup(handle)?;
+            tauri::async_runtime::spawn(drive::watch(handle.clone()));
             Ok(())
         })
         .on_window_event(|window, event| {

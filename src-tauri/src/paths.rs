@@ -32,6 +32,39 @@ pub fn check_root(path: &Path) -> RootCheck {
     }
 }
 
+/// True when the configured studio root is reachable right now. External
+/// roots (under `/Volumes`) are detected by listing `/Volumes` instead of
+/// stat-ing the mount point itself — a stat on an unhealthy mount can hang,
+/// listing its healthy parent cannot. Anything else is a local path where a
+/// plain existence check is safe.
+pub fn root_mounted(root: &Path) -> bool {
+    match volume_name(root) {
+        Some(name) => volume_present(Path::new("/Volumes"), name),
+        None => root.exists(),
+    }
+}
+
+/// The `<name>` in `/Volumes/<name>[/...]`, when the path is an external mount.
+fn volume_name(root: &Path) -> Option<&std::ffi::OsStr> {
+    use std::path::Component;
+    let mut components = root.components();
+    match (components.next(), components.next(), components.next()) {
+        (
+            Some(Component::RootDir),
+            Some(Component::Normal(volumes)),
+            Some(Component::Normal(name)),
+        ) if volumes == "Volumes" => Some(name),
+        _ => None,
+    }
+}
+
+/// Whether `name` appears among the entries of the volumes directory.
+fn volume_present(volumes_dir: &Path, name: &std::ffi::OsStr) -> bool {
+    std::fs::read_dir(volumes_dir)
+        .map(|entries| entries.flatten().any(|entry| entry.file_name() == name))
+        .unwrap_or(false)
+}
+
 /// A path is on the boot volume unless it resolves under `/Volumes` (external
 /// mounts live there on macOS; `/Volumes/Macintosh HD` is a symlink back to
 /// `/`, which canonicalization unmasks).
@@ -80,5 +113,41 @@ mod tests {
     fn volumes_path_is_not_boot_volume() {
         // A nonexistent /Volumes path can't canonicalize; the raw prefix decides.
         assert!(!check_root(std::path::Path::new("/Volumes/NO-SUCH-SSD")).on_boot_volume);
+    }
+
+    #[test]
+    fn volume_name_extracted_from_volumes_path() {
+        assert_eq!(
+            volume_name(Path::new("/Volumes/Studio/footage")),
+            Some(std::ffi::OsStr::new("Studio"))
+        );
+    }
+
+    #[test]
+    fn volume_name_absent_for_local_and_bare_paths() {
+        assert_eq!(volume_name(Path::new("/Users/a/Studio")), None);
+        assert_eq!(volume_name(Path::new("/Volumes")), None);
+    }
+
+    #[test]
+    fn volume_present_matches_directory_entries() {
+        let volumes = tempfile::tempdir().unwrap();
+        std::fs::create_dir(volumes.path().join("Studio")).unwrap();
+
+        assert!(volume_present(
+            volumes.path(),
+            std::ffi::OsStr::new("Studio")
+        ));
+        assert!(!volume_present(
+            volumes.path(),
+            std::ffi::OsStr::new("Gone")
+        ));
+    }
+
+    #[test]
+    fn local_root_mounted_iff_it_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(root_mounted(dir.path()));
+        assert!(!root_mounted(&dir.path().join("missing")));
     }
 }
