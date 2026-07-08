@@ -26,14 +26,18 @@ export function registerAppCommands(queryClient: QueryClient): void {
 		title: "Sleep to tray",
 		keywords: ["close", "hide", "minimize"],
 		group: "App",
-		run: () => void sleepToTray(),
+		run: async () => {
+			await sleepToTray();
+		},
 	});
 	registerCommand({
 		id: "app.quit",
 		title: "Quit katto",
 		keywords: ["exit"],
 		group: "App",
-		run: () => void quitApp(),
+		run: async () => {
+			await quitApp();
+		},
 	});
 	registerCommand({
 		id: "ai.redetect-claude",

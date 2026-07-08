@@ -7,6 +7,8 @@ import { useSettings } from "@/hooks/use-settings";
 
 export function SettingsPage() {
 	const settings = useSettings();
+	// A settings load error is DB-fatal at backend bootstrap; transient blips
+	// retry via the query. Rendering nothing beats rendering a broken form.
 	if (settings.isPending || settings.isError) return null;
 
 	return (

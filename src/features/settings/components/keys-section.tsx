@@ -7,6 +7,7 @@ import type { KeyService } from "@/lib/ipc/onboarding";
 import { storeKey } from "@/lib/ipc/onboarding";
 import type { Settings } from "@/lib/ipc/settings";
 import { settingsKeys } from "@/lib/ipc/settings";
+import { cn } from "@/lib/utils";
 
 function KeyRow({
 	service,
@@ -34,7 +35,10 @@ function KeyRow({
 				<Label htmlFor={inputId}>{`${label} API key`}</Label>
 				<span className="flex items-center gap-1.5 text-xs text-fg-muted">
 					<span
-						className={`size-1.5 rounded-full ${present ? "bg-done" : "bg-fg-faint"}`}
+						className={cn(
+							"size-1.5 rounded-full",
+							present ? "bg-done" : "bg-fg-faint",
+						)}
 					/>
 					{present ? "in keychain" : "not set"}
 				</span>

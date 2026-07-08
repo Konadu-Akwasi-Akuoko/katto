@@ -26,14 +26,14 @@ export function Titlebar({
 			</span>
 			<span className="text-xs text-fg-faint">alps-day-3</span>
 			<div className="ml-auto flex items-center gap-2">
-				<button
-					type="button"
+				<Button
+					variant="outline"
 					onClick={() => useUiStore.getState().setPaletteOpen(true)}
-					className="hidden h-9 w-64 items-center gap-2 rounded-md border bg-surface px-3 text-sm text-fg-faint sm:flex"
+					className="hidden h-9 w-64 justify-start gap-2 px-3 font-normal text-fg-faint sm:flex"
 				>
 					<MagnifyingGlassIcon className="size-4" />
 					Search or press ⌘K
-				</button>
+				</Button>
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<Button variant="ghost" size="icon" onClick={onToggleTheme}>
