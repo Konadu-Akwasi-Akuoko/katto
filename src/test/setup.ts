@@ -10,6 +10,20 @@ if (!globalThis.crypto?.getRandomValues) {
 	Object.defineProperty(globalThis, "crypto", { value: webcrypto });
 }
 
+// cmdk scrolls the selected palette item into view; jsdom has no layout.
+if (!Element.prototype.scrollIntoView) {
+	Element.prototype.scrollIntoView = () => {};
+}
+
+// cmdk observes its list for resize; jsdom ships no ResizeObserver.
+if (!globalThis.ResizeObserver) {
+	globalThis.ResizeObserver = class {
+		observe() {}
+		unobserve() {}
+		disconnect() {}
+	};
+}
+
 afterEach(() => {
 	cleanup();
 	clearMocks();
