@@ -55,10 +55,12 @@ fn status_for(root: Option<&str>) -> DriveStatus {
 }
 
 /// Poll the studio root for the app's lifetime; broadcast the state once at
-/// start and on every transition, and log transitions to the events feed.
+/// start and whenever it changes (mount flips, but also a re-picked root —
+/// the dashboard's drive card must never show a stale path), and log mount
+/// transitions to the events feed.
 pub async fn watch(app: AppHandle) {
     let mut interval = tokio::time::interval(POLL_INTERVAL);
-    let mut last: Option<bool> = None;
+    let mut last: Option<(bool, String)> = None;
     loop {
         interval.tick().await;
         let Some(state) = app.try_state::<AppState>() else {
@@ -72,7 +74,8 @@ pub async fn watch(app: AppHandle) {
             continue;
         };
 
-        if last.is_some_and(|was| was != status.mounted) {
+        let observed = (status.mounted, path.clone());
+        if last.as_ref().is_some_and(|(was, _)| *was != status.mounted) {
             let kind = if status.mounted {
                 "drive_reconnected"
             } else {
@@ -85,14 +88,14 @@ pub async fn watch(app: AppHandle) {
                 .await;
             broadcast::events_appended(&app);
         }
-        if last != Some(status.mounted) {
+        if last.as_ref() != Some(&observed) {
             let _ = DriveStatusChanged {
                 mounted: status.mounted,
-                path: path.clone(),
+                path,
             }
             .emit(&app);
         }
-        last = Some(status.mounted);
+        last = Some(observed);
     }
 }
 
