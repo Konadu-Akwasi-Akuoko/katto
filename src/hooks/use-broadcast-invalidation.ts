@@ -1,6 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { onDriveStatusChanged, onEventsAppended, onJobsChanged } from "@/lib/ipc/broadcast";
+import {
+	onDriveStatusChanged,
+	onEventsAppended,
+	onJobsChanged,
+} from "@/lib/ipc/broadcast";
 import { driveKeys } from "@/lib/ipc/drive";
 import { eventsKeys } from "@/lib/ipc/events";
 import { jobsKeys } from "@/lib/ipc/jobs";

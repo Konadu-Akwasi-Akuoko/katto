@@ -18,7 +18,8 @@ export function GeneralSection({ settings }: { settings: Settings }) {
 	const autostart = useAutostart();
 	const patch = useMutation({
 		mutationFn: patchSettings,
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsKeys.all }),
+		onSuccess: () =>
+			queryClient.invalidateQueries({ queryKey: settingsKeys.all }),
 	});
 
 	return (

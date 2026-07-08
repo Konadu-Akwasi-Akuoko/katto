@@ -18,7 +18,9 @@ export const queryClient = new QueryClient({
 	mutationCache: new MutationCache({
 		onError: (error) => {
 			const title =
-				error instanceof IpcError ? (TITLES[error.kind] ?? "Command failed") : "Command failed";
+				error instanceof IpcError
+					? (TITLES[error.kind] ?? "Command failed")
+					: "Command failed";
 			toast.error(title, { description: error.message });
 		},
 	}),

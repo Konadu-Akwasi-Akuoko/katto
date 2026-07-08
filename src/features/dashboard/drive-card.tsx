@@ -20,7 +20,9 @@ export function DriveCard() {
 					<p className="text-fg-muted text-sm">No studio root configured.</p>
 				) : (
 					<>
-						<p className="break-all font-mono text-fg-muted text-xs">{data.path}</p>
+						<p className="break-all font-mono text-fg-muted text-xs">
+							{data.path}
+						</p>
 						{data.free_gb !== null && (
 							<p className="tabular text-sm">{data.free_gb} GB free</p>
 						)}

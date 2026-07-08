@@ -28,7 +28,9 @@ describe("rootWarnings", () => {
 	});
 
 	it("warns about unwritable roots", () => {
-		expect(rootWarnings({ ...good, writable: false })[0]).toMatch(/can't write/i);
+		expect(rootWarnings({ ...good, writable: false })[0]).toMatch(
+			/can't write/i,
+		);
 	});
 });
 
@@ -40,6 +42,8 @@ describe("canContinue", () => {
 	});
 
 	it("allows advisory-warned roots through", () => {
-		expect(canContinue({ ...good, on_boot_volume: true, low_free_space: true })).toBe(true);
+		expect(
+			canContinue({ ...good, on_boot_volume: true, low_free_space: true }),
+		).toBe(true);
 	});
 });

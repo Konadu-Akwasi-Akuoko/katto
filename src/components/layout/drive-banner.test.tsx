@@ -10,7 +10,9 @@ function renderWithStatus(status: DriveStatus) {
 		if (cmd === "get_drive_status") return status;
 		throw new Error(`unexpected command: ${cmd}`);
 	});
-	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+	const client = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	});
 	return render(
 		<QueryClientProvider client={client}>
 			<DriveBanner />
@@ -20,8 +22,14 @@ function renderWithStatus(status: DriveStatus) {
 
 describe("DriveBanner", () => {
 	it("shows the expected path when the drive is disconnected", async () => {
-		renderWithStatus({ mounted: false, path: "/Volumes/Studio", free_gb: null });
-		expect(await screen.findByRole("alert")).toHaveTextContent("/Volumes/Studio");
+		renderWithStatus({
+			mounted: false,
+			path: "/Volumes/Studio",
+			free_gb: null,
+		});
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"/Volumes/Studio",
+		);
 	});
 
 	it("renders nothing while the drive is mounted", async () => {

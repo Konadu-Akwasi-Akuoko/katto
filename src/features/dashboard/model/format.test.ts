@@ -3,19 +3,31 @@ import { eventLine, relativeTime } from "@/features/dashboard/model/format";
 
 describe("eventLine", () => {
 	it("maps known kinds to plain sentences", () => {
-		expect(eventLine({ kind: "app_started", payload_json: null })).toBe("katto started");
-		expect(eventLine({ kind: "onboarding_completed", payload_json: null })).toBe(
-			"Onboarding completed",
+		expect(eventLine({ kind: "app_started", payload_json: null })).toBe(
+			"katto started",
 		);
+		expect(
+			eventLine({ kind: "onboarding_completed", payload_json: null }),
+		).toBe("Onboarding completed");
 	});
 
 	it("names the job in terminal job events", () => {
-		const payload = JSON.stringify({ job_id: "j1", label: "Smoke test", error: null });
-		expect(eventLine({ kind: "job_done", payload_json: payload })).toBe("Smoke test finished");
+		const payload = JSON.stringify({
+			job_id: "j1",
+			label: "Smoke test",
+			error: null,
+		});
+		expect(eventLine({ kind: "job_done", payload_json: payload })).toBe(
+			"Smoke test finished",
+		);
 	});
 
 	it("includes the error for failed jobs", () => {
-		const payload = JSON.stringify({ job_id: "j1", label: "Smoke test", error: "disk full" });
+		const payload = JSON.stringify({
+			job_id: "j1",
+			label: "Smoke test",
+			error: "disk full",
+		});
 		expect(eventLine({ kind: "job_failed", payload_json: payload })).toBe(
 			"Smoke test failed — disk full",
 		);
@@ -23,12 +35,12 @@ describe("eventLine", () => {
 
 	it("shows the drive path on drive events", () => {
 		const payload = JSON.stringify({ path: "/Volumes/Studio" });
-		expect(eventLine({ kind: "drive_disconnected", payload_json: payload })).toBe(
-			"Studio drive disconnected",
-		);
-		expect(eventLine({ kind: "drive_reconnected", payload_json: payload })).toBe(
-			"Studio drive reconnected",
-		);
+		expect(
+			eventLine({ kind: "drive_disconnected", payload_json: payload }),
+		).toBe("Studio drive disconnected");
+		expect(
+			eventLine({ kind: "drive_reconnected", payload_json: payload }),
+		).toBe("Studio drive reconnected");
 	});
 
 	it("humanizes unknown kinds instead of leaking snake_case", () => {
@@ -38,7 +50,9 @@ describe("eventLine", () => {
 	});
 
 	it("survives malformed payload json", () => {
-		expect(eventLine({ kind: "job_done", payload_json: "{not json" })).toBe("Job finished");
+		expect(eventLine({ kind: "job_done", payload_json: "{not json" })).toBe(
+			"Job finished",
+		);
 	});
 });
 

@@ -26,7 +26,10 @@ export function ActivityFeed() {
 					<ScrollArea className="max-h-[60dvh]">
 						<ul className="flex flex-col gap-2 pr-3">
 							{events.map((event) => (
-								<li key={event.id} className="flex items-baseline justify-between gap-3">
+								<li
+									key={event.id}
+									className="flex items-baseline justify-between gap-3"
+								>
 									<span className="text-sm">{eventLine(event)}</span>
 									<time className="tabular whitespace-nowrap text-fg-faint text-xs">
 										{relativeTime(event.ts, now)}

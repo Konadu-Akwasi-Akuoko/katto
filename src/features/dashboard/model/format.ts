@@ -9,7 +9,10 @@ const TITLES: Record<string, string> = {
 	drive_reconnected: "Studio drive reconnected",
 };
 
-function jobPayload(payloadJson: string | null): { label?: string; error?: string | null } {
+function jobPayload(payloadJson: string | null): {
+	label?: string;
+	error?: string | null;
+} {
 	if (payloadJson === null) return {};
 	try {
 		const parsed: unknown = JSON.parse(payloadJson);
@@ -53,5 +56,9 @@ export function relativeTime(ts: string, now: Date): string {
 	if (age < MINUTE) return "just now";
 	if (age < HOUR) return `${Math.floor(age / MINUTE)}m ago`;
 	if (age < DAY) return `${Math.floor(age / HOUR)}h ago`;
-	return then.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+	return then.toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		timeZone: "UTC",
+	});
 }

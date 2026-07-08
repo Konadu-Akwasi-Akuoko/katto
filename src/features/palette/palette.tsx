@@ -53,11 +53,13 @@ export function Palette() {
 								value={`${command.title} ${command.keywords.join(" ")}`}
 								onSelect={() => {
 									setPaletteOpen(false);
-									void Promise.resolve(command.run()).catch((error: unknown) => {
-										const description =
-											error instanceof Error ? error.message : String(error);
-										toast.error("Command failed", { description });
-									});
+									void Promise.resolve(command.run()).catch(
+										(error: unknown) => {
+											const description =
+												error instanceof Error ? error.message : String(error);
+											toast.error("Command failed", { description });
+										},
+									);
 								}}
 							>
 								{command.title}

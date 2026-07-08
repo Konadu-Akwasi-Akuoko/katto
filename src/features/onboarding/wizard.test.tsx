@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { mockIPC } from "@tauri-apps/api/mocks";
 import { describe, expect, it } from "vitest";
 import { OnboardingWizard } from "@/features/onboarding/wizard";
 import { settingsFixture } from "@/test/fixtures/settings";
@@ -16,7 +16,9 @@ const goodRoot = {
 
 const savedSettings = { ...settingsFixture, studio_root: "/Volumes/Studio" };
 
-function mockOnboardingIpc(overrides: Record<string, (args: unknown) => unknown> = {}) {
+function mockOnboardingIpc(
+	overrides: Record<string, (args: unknown) => unknown> = {},
+) {
 	const calls: string[] = [];
 	mockIPC((cmd, args) => {
 		calls.push(cmd);
@@ -61,9 +63,13 @@ describe("OnboardingWizard", () => {
 		expect(await screen.findByText("/Volumes/Studio")).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Continue" }));
 
-		await user.click(await screen.findByRole("button", { name: "Skip for now" }));
+		await user.click(
+			await screen.findByRole("button", { name: "Skip for now" }),
+		);
 
-		expect(await screen.findByText("/opt/homebrew/bin/claude")).toBeInTheDocument();
+		expect(
+			await screen.findByText("/opt/homebrew/bin/claude"),
+		).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: "Finish" }));
 		await waitFor(() => expect(calls).toContain("complete_onboarding"));
 		expect(calls).toContain("set_settings");
@@ -98,8 +104,12 @@ describe("OnboardingWizard", () => {
 
 		await user.type(await screen.findByLabelText("API key"), "xi-secret");
 		await user.click(screen.getByRole("button", { name: "Save key" }));
-		expect(await screen.findByText(/stored in your keychain/i)).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+		expect(
+			await screen.findByText(/stored in your keychain/i),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Continue" }),
+		).toBeInTheDocument();
 		await waitFor(() => expect(calls).toContain("store_key"));
 	});
 });

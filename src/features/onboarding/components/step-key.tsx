@@ -22,9 +22,9 @@ export function StepKey({ onDone }: { onDone: () => void }) {
 			<div className="flex flex-col gap-2">
 				<h1 className="font-serif text-3xl font-semibold">ElevenLabs key</h1>
 				<p className="text-fg-muted">
-					Transcription runs through ElevenLabs Scribe. The key goes straight into the
-					macOS keychain — katto never shows it again. You can also add it later in
-					Settings.
+					Transcription runs through ElevenLabs Scribe. The key goes straight
+					into the macOS keychain — katto never shows it again. You can also add
+					it later in Settings.
 				</p>
 			</div>
 			{stored ? (

@@ -20,5 +20,6 @@ export function rootWarnings(check: RootCheck): string[] {
 
 /** The wizard's only hard requirement: a picked root katto can write to. */
 export function canContinue(check: RootCheck | null): boolean {
+	// biome-ignore lint/complexity/useOptionalChain: check?.writable would return boolean | undefined, breaking the declared boolean return (null case must be false, not undefined)
 	return check !== null && check.writable;
 }

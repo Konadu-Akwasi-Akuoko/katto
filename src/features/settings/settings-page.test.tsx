@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { mockIPC } from "@tauri-apps/api/mocks";
 import { describe, expect, it } from "vitest";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { settingsFixture } from "@/test/fixtures/settings";
@@ -60,7 +60,9 @@ describe("SettingsPage", () => {
 		const user = userEvent.setup();
 		renderPage();
 
-		const toggle = await screen.findByRole("switch", { name: /launch at login/i });
+		const toggle = await screen.findByRole("switch", {
+			name: /launch at login/i,
+		});
 		expect(toggle).not.toBeChecked();
 		await user.click(toggle);
 
@@ -68,7 +70,9 @@ describe("SettingsPage", () => {
 			expect(calls).toContainEqual(["set_autostart", { enabled: true }]),
 		);
 		await waitFor(() =>
-			expect(screen.getByRole("switch", { name: /launch at login/i })).toBeChecked(),
+			expect(
+				screen.getByRole("switch", { name: /launch at login/i }),
+			).toBeChecked(),
 		);
 	});
 
@@ -79,7 +83,9 @@ describe("SettingsPage", () => {
 
 		const input = await screen.findByLabelText("ElevenLabs API key");
 		await user.type(input, "xi-secret");
-		await user.click(screen.getByRole("button", { name: "Save ElevenLabs key" }));
+		await user.click(
+			screen.getByRole("button", { name: "Save ElevenLabs key" }),
+		);
 
 		await waitFor(() => expect(input).toHaveValue(""));
 		expect(await screen.findByText(/in keychain/i)).toBeInTheDocument();
@@ -92,6 +98,8 @@ describe("SettingsPage", () => {
 
 		expect(await screen.findByText(/not found on path/i)).toBeInTheDocument();
 		await user.click(screen.getByRole("button", { name: /re-run detection/i }));
-		expect(await screen.findByText("/opt/homebrew/bin/claude")).toBeInTheDocument();
+		expect(
+			await screen.findByText("/opt/homebrew/bin/claude"),
+		).toBeInTheDocument();
 	});
 });

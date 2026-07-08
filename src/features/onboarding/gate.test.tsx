@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
 import { mockIPC } from "@tauri-apps/api/mocks";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { OnboardingGate } from "@/features/onboarding/gate";
 import type { Settings } from "@/lib/ipc/settings";
@@ -33,7 +33,9 @@ describe("OnboardingGate", () => {
 	it("shows the wizard on first run", async () => {
 		renderGate(settingsFixture);
 		expect(
-			await screen.findByRole("heading", { name: /where does your footage live/i }),
+			await screen.findByRole("heading", {
+				name: /where does your footage live/i,
+			}),
 		).toBeInTheDocument();
 	});
 });

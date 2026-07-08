@@ -4,13 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import type { Job, JobProgress } from "@/lib/ipc/jobs";
 import {
 	devRunSmokeJob,
 	jobsKeys,
 	listJobs,
 	subscribeJobProgress,
 } from "@/lib/ipc/jobs";
-import type { Job, JobProgress } from "@/lib/ipc/jobs";
 
 const CHIP_VARIANTS = ["running", "done", "failed", "queued"] as const;
 type ChipVariant = (typeof CHIP_VARIANTS)[number];

@@ -1,6 +1,6 @@
 import { Channel } from "@tauri-apps/api/core";
-import { commands } from "@/lib/ipc/bindings.gen";
 import type { Job, JobProgress } from "@/lib/ipc/bindings.gen";
+import { commands } from "@/lib/ipc/bindings.gen";
 import { unwrap } from "@/lib/ipc/result";
 
 export type { Job, JobProgress };

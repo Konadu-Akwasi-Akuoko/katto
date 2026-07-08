@@ -2,7 +2,8 @@ import { commands } from "@/lib/ipc/bindings.gen";
 import { unwrap } from "@/lib/ipc/result";
 
 /** Whether launch-at-login is enabled at the OS level. */
-export const getAutostart = (): Promise<boolean> => unwrap(commands.getAutostart());
+export const getAutostart = (): Promise<boolean> =>
+	unwrap(commands.getAutostart());
 
 /** Enable or disable launch-at-login. */
 export const setAutostart = (enabled: boolean): Promise<null> =>

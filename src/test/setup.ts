@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
 import { clearMocks } from "@tauri-apps/api/mocks";
+import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 
 // mockIPC leans on the Web Crypto API; polyfill for Node builds that don't

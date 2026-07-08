@@ -16,9 +16,12 @@ export function DriveBanner() {
 		>
 			<span className="size-1.5 shrink-0 rounded-full bg-warn" />
 			<span>
-				Studio drive disconnected — plug the drive back in and katto will pick it up.
+				Studio drive disconnected — plug the drive back in and katto will pick
+				it up.
 			</span>
-			<span className="ml-auto font-mono text-fg-muted text-xs">{data.path}</span>
+			<span className="ml-auto font-mono text-fg-muted text-xs">
+				{data.path}
+			</span>
 		</div>
 	);
 }

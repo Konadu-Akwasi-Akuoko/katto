@@ -1,5 +1,5 @@
-import { events } from "@/lib/ipc/bindings.gen";
 import type { DriveStatusChanged } from "@/lib/ipc/bindings.gen";
+import { events } from "@/lib/ipc/bindings.gen";
 
 export type { DriveStatusChanged };
 
@@ -16,4 +16,5 @@ export const onJobsChanged = (callback: () => void): Promise<Unlisten> =>
 /** The studio root mounted or disconnected. */
 export const onDriveStatusChanged = (
 	callback: (status: DriveStatusChanged) => void,
-): Promise<Unlisten> => events.driveStatusChanged.listen((event) => callback(event.payload));
+): Promise<Unlisten> =>
+	events.driveStatusChanged.listen((event) => callback(event.payload));

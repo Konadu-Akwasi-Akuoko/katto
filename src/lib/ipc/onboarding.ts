@@ -1,5 +1,5 @@
-import { commands } from "@/lib/ipc/bindings.gen";
 import type { KeyService, RootCheck } from "@/lib/ipc/bindings.gen";
+import { commands } from "@/lib/ipc/bindings.gen";
 import { unwrap } from "@/lib/ipc/result";
 
 export type { KeyService, RootCheck };

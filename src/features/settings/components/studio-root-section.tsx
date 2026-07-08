@@ -13,7 +13,8 @@ export function StudioRootSection({ settings }: { settings: Settings }) {
 
 	const save = useMutation({
 		mutationFn: (path: string) => patchSettings({ studio_root: path }),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: settingsKeys.all }),
+		onSuccess: () =>
+			queryClient.invalidateQueries({ queryKey: settingsKeys.all }),
 	});
 	const repick = useMutation({
 		mutationFn: pickStudioRoot,
@@ -31,7 +32,9 @@ export function StudioRootSection({ settings }: { settings: Settings }) {
 			<h2 className="font-serif text-lg font-semibold">Studio root</h2>
 			<div className="flex items-center justify-between gap-4 text-sm">
 				{settings.studio_root ? (
-					<span className="font-mono text-fg-muted">{settings.studio_root}</span>
+					<span className="font-mono text-fg-muted">
+						{settings.studio_root}
+					</span>
 				) : (
 					<span className="text-fg-muted">Not set</span>
 				)}

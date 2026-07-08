@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { useSettings } from "@/hooks/use-settings";
 import { OnboardingWizard } from "@/features/onboarding/wizard";
+import { useSettings } from "@/hooks/use-settings";
 
 /**
  * Holds the app behind the wizard until onboarding has completed once. A
@@ -10,6 +10,7 @@ import { OnboardingWizard } from "@/features/onboarding/wizard";
 export function OnboardingGate({ children }: { children: ReactNode }) {
 	const settings = useSettings();
 	if (settings.isPending) return null;
-	if (settings.isError || settings.data.onboarding_complete) return <>{children}</>;
+	if (settings.isError || settings.data.onboarding_complete)
+		return <>{children}</>;
 	return <OnboardingWizard />;
 }

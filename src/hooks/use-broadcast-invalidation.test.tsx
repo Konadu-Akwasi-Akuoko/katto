@@ -16,7 +16,9 @@ describe("useBroadcastInvalidation", () => {
 		const invalidate = vi.spyOn(client, "invalidateQueries");
 
 		function wrapper({ children }: { children: ReactNode }) {
-			return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+			return (
+				<QueryClientProvider client={client}>{children}</QueryClientProvider>
+			);
 		}
 		renderHook(() => useBroadcastInvalidation(), { wrapper });
 

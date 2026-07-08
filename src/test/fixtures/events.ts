@@ -7,7 +7,11 @@ export const eventsFixture: Event[] = [
 		ts: "2026-07-08T10:15:00.000Z",
 		kind: "job_done",
 		project_slug: null,
-		payload_json: JSON.stringify({ job_id: "job-1", label: "Smoke test", error: null }),
+		payload_json: JSON.stringify({
+			job_id: "job-1",
+			label: "Smoke test",
+			error: null,
+		}),
 	},
 	{
 		id: 2,
