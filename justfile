@@ -32,7 +32,7 @@ bindings:
 
 # Build the installable .app, signed with the stable dev identity when one
 # exists (same keychain-ACL rationale as scripts/macos-dev-sign.sh); ad-hoc
-# otherwise. Output: src-tauri/target/release/bundle/macos/katto.app
+# otherwise. Output: target/release/bundle/macos/katto.app
 bundle:
     #!/bin/sh
     set -eu
