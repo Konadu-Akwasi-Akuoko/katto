@@ -23,8 +23,7 @@ pub async fn set_autostart(
         }
     })
     .await
-    .map_err(|e| Error::Io(e.to_string()))?
-    .map_err(|e| Error::Autostart(e.to_string()))?;
+    .map_err(|e| Error::Io(e.to_string()))??;
 
     state
         .db
@@ -48,10 +47,10 @@ pub async fn set_autostart(
 #[tauri::command]
 #[specta::specta]
 pub async fn get_autostart(app: AppHandle) -> Result<bool> {
-    tauri::async_runtime::spawn_blocking(move || app.autolaunch().is_enabled())
+    let enabled = tauri::async_runtime::spawn_blocking(move || app.autolaunch().is_enabled())
         .await
-        .map_err(|e| Error::Io(e.to_string()))?
-        .map_err(|e| Error::Autostart(e.to_string()))
+        .map_err(|e| Error::Io(e.to_string()))??;
+    Ok(enabled)
 }
 
 /// Close the main window: the WebView is destroyed and katto stays resident

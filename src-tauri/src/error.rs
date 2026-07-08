@@ -67,4 +67,10 @@ impl From<keyring_core::Error> for Error {
     }
 }
 
+impl From<tauri_plugin_autostart::Error> for Error {
+    fn from(err: tauri_plugin_autostart::Error) -> Self {
+        Error::Autostart(err.to_string())
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;
