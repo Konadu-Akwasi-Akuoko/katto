@@ -50,6 +50,12 @@ export type Job = {
 	finished_at: string | null,
 };
 
+/**  Which credentials exist in the keychain — presence only, never values. */
+export type KeysPresent = {
+	elevenlabs: boolean,
+	anthropic: boolean,
+};
+
 /**
  *  A SQLite `INTEGER PRIMARY KEY` / rowid. Serializes transparently as its inner
  *  integer (the wire value); exported to TypeScript as `number` because these
@@ -61,7 +67,7 @@ export type RowId = number;
 /**
  *  The app's settings as the frontend sees them, assembled from the key/value
  *  `settings` table. `default_nle` stays `None` until the first export seeds it
- *  (Phase 5). Keychain presence (`keys_present`) is added with the keychain slice.
+ *  (Phase 5).
  */
 export type Settings = {
 	studio_root: string | null,
@@ -69,6 +75,7 @@ export type Settings = {
 	idle_reap_minutes: number,
 	onboarding_complete: boolean,
 	claude_path: string | null,
+	keys_present: KeysPresent,
 };
 
 /**  Partial update — only the `Some` fields are written. */
