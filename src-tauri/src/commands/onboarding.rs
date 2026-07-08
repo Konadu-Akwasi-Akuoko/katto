@@ -33,6 +33,7 @@ pub async fn pick_studio_root(app: tauri::AppHandle) -> Result<Option<RootCheck>
 #[tauri::command]
 #[specta::specta]
 pub async fn store_key(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     service: KeyService,
     value: String,
@@ -52,6 +53,7 @@ pub async fn store_key(
             )
         })
         .await?;
+    crate::broadcast::events_appended(&app);
     Ok(())
 }
 
@@ -95,8 +97,10 @@ pub async fn detect_claude(state: State<'_, AppState>) -> Result<Option<String>>
 /// stay optional (Phase 1 runs no AI).
 #[tauri::command]
 #[specta::specta]
-pub async fn complete_onboarding(state: State<'_, AppState>) -> Result<()> {
-    state.db.call(|conn| complete(conn)).await
+pub async fn complete_onboarding(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<()> {
+    state.db.call(|conn| complete(conn)).await?;
+    crate::broadcast::events_appended(&app);
+    Ok(())
 }
 
 fn complete(conn: &Connection) -> Result<()> {

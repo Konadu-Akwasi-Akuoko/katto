@@ -14,8 +14,9 @@ pub async fn set_autostart(
     state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<()> {
+    let handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let manager = app.autolaunch();
+        let manager = handle.autolaunch();
         if enabled {
             manager.enable()
         } else {
@@ -40,6 +41,7 @@ pub async fn set_autostart(
             )
         })
         .await?;
+    crate::broadcast::events_appended(&app);
     Ok(())
 }
 

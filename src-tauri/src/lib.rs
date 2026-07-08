@@ -1,3 +1,4 @@
+pub mod broadcast;
 pub mod commands;
 pub mod db;
 pub mod error;
@@ -8,26 +9,32 @@ mod tray;
 mod window;
 
 use tauri::Manager;
-use tauri_specta::{Builder, collect_commands};
+use tauri_specta::{Builder, collect_commands, collect_events};
 
 /// The tauri-specta command registry. Shared by [`run`] and the bindings-export
 /// test so the generated TypeScript can never drift from the wired handlers.
 fn specta_builder() -> Builder<tauri::Wry> {
-    Builder::<tauri::Wry>::new().commands(collect_commands![
-        commands::settings::get_settings,
-        commands::settings::set_settings,
-        commands::events::list_events,
-        commands::jobs::list_jobs,
-        commands::onboarding::pick_studio_root,
-        commands::onboarding::store_key,
-        commands::onboarding::key_present,
-        commands::onboarding::detect_claude,
-        commands::onboarding::complete_onboarding,
-        commands::shell::set_autostart,
-        commands::shell::get_autostart,
-        commands::shell::sleep_to_tray,
-        commands::shell::quit_app,
-    ])
+    Builder::<tauri::Wry>::new()
+        .commands(collect_commands![
+            commands::settings::get_settings,
+            commands::settings::set_settings,
+            commands::events::list_events,
+            commands::jobs::list_jobs,
+            commands::onboarding::pick_studio_root,
+            commands::onboarding::store_key,
+            commands::onboarding::key_present,
+            commands::onboarding::detect_claude,
+            commands::onboarding::complete_onboarding,
+            commands::shell::set_autostart,
+            commands::shell::get_autostart,
+            commands::shell::sleep_to_tray,
+            commands::shell::quit_app,
+        ])
+        .events(collect_events![
+            broadcast::EventsAppended,
+            broadcast::JobsChanged,
+            broadcast::DriveStatusChanged,
+        ])
 }
 
 /// Open the database and assemble the managed [`AppState`]: resolve the app data
