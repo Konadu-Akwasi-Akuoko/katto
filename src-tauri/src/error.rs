@@ -24,6 +24,9 @@ pub enum Error {
 
     #[error("{0}")]
     DbClosed(String),
+
+    #[error("{0}")]
+    Keychain(String),
 }
 
 impl Error {
@@ -49,6 +52,12 @@ impl From<rusqlite_migration::Error> for Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         Error::Io(err.to_string())
+    }
+}
+
+impl From<keyring_core::Error> for Error {
+    fn from(err: keyring_core::Error) -> Self {
+        Error::Keychain(err.to_string())
     }
 }
 

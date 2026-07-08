@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod db;
 pub mod error;
+pub mod keychain;
 mod state;
 mod tray;
 mod window;
@@ -44,6 +45,7 @@ pub fn run() {
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
+            keychain::init()?;
             app.manage(bootstrap_state(app)?);
 
             let handle = app.handle();
