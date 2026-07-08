@@ -26,6 +26,33 @@ IPC layer into place before any feature code exists to do it wrong.
 - Anything katto does in the background shows up as a job with live progress and lands in an
   activity feed I can read later.
 
+## Progress
+
+Living checklist — the durable record of what's landed vs. outstanding on `feat/phase-1-tray-window`.
+Update as work merges; keep in sync with the acceptance-criteria table below and the tracker in
+`index.md`. Legend: `[x]` done · `[~]` partial · `[ ]` not started.
+
+- [x] Tray residency (icon, left-click menu, dynamic Show/Hide, Quit) — `146be12`
+- [x] Window lifecycle: close destroys WebView, app stays resident, reopen from tray/Dock — `146be12`
+- [x] Single instance (second launch focuses window) — `lib.rs`
+- [x] SQLite bootstrap + numbered migrations (schema 001), single-writer handle — `58c4245`
+- [x] Events log (`record_event` / `list_events`, append-only) — `58c4245`
+- [x] Settings store (SQLite key/value, typed accessors) — `58c4245`
+- [x] Typed IPC: `get_settings` / `set_settings` / `list_events` / `list_jobs` / `job_transition` — `7c2b41b`
+- [x] App icons + menu-bar template — `fd94547`
+- [~] Jobs framework — row + state machine done; `Channel<JobProgress>` streaming + tray-mirror pending
+- [ ] Keychain commands (`store_key` / `key_present` for `elevenlabs` / `anthropic`)
+- [ ] Launch-at-login toggle (autostart plugin) — Settings, survives reboot
+- [ ] Studio-root picker (any dir; boot-volume / <100 GB warning)
+- [ ] Studio-root mount check + drive-disconnected banner
+- [ ] `claude` detection (`zsh -lc "which claude"`, cached in settings)
+- [ ] Onboarding wizard (root · ElevenLabs key · claude detection) → Dashboard  ← **next**
+- [~] ⌘K palette — `cmdk` component vendored; command registry + wiring pending
+- [ ] Dashboard v1 (events feed · active-jobs list · drive-status card)
+- [~] Frontend toolchain — Tailwind v4 + shadcn + bindings in place; Biome/Vitest/TanStack/Zustand wiring pending
+- [ ] Gate/CI extension — `just check` still `fmt-check clippy test tsc`; add `biome` + `vitest`, mirror in CI
+- [ ] Exit criteria: installable `.app` in menu bar, onboarding persists, `just check` green
+
 ## Scope with acceptance criteria
 
 | Feature | Acceptance criteria |
