@@ -70,5 +70,8 @@ jobs:
       - name: Type check
         run: bun run tsc --noEmit
 
+      - name: vitest
+        run: bunx vitest run
+
       - name: Build
         run: bun run build

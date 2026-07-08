@@ -3,7 +3,7 @@
 default: check
 
 # The full quality gate. Run before claiming any work done.
-check: fmt-check clippy test tsc
+check: fmt-check clippy test tsc vitest
 
 fmt-check:
     cargo fmt --all -- --check
@@ -16,6 +16,9 @@ test:
 
 tsc:
     bunx tsc --noEmit
+
+vitest:
+    bunx vitest run
 
 fmt:
     cargo fmt --all
