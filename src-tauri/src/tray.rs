@@ -10,16 +10,30 @@ use crate::window;
 /// without rebuilding the tray.
 struct TrayState {
     toggle: MenuItem<Wry>,
+    job: MenuItem<Wry>,
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let toggle = MenuItem::with_id(app, "toggle", "Hide window", true, None::<&str>)?;
+    let job = MenuItem::with_id(app, "job", "No active job", false, None::<&str>)?;
     let project = MenuItem::with_id(app, "project", "No project", false, None::<&str>)?;
     let shoot = MenuItem::with_id(app, "shoot", "No shoot scheduled", false, None::<&str>)?;
-    let separator = PredefinedMenuItem::separator(app)?;
+    let sep_top = PredefinedMenuItem::separator(app)?;
+    let sep_bottom = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
-    let menu = Menu::with_items(app, &[&toggle, &project, &shoot, &separator, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &toggle,
+            &sep_top,
+            &job,
+            &project,
+            &shoot,
+            &sep_bottom,
+            &quit,
+        ],
+    )?;
 
     TrayIconBuilder::with_id("katto")
         .icon(tauri::include_image!("icons/tray/menubar.png"))
@@ -32,7 +46,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    app.manage(TrayState { toggle });
+    app.manage(TrayState { toggle, job });
 
     Ok(())
 }
@@ -42,5 +56,14 @@ pub fn set_window_shown(app: &AppHandle, shown: bool) {
     if let Some(state) = app.try_state::<TrayState>() {
         let label = if shown { "Hide window" } else { "Show window" };
         let _ = state.toggle.set_text(label);
+    }
+}
+
+/// Mirror the active job (label + percent) into the tray; `None` when idle.
+/// MenuItem setters marshal to the main thread internally, so this is safe to
+/// call from async tasks.
+pub fn set_active_job(app: &AppHandle, label: Option<&str>) {
+    if let Some(state) = app.try_state::<TrayState>() {
+        let _ = state.job.set_text(label.unwrap_or("No active job"));
     }
 }

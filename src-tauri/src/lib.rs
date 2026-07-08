@@ -21,6 +21,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::settings::set_settings,
             commands::events::list_events,
             commands::jobs::list_jobs,
+            commands::jobs::subscribe_job_progress,
+            commands::jobs::dev_run_smoke_job,
             commands::onboarding::pick_studio_root,
             commands::onboarding::store_key,
             commands::onboarding::key_present,
@@ -48,7 +50,8 @@ fn bootstrap_state(app: &tauri::App) -> Result<state::AppState, Box<dyn std::err
     tauri::async_runtime::block_on(
         db.call(|conn| db::events::record(conn, "app_started", None, None)),
     )?;
-    Ok(state::AppState { db })
+    let jobs = jobs::JobRuntime::new(app.handle().clone(), db.clone());
+    Ok(state::AppState { db, jobs })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
