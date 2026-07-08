@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RootCheck } from "@/lib/ipc/bindings.gen";
+import type { RootCheck } from "@/lib/ipc/onboarding";
 import { canContinue, rootWarnings } from "@/features/onboarding/model/root-warnings";
 
 const good: RootCheck = {

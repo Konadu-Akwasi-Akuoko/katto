@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { completeOnboarding, detectClaude, storeKey } from "@/lib/ipc/onboarding";
+import { claudeDetectKeys, completeOnboarding, detectClaude, storeKey } from "@/lib/ipc/onboarding";
 import { settingsKeys } from "@/lib/ipc/settings";
 
 export function StepClaude() {
@@ -12,7 +12,7 @@ export function StepClaude() {
 	const [keyStored, setKeyStored] = useState(false);
 
 	const detection = useQuery({
-		queryKey: ["claude-detect"],
+		queryKey: claudeDetectKeys.all,
 		queryFn: detectClaude,
 		staleTime: Number.POSITIVE_INFINITY,
 	});

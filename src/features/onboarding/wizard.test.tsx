@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { describe, expect, it } from "vitest";
 import { OnboardingWizard } from "@/features/onboarding/wizard";
+import { settingsFixture } from "@/test/fixtures/settings";
 
 const goodRoot = {
 	path: "/Volumes/Studio",
@@ -13,14 +14,7 @@ const goodRoot = {
 	low_free_space: false,
 };
 
-const settingsFixture = {
-	studio_root: "/Volumes/Studio",
-	default_nle: null,
-	idle_reap_minutes: 10,
-	onboarding_complete: false,
-	claude_path: null,
-	keys_present: { elevenlabs: false, anthropic: false },
-};
+const savedSettings = { ...settingsFixture, studio_root: "/Volumes/Studio" };
 
 function mockOnboardingIpc(overrides: Record<string, (args: unknown) => unknown> = {}) {
 	const calls: string[] = [];
@@ -32,7 +26,7 @@ function mockOnboardingIpc(overrides: Record<string, (args: unknown) => unknown>
 			case "pick_studio_root":
 				return goodRoot;
 			case "set_settings":
-				return settingsFixture;
+				return savedSettings;
 			case "store_key":
 			case "complete_onboarding":
 				return null;

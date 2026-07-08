@@ -2,17 +2,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { describe, expect, it } from "vitest";
-import type { Settings } from "@/lib/ipc/bindings.gen";
 import { OnboardingGate } from "@/features/onboarding/gate";
-
-const settingsFixture: Settings = {
-	studio_root: null,
-	default_nle: null,
-	idle_reap_minutes: 10,
-	onboarding_complete: false,
-	claude_path: null,
-	keys_present: { elevenlabs: false, anthropic: false },
-};
+import type { Settings } from "@/lib/ipc/settings";
+import { settingsFixture } from "@/test/fixtures/settings";
 
 function renderGate(settings: Settings) {
 	mockIPC((cmd) => {

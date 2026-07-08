@@ -23,3 +23,6 @@ export const detectClaude = (): Promise<string | null> =>
 /** Flip the onboarding flag (requires a saved studio root). */
 export const completeOnboarding = (): Promise<null> =>
 	unwrap(commands.completeOnboarding());
+
+/** TanStack Query key for the claude-detection probe. */
+export const claudeDetectKeys = { all: ["claude-detect"] as const };

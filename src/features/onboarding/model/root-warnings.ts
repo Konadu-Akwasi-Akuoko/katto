@@ -1,4 +1,4 @@
-import type { RootCheck } from "@/lib/ipc/bindings.gen";
+import type { RootCheck } from "@/lib/ipc/onboarding";
 
 /** Advisory copy for a picked studio root. Empty when nothing needs saying. */
 export function rootWarnings(check: RootCheck): string[] {

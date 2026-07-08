@@ -2,8 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { canContinue, rootWarnings } from "@/features/onboarding/model/root-warnings";
-import type { RootCheck } from "@/lib/ipc/bindings.gen";
-import { pickStudioRoot } from "@/lib/ipc/onboarding";
+import { pickStudioRoot, type RootCheck } from "@/lib/ipc/onboarding";
 import { patchSettings } from "@/lib/ipc/settings";
 
 export function StepRoot({ onDone }: { onDone: () => void }) {

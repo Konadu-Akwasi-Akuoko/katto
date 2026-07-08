@@ -13,6 +13,7 @@ import {
   UserIcon,
 } from "@phosphor-icons/react";
 import type { ComponentType } from "react";
+import { cn } from "@/lib/utils";
 
 type IconType = ComponentType<{ className?: string }>;
 type NavItem = { icon: IconType; label: string; active?: boolean };
@@ -46,11 +47,12 @@ function NavList({ heading, items }: { heading: string; items: NavItem[] }) {
         <button
           key={label}
           type="button"
-          className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+          className={cn(
+            "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
             active
               ? "bg-surface-2 text-fg"
-              : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-          }`}
+              : "text-fg-muted hover:bg-surface-2 hover:text-fg",
+          )}
         >
           <Icon className="size-4" />
           {label}
