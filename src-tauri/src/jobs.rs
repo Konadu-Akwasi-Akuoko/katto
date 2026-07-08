@@ -105,9 +105,17 @@ impl JobRuntime {
         Fut: Future<Output = std::result::Result<(), String>> + Send + 'static,
     {
         let id = job.id.clone();
-        {
+        let started = {
             let id = id.clone();
-            let _ = self.db.call(move |conn| jobs_repo::start(conn, &id)).await;
+            self.db.call(move |conn| jobs_repo::start(conn, &id)).await
+        };
+        if let Err(err) = started {
+            // The queued -> running transition failed, so the work never runs.
+            // "Nothing fails silently" dominates the happy path: fail the row
+            // (queued -> failed) and surface a terminal events row.
+            self.finalize(&job, Err(format!("failed to start: {err}")))
+                .await;
+            return;
         }
         broadcast::jobs_changed(&self.app);
         tray::set_active_job(&self.app, Some(&format!("{} — 0%", job.label)));
@@ -117,8 +125,24 @@ impl JobRuntime {
             job_id: id.clone(),
             label: job.label.clone(),
         };
-        let outcome = work(ctx).await;
+        // Isolate the work future on its own task so a panic unwinds there,
+        // not through `run`. A join failure (panic/cancel) becomes a normal
+        // job failure — the terminal path always runs.
+        let outcome = match tauri::async_runtime::spawn(work(ctx)).await {
+            Ok(outcome) => outcome,
+            Err(_) => Err("job panicked".to_string()),
+        };
+        self.finalize(&job, outcome).await;
+    }
 
+    /// Terminal handling shared by every job outcome: transition the row
+    /// (`finish` on success, `fail` otherwise), publish a final hub tick,
+    /// prune the sink, write the `job_done`/`job_failed` events row, re-mirror
+    /// the tray, and broadcast. `outcome` is `Ok(())` for success or
+    /// `Err(message)` for any failure — a work error, a panic, or a job that
+    /// could not start.
+    async fn finalize(&self, job: &jobs_repo::Job, outcome: std::result::Result<(), String>) {
+        let id = job.id.clone();
         let (event_kind, error) = match &outcome {
             Ok(()) => ("job_done", None),
             Err(message) => ("job_failed", Some(message.clone())),

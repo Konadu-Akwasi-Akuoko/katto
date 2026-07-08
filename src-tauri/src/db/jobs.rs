@@ -126,7 +126,8 @@ pub fn finish(conn: &Connection, id: &str) -> Result<Job> {
     fetch(conn, id)
 }
 
-/// `running -> failed`. Records `error` and stamps `finished_at`.
+/// `running -> failed`, or `queued -> failed` for a job that could not start.
+/// Records `error` and stamps `finished_at`.
 pub fn fail(conn: &Connection, id: &str, error: &str) -> Result<Job> {
     transition(conn, id, "failed")?;
     conn.execute(
@@ -138,13 +139,15 @@ pub fn fail(conn: &Connection, id: &str, error: &str) -> Result<Job> {
     fetch(conn, id)
 }
 
-/// Enforce the legal state machine, then write the new status.
+/// Enforce the legal state machine, then write the new status. Legal moves:
+/// `queued -> running`, `running -> done`, `running -> failed`, and
+/// `queued -> failed` (a job that could not start has failed).
 fn transition(conn: &Connection, id: &str, to: &str) -> Result<()> {
     let from: String =
         conn.query_row("SELECT status FROM jobs WHERE id = ?1", [id], |r| r.get(0))?;
     let legal = matches!(
         (from.as_str(), to),
-        ("queued", "running") | ("running", "done") | ("running", "failed")
+        ("queued", "running") | ("queued", "failed") | ("running", "done") | ("running", "failed")
     );
     if !legal {
         return Err(Error::JobTransition(format!(
@@ -193,6 +196,16 @@ mod tests {
         let failed = fail(&conn, "j1", "ffmpeg exited 1").unwrap();
         assert_eq!(failed.status, "failed");
         assert_eq!(failed.error.as_deref(), Some("ffmpeg exited 1"));
+    }
+
+    #[test]
+    fn fail_from_queued_succeeds() {
+        let conn = test_db();
+        seed(&conn);
+        let failed = fail(&conn, "j1", "failed to start: db locked").unwrap();
+        assert_eq!(failed.status, "failed");
+        assert_eq!(failed.error.as_deref(), Some("failed to start: db locked"));
+        assert!(failed.started_at.is_none() && failed.finished_at.is_some());
     }
 
     #[test]
