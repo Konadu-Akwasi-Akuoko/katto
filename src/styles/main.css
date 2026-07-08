@@ -14,6 +14,10 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* native form controls (number spinners, scrollbars) follow color-scheme,
+     not our token palette — keep it in step with the theme class */
+  color-scheme: light;
+
   /* ---- katto canonical — warm-light (default) ---- */
   --bg: oklch(0.968 0.012 78);
   --surface: oklch(0.992 0.006 82);
@@ -63,6 +67,8 @@
 }
 
 .dark {
+  color-scheme: dark;
+
   /* only katto tokens change — shadcn aliases follow automatically */
   --bg: oklch(0.148 0.004 74);
   --surface: oklch(0.188 0.005 74);
