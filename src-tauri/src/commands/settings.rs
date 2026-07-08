@@ -87,7 +87,7 @@ async fn read_keys_present() -> Result<KeysPresent> {
         })
     })
     .await
-    .map_err(|e| Error::Keychain(e.to_string()))?
+    .map_err(|e| Error::Io(e.to_string()))?
 }
 
 #[tauri::command]

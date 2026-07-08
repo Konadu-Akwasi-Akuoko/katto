@@ -14,18 +14,17 @@ use crate::state::AppState;
 #[tauri::command]
 #[specta::specta]
 pub async fn pick_studio_root(app: tauri::AppHandle) -> Result<Option<RootCheck>> {
-    let picked =
-        tauri::async_runtime::spawn_blocking(move || app.dialog().file().blocking_pick_folder())
-            .await
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(file_path) = app.dialog().file().blocking_pick_folder() else {
+            return Ok(None);
+        };
+        let path = file_path
+            .into_path()
             .map_err(|e| Error::Io(e.to_string()))?;
-
-    let Some(file_path) = picked else {
-        return Ok(None);
-    };
-    let path = file_path
-        .into_path()
-        .map_err(|e| Error::Io(e.to_string()))?;
-    Ok(Some(paths::check_root(&path)))
+        Ok(Some(paths::check_root(&path)))
+    })
+    .await
+    .map_err(|e| Error::Io(e.to_string()))?
 }
 
 /// Store a credential in the macOS keychain. The value is write-only: never
@@ -40,7 +39,7 @@ pub async fn store_key(
 ) -> Result<()> {
     tauri::async_runtime::spawn_blocking(move || keychain::store_key(service, &value))
         .await
-        .map_err(|e| Error::Keychain(e.to_string()))??;
+        .map_err(|e| Error::Io(e.to_string()))??;
 
     state
         .db
@@ -62,7 +61,7 @@ pub async fn store_key(
 pub async fn key_present(service: KeyService) -> Result<bool> {
     tauri::async_runtime::spawn_blocking(move || keychain::key_present(service))
         .await
-        .map_err(|e| Error::Keychain(e.to_string()))?
+        .map_err(|e| Error::Io(e.to_string()))?
 }
 
 /// `which claude` through a login shell, so the owner's PATH additions apply.
