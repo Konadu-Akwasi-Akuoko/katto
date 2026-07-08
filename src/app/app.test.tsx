@@ -20,6 +20,12 @@ beforeEach(() => {
 				return false;
 			case "detect_claude":
 				return null;
+			case "plugin:event|listen":
+				return 1;
+			case "plugin:event|unlisten":
+				return null;
+			case "get_drive_status":
+				return { mounted: true, path: null, free_gb: null };
 			default:
 				throw new Error(`unexpected command ${cmd}`);
 		}

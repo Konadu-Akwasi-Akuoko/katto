@@ -24,7 +24,12 @@ if (!globalThis.ResizeObserver) {
 	};
 }
 
-afterEach(() => {
+afterEach(async () => {
 	cleanup();
+	// Effect teardown that unlistens from tauri events defers the actual
+	// unlisten to a microtask (`subscription.then(unlisten)`). Cross one
+	// macrotask boundary so that chain settles while the mock IPC internals
+	// are still installed, before clearMocks tears them down.
+	await new Promise((resolve) => setTimeout(resolve, 0));
 	clearMocks();
 });
