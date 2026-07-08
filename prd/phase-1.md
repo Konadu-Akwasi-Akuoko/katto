@@ -40,15 +40,15 @@ Update as work merges; keep in sync with the acceptance-criteria table below and
 - [x] Settings store (SQLite key/value, typed accessors) — `58c4245`
 - [x] Typed IPC: `get_settings` / `set_settings` / `list_events` / `list_jobs` / `job_transition` — `7c2b41b`
 - [x] App icons + menu-bar template — `fd94547`
-- [~] Jobs framework — row + state machine done; `Channel<JobProgress>` streaming + tray-mirror pending
+- [x] Jobs framework — runtime with `Channel<JobProgress>` streaming, tray mirror, terminal events rows (panic-isolated; `queued→failed` added for failed starts)
 - [x] Keychain commands (`store_key` / `key_present` for `elevenlabs` / `anthropic`)
 - [x] Launch-at-login toggle (autostart plugin) — Settings, survives reboot
 - [x] Studio-root picker (any dir; boot-volume / <100 GB warning) — onboarding + Settings re-pick
-- [ ] Studio-root mount check + drive-disconnected banner
+- [x] Studio-root mount check (2 s `/Volumes` poll) + drive-disconnected banner + `get_drive_status`
 - [x] `claude` detection (`zsh -lc "which claude"`, cached in settings)
 - [x] Onboarding wizard (root · ElevenLabs key · claude detection) → Dashboard
 - [x] ⌘K palette — registry + overlay + phase-1 commands (open settings/dashboard, quit, sleep, re-run claude)
-- [ ] Dashboard v1 (events feed · active-jobs list · drive-status card)
+- [x] Dashboard v1 (events feed · active-jobs list · drive-status card) — live queries + broadcast invalidation; DEV smoke-job button
 - [~] Frontend toolchain — Tailwind v4 + shadcn + bindings + Vitest/RTL + TanStack Query + Zustand ui store + `app/`+`features/` layout in place; Biome pending
 - [~] Gate/CI extension — `just check` now includes `vitest` + real `bindings` recipe; `biome` + CI-root move pending
 - [ ] Exit criteria: installable `.app` in menu bar, onboarding persists, `just check` green
