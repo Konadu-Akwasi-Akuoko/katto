@@ -1,4 +1,5 @@
 pub mod anatomy;
+pub mod freshness;
 pub mod manifest;
 pub mod reconcile;
 pub mod slug;

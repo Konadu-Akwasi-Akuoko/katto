@@ -32,6 +32,12 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::onboarding::detect_claude,
             commands::onboarding::complete_onboarding,
             commands::projects::rescan_projects,
+            commands::projects::list_projects,
+            commands::projects::get_project,
+            commands::projects::create_project,
+            commands::projects::set_project_status,
+            commands::projects::set_project_dates,
+            commands::projects::reveal_project_folder,
             commands::shell::set_autostart,
             commands::shell::get_autostart,
             commands::shell::sleep_to_tray,
@@ -41,6 +47,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::EventsAppended,
             broadcast::JobsChanged,
             broadcast::DriveStatusChanged,
+            broadcast::ProjectsChanged,
         ])
 }
 

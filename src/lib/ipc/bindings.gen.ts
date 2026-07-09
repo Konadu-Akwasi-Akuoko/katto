@@ -68,6 +68,37 @@ export const commands = {
 	 *  Returns an empty report when no studio root is configured yet.
 	 */
 	rescanProjects: () => typedError<ReconcileReport, Error>(__TAURI_INVOKE("rescan_projects")),
+	/**  Every project row, most-recently-touched first. */
+	listProjects: () => typedError<Project[], Error>(__TAURI_INVOKE("list_projects")),
+	/**
+	 *  One project with its manifest-validity flag and per-subfolder freshness.
+	 *  Guards the studio-root mount before reading any folder.
+	 */
+	getProject: (slug: string) => typedError<ProjectDetail, Error>(__TAURI_INVOKE("get_project", { slug })),
+	/**
+	 *  Create a new project: dedupe the slug against the index, lay down the D6
+	 *  folder skeleton with a fresh `project.json`, insert and touch the row, record
+	 *  a `project-created` event, and broadcast. All folder + DB work runs on the
+	 *  single writer thread so the slug dedupe and the folder creation cannot race.
+	 */
+	createProject: (title: string, shootDate: string | null) => typedError<Project, Error>(__TAURI_INVOKE("create_project", { title, shootDate })),
+	/**
+	 *  Move a project through the status vocabulary. Writes both the manifest
+	 *  (atomic) and the row — folders are truth — then touches the row, records an
+	 *  event, and broadcasts.
+	 */
+	setProjectStatus: (slug: string, status: string) => typedError<null, Error>(__TAURI_INVOKE("set_project_status", { slug, status })),
+	/**
+	 *  Set (or clear) a project's shoot and publish dates. Writes the manifest
+	 *  (atomic) and the row, touches, records an event, and broadcasts.
+	 */
+	setProjectDates: (slug: string, shoot: string | null, publish: string | null) => typedError<null, Error>(__TAURI_INVOKE("set_project_dates", { slug, shoot, publish })),
+	/**
+	 *  Reveal a project folder (or one of its D6 subfolders) in Finder. `subfolder`
+	 *  is validated against the anatomy allowlist so it can never escape the project
+	 *  directory.
+	 */
+	revealProjectFolder: (slug: string, subfolder: string | null) => typedError<null, Error>(__TAURI_INVOKE("reveal_project_folder", { slug, subfolder })),
 	/**
 	 *  Enable or disable launch-at-login, recording the change in the activity
 	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
@@ -89,6 +120,7 @@ export const events = {
 	driveStatusChanged: makeEvent<DriveStatusChanged>("drive-status-changed"),
 	eventsAppended: makeEvent<EventsAppended>("events-appended"),
 	jobsChanged: makeEvent<JobsChanged>("jobs-changed"),
+	projectsChanged: makeEvent<ProjectsChanged>("projects-changed"),
 };
 
 /* Types */
@@ -130,6 +162,18 @@ export type Event = {
 
 /**  Broadcast after any `events` row is written; the dashboard refetches its feed. */
 export type EventsAppended = null;
+
+/**
+ *  Per-subfolder freshness for a project's D6 anatomy: how many files a subfolder
+ *  holds (non-recursive) and the newest file mtime. `latest_mtime` is `None` for
+ *  an empty or absent subfolder. Feeds the project-detail "what has activity"
+ *  grid — never a score, only a raw count and timestamp.
+ */
+export type FolderFreshness = {
+	subfolder: string,
+	file_count: number,
+	latest_mtime: string | null,
+};
 
 /**
  *  A folder whose `project.json` failed to read or validate. Surfaced in the
@@ -179,6 +223,41 @@ export type KeysPresent = {
 	elevenlabs: boolean,
 	anthropic: boolean,
 };
+
+/**
+ *  A project row. The folder on disk is the source of truth; this row is an index
+ *  reconciled on launch. `last_touched_at` records the most recent interaction and
+ *  drives the tray's current-project line.
+ */
+export type Project = {
+	slug: string,
+	title: string,
+	root_path: string,
+	status: string,
+	target_nle: string,
+	shoot_date: string | null,
+	publish_date: string | null,
+	created_at: string,
+	last_touched_at: string | null,
+};
+
+/**
+ *  A project row plus the on-disk facts the detail surface needs: whether its
+ *  `project.json` still validates (`manifest_error` = `Some` message when not —
+ *  folders are truth, so a bad manifest badges the project rather than dropping
+ *  it) and per-subfolder freshness.
+ */
+export type ProjectDetail = {
+	project: Project,
+	manifest_error: string | null,
+	freshness: FolderFreshness[],
+};
+
+/**
+ *  Broadcast after any project row is created or mutated (status, dates,
+ *  reconcile add/remove); planner and projects surfaces refetch their lists.
+ */
+export type ProjectsChanged = null;
 
 /**
  *  The outcome of a reconcile pass: which rows were added (new valid folders),

@@ -17,6 +17,11 @@ pub struct DriveStatusChanged {
     pub path: String,
 }
 
+/// Broadcast after any project row is created or mutated (status, dates,
+/// reconcile add/remove); planner and projects surfaces refetch their lists.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct ProjectsChanged;
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -26,4 +31,9 @@ pub fn events_appended(app: &AppHandle) {
 /// Best-effort, same contract as [`events_appended`].
 pub fn jobs_changed(app: &AppHandle) {
     let _ = JobsChanged.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn projects_changed(app: &AppHandle) {
+    let _ = ProjectsChanged.emit(app);
 }
