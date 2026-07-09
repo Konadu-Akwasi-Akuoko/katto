@@ -17,6 +17,10 @@ export const onJobsChanged = (callback: () => void): Promise<Unlisten> =>
 export const onIdeasChanged = (callback: () => void): Promise<Unlisten> =>
 	events.ideasChanged.listen(() => callback());
 
+/** A project row was created, mutated (status/dates), or reconciled. */
+export const onProjectsChanged = (callback: () => void): Promise<Unlisten> =>
+	events.projectsChanged.listen(() => callback());
+
 /** The studio root mounted or disconnected. */
 export const onDriveStatusChanged = (
 	callback: (status: DriveStatusChanged) => void,

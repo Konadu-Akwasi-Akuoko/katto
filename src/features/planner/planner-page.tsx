@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BacklogView } from "@/features/planner/backlog/backlog-view";
+import { BoardView } from "@/features/planner/board/board-view";
 
 export function PlannerPage() {
 	return (
@@ -13,9 +14,7 @@ export function PlannerPage() {
 					<TabsTrigger value="backlog">Backlog</TabsTrigger>
 				</TabsList>
 				<TabsContent value="board" className="min-h-0">
-					<Placeholder>
-						The board arrives with drag-to-status. For now, triage the backlog.
-					</Placeholder>
+					<BoardView />
 				</TabsContent>
 				<TabsContent value="calendar" className="min-h-0">
 					<Placeholder>
