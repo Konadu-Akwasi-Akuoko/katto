@@ -10,6 +10,7 @@ pub mod events;
 mod handle;
 pub mod jobs;
 pub mod migrations;
+pub mod projects;
 pub mod settings;
 
 pub use handle::DbHandle;

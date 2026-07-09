@@ -5,8 +5,12 @@ use rusqlite_migration::{M, Migrations};
 /// The forward-only migration ladder. Shipped entries are immutable — a change
 /// to the schema is always a *new* `M::up(...)` appended here, never an edit to
 /// an existing one. See the `add-db-migration` skill.
-pub static MIGRATIONS: LazyLock<Migrations<'static>> =
-    LazyLock::new(|| Migrations::new(vec![M::up(include_str!("migrations/001_initial.sql"))]));
+pub static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
+    Migrations::new(vec![
+        M::up(include_str!("migrations/001_initial.sql")),
+        M::up(include_str!("migrations/002_last_touched.sql")),
+    ])
+});
 
 #[cfg(test)]
 mod tests {
