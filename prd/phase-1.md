@@ -51,7 +51,7 @@ Update as work merges; keep in sync with the acceptance-criteria table below and
 - [x] Dashboard v1 (events feed · active-jobs list · drive-status card) — live queries + broadcast invalidation; DEV smoke-job button
 - [x] Frontend toolchain — Tailwind v4 + shadcn + bindings + Vitest/RTL + TanStack Query + Zustand ui store + Biome 2 + `app/`+`features/` layout
 - [x] Gate/CI extension — `just check` = fmt-check + clippy + test + biome + tsc + vitest; CI mirrors it 1:1 from the workspace root; `just bundle` builds the signed `.app`
-- [~] Exit criteria: `.app` builds signed via `just bundle` and `just check` is green; owner's manual install + onboarding-persistence pass outstanding
+- [x] Exit criteria: `.app` builds signed via `just bundle`, `just check` green, installed to `/Applications`; owner's manual pass (tray, fresh onboarding, quit/relaunch persistence, autostart, drive banner) confirmed 2026-07-09
 
 ## Scope with acceptance criteria
 
