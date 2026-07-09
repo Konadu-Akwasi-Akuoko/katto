@@ -15,6 +15,18 @@ const TITLES: Partial<Record<IpcError["kind"], string>> = {
  * hand-rolls try/catch UI.
  */
 export const queryClient = new QueryClient({
+	// Queries and mutations run over Tauri IPC, not HTTP. The defaults are
+	// network-shaped in two ways that blank the app: networkMode "online"
+	// pauses fetching while the WebView reports offline (a Mac with no
+	// internet), and the retry loop for a failing query pauses while the
+	// window is hidden/unfocused — either way a failed getSettings never
+	// settles and the onboarding gate renders nothing forever. IPC answers
+	// or fails deterministically, so don't retry; recovery comes from
+	// refetch-on-focus and broadcast invalidation.
+	defaultOptions: {
+		queries: { networkMode: "always", retry: false },
+		mutations: { networkMode: "always" },
+	},
 	mutationCache: new MutationCache({
 		onError: (error) => {
 			const title =
