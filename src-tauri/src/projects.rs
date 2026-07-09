@@ -1,3 +1,4 @@
+pub mod anatomy;
 pub mod manifest;
 pub mod slug;
 
