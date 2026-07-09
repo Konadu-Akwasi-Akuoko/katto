@@ -4,10 +4,12 @@ import { useEffect } from "react";
 import {
 	onDriveStatusChanged,
 	onEventsAppended,
+	onIdeasChanged,
 	onJobsChanged,
 } from "@/lib/ipc/broadcast";
 import { driveKeys } from "@/lib/ipc/drive";
 import { eventsKeys } from "@/lib/ipc/events";
+import { ideasKeys } from "@/lib/ipc/ideas";
 import { jobsKeys } from "@/lib/ipc/jobs";
 
 /**
@@ -27,6 +29,9 @@ export function useBroadcastInvalidation(): void {
 			}),
 			onJobsChanged(() => {
 				void queryClient.invalidateQueries({ queryKey: jobsKeys.all });
+			}),
+			onIdeasChanged(() => {
+				void queryClient.invalidateQueries({ queryKey: ideasKeys.all });
 			}),
 			onDriveStatusChanged(() => {
 				void queryClient.invalidateQueries({ queryKey: driveKeys.status });

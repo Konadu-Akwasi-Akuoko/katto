@@ -13,6 +13,10 @@ export const onEventsAppended = (callback: () => void): Promise<Unlisten> =>
 export const onJobsChanged = (callback: () => void): Promise<Unlisten> =>
 	events.jobsChanged.listen(() => callback());
 
+/** An idea row was created or changed (create, update, discard, promote). */
+export const onIdeasChanged = (callback: () => void): Promise<Unlisten> =>
+	events.ideasChanged.listen(() => callback());
+
 /** The studio root mounted or disconnected. */
 export const onDriveStatusChanged = (
 	callback: (status: DriveStatusChanged) => void,

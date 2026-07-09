@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { useBroadcastInvalidation } from "@/hooks/use-broadcast-invalidation";
 import { driveKeys } from "@/lib/ipc/drive";
 import { eventsKeys } from "@/lib/ipc/events";
+import { ideasKeys } from "@/lib/ipc/ideas";
 import { jobsKeys } from "@/lib/ipc/jobs";
 
 describe("useBroadcastInvalidation", () => {
@@ -28,11 +29,13 @@ describe("useBroadcastInvalidation", () => {
 
 		await emit("events-appended");
 		await emit("jobs-changed");
+		await emit("ideas-changed");
 		await emit("drive-status-changed");
 
 		await waitFor(() => {
 			expect(invalidate).toHaveBeenCalledWith({ queryKey: eventsKeys.all });
 			expect(invalidate).toHaveBeenCalledWith({ queryKey: jobsKeys.all });
+			expect(invalidate).toHaveBeenCalledWith({ queryKey: ideasKeys.all });
 			expect(invalidate).toHaveBeenCalledWith({ queryKey: driveKeys.status });
 		});
 	});

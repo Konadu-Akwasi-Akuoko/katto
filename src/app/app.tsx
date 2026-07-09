@@ -9,7 +9,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Dashboard } from "@/features/dashboard/dashboard";
 import { OnboardingGate } from "@/features/onboarding/gate";
 import { Palette } from "@/features/palette/palette";
-import { PlannerStub } from "@/features/planner/planner-stub";
+import { PlannerPage } from "@/features/planner/planner-page";
 import { ProjectsStub } from "@/features/projects/projects-stub";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { useBroadcastInvalidation } from "@/hooks/use-broadcast-invalidation";
@@ -46,7 +46,7 @@ export default function App() {
 					sidebar={<Sidebar />}
 				>
 					{surface === "dashboard" && <Dashboard />}
-					{surface === "planner" && <PlannerStub />}
+					{surface === "planner" && <PlannerPage />}
 					{surface === "projects" && <ProjectsStub />}
 					{surface === "settings" && <SettingsPage />}
 				</AppShell>
