@@ -43,5 +43,6 @@ fs4 = { version = "1.1", features = ["sync"] }
 apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
 
 [dev-dependencies]
+rstest = "0.26.1"
 tempfile = "3.27.0"
 tokio = { workspace = true, features = ["rt"] }

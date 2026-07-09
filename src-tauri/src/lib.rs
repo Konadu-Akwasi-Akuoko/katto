@@ -6,6 +6,7 @@ pub mod error;
 pub mod jobs;
 pub mod keychain;
 pub mod paths;
+pub mod projects;
 mod state;
 mod tray;
 mod window;
