@@ -36,6 +36,9 @@ pub enum Error {
 
     #[error("{0}")]
     StudioRootUnmounted(String),
+
+    #[error("{0}")]
+    InvalidManifest(String),
 }
 
 impl Error {
@@ -43,6 +46,13 @@ impl Error {
     /// a message so every variant keeps the uniform `{ kind, message }` wire shape.
     pub fn db_closed() -> Self {
         Error::DbClosed("the database writer is unavailable".to_string())
+    }
+
+    /// A `project.json` failed schema/slug validation. Pre-formats the offending
+    /// path into the message so the variant stays a single-string tuple and keeps
+    /// the uniform `{ kind, message: string }` wire shape the frontend switches on.
+    pub fn invalid_manifest(path: &std::path::Path, message: &str) -> Self {
+        Error::InvalidManifest(format!("{}: {message}", path.display()))
     }
 }
 
