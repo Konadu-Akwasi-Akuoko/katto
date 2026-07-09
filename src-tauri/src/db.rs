@@ -8,9 +8,11 @@ use crate::error::Result;
 
 pub mod events;
 mod handle;
+pub mod ideas;
 pub mod jobs;
 pub mod migrations;
 pub mod projects;
+pub mod schedule;
 pub mod settings;
 
 pub use handle::DbHandle;
