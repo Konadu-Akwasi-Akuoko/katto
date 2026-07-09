@@ -99,6 +99,25 @@ export const commands = {
 	 *  directory.
 	 */
 	revealProjectFolder: (slug: string, subfolder: string | null) => typedError<null, Error>(__TAURI_INVOKE("reveal_project_folder", { slug, subfolder })),
+	/**  Ideas with the given status, newest-first. */
+	listIdeas: (status: string) => typedError<Idea[], Error>(__TAURI_INVOKE("list_ideas", { status })),
+	/**  Capture a new idea into the backlog and broadcast. */
+	createIdea: (input: IdeaCreate) => typedError<Idea, Error>(__TAURI_INVOKE("create_idea", { input })),
+	/**  Patch an idea's editable fields and return the updated row. */
+	updateIdea: (id: string, patch: IdeaPatch) => typedError<Idea, Error>(__TAURI_INVOKE("update_idea", { id, patch })),
+	/**
+	 *  Discard an idea: it moves to `status='discarded'` and the row is retained as
+	 *  an audit trail (never deleted).
+	 */
+	discardIdea: (id: string) => typedError<null, Error>(__TAURI_INVOKE("discard_idea", { id })),
+	/**
+	 *  Promote a backlog idea into a real project folder in one motion. All the DB
+	 *  work runs inside a single rusqlite transaction on the writer thread; the
+	 *  folder skeleton is filesystem state the transaction cannot cover, so a
+	 *  DB-side failure rolls the rows back and then explicitly removes the folder.
+	 *  On success the idea stays as a `promoted` audit row pointing at the new slug.
+	 */
+	promoteIdea: (id: string) => typedError<PromoteResult, Error>(__TAURI_INVOKE("promote_idea", { id })),
 	/**
 	 *  Enable or disable launch-at-login, recording the change in the activity
 	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
@@ -119,6 +138,7 @@ export const commands = {
 export const events = {
 	driveStatusChanged: makeEvent<DriveStatusChanged>("drive-status-changed"),
 	eventsAppended: makeEvent<EventsAppended>("events-appended"),
+	ideasChanged: makeEvent<IdeasChanged>("ideas-changed"),
 	jobsChanged: makeEvent<JobsChanged>("jobs-changed"),
 	projectsChanged: makeEvent<ProjectsChanged>("projects-changed"),
 };
@@ -149,7 +169,7 @@ export type DriveStatusChanged = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string };
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string };
 
 /**  A row in the append-only activity log. */
 export type Event = {
@@ -174,6 +194,53 @@ export type FolderFreshness = {
 	file_count: number,
 	latest_mtime: string | null,
 };
+
+/**
+ *  An idea row. Column parity with hyper-frames `tools/studio` (D7: no numeric
+ *  score or ranking fields). `status` moves `backlog -> promoted | discarded`;
+ *  discarded rows are kept as an audit trail rather than deleted.
+ */
+export type Idea = {
+	id: string,
+	type: string,
+	kind: string,
+	status: string,
+	title: string,
+	rationale: string | null,
+	source: string | null,
+	source_url: string | null,
+	source_title: string | null,
+	evidence_json: string | null,
+	raw_signal_id: string | null,
+	first_seen: string,
+	notes: string | null,
+	promoted_slug: string | null,
+	kind_source: string | null,
+	kind_why: string | null,
+};
+
+/**
+ *  Fields for a manually captured idea. Everything else is defaulted server-side
+ *  (`type='manual'`, `status='backlog'`, a fresh id, and the capture timestamp).
+ */
+export type IdeaCreate = {
+	title: string,
+	kind: string | null,
+	notes: string | null,
+};
+
+/**  A partial edit of an idea; a `None` field leaves that column unchanged. */
+export type IdeaPatch = {
+	title: string | null,
+	kind: string | null,
+	notes: string | null,
+};
+
+/**
+ *  Broadcast after any idea row is created or mutated (create, update, discard,
+ *  promote); the backlog surface refetches its list.
+ */
+export type IdeasChanged = null;
 
 /**
  *  A folder whose `project.json` failed to read or validate. Surfaced in the
@@ -258,6 +325,11 @@ export type ProjectDetail = {
  *  reconcile add/remove); planner and projects surfaces refetch their lists.
  */
 export type ProjectsChanged = null;
+
+/**  The slug of the project an idea was promoted into. */
+export type PromoteResult = {
+	slug: string,
+};
 
 /**
  *  The outcome of a reconcile pass: which rows were added (new valid folders),

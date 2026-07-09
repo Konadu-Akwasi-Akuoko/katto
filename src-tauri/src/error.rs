@@ -39,6 +39,9 @@ pub enum Error {
 
     #[error("{0}")]
     InvalidManifest(String),
+
+    #[error("{0}")]
+    PromoteFailed(String),
 }
 
 impl Error {
@@ -53,6 +56,14 @@ impl Error {
     /// the uniform `{ kind, message: string }` wire shape the frontend switches on.
     pub fn invalid_manifest(path: &std::path::Path, message: &str) -> Self {
         Error::InvalidManifest(format!("{}: {message}", path.display()))
+    }
+
+    /// Promoting an idea into a project failed. Pre-formats the failing `stage`
+    /// into the message so the variant stays a single-string tuple and keeps the
+    /// uniform `{ kind, message: string }` wire shape the frontend switches on
+    /// (a struct variant would nest an object under `message` and break that).
+    pub fn promote_failed(stage: &str, message: &str) -> Self {
+        Error::PromoteFailed(format!("promote failed at {stage}: {message}"))
     }
 }
 

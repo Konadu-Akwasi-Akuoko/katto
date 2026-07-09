@@ -22,6 +22,11 @@ pub struct DriveStatusChanged {
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
 pub struct ProjectsChanged;
 
+/// Broadcast after any idea row is created or mutated (create, update, discard,
+/// promote); the backlog surface refetches its list.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct IdeasChanged;
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -36,4 +41,9 @@ pub fn jobs_changed(app: &AppHandle) {
 /// Best-effort, same contract as [`events_appended`].
 pub fn projects_changed(app: &AppHandle) {
     let _ = ProjectsChanged.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn ideas_changed(app: &AppHandle) {
+    let _ = IdeasChanged.emit(app);
 }
