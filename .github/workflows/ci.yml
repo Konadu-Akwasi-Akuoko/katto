@@ -12,26 +12,14 @@ env:
 
 jobs:
   # Mirrors the Rust half of `just check` 1:1 from the workspace root.
-  # NOTE: switch runner ubuntu -> macos when objc2 / macOS-only deps land (Phase 2).
+  # Runs on macOS: Phase 2 lands macOS-only deps (objc2, objc2-user-notifications).
+  # macos-latest -> macos-26 image ships Xcode CLT preinstalled, the only Tauri
+  # macOS build prerequisite, so no setup step is needed.
   rust:
     name: Rust (fmt, clippy, test)
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Tauri Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
