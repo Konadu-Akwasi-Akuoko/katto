@@ -61,6 +61,14 @@ export const commands = {
 	 */
 	completeOnboarding: () => typedError<null, Error>(__TAURI_INVOKE("complete_onboarding")),
 	/**
+	 *  Reconcile the projects index against the studio-root folders on demand
+	 *  (folders are truth). Reads the configured `studio_root`, refuses when it is
+	 *  unmounted, then scans `<root>/Projects`, diffs against the index, and applies.
+	 * 
+	 *  Returns an empty report when no studio root is configured yet.
+	 */
+	rescanProjects: () => typedError<ReconcileReport, Error>(__TAURI_INVOKE("rescan_projects")),
+	/**
 	 *  Enable or disable launch-at-login, recording the change in the activity
 	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
 	 */
@@ -124,6 +132,15 @@ export type Event = {
 export type EventsAppended = null;
 
 /**
+ *  A folder whose `project.json` failed to read or validate. Surfaced in the
+ *  reconcile report so the UI can badge it; its DB row is left untouched.
+ */
+export type InvalidManifest = {
+	slug: string,
+	error: string,
+};
+
+/**
  *  A background job row. `status` moves `queued -> running -> (done | failed)`;
  *  no other transition is legal. This repository owns the DB state only; writing
  *  the terminal `events` row is the jobs runtime's job (a later slice).
@@ -161,6 +178,17 @@ export type KeyService = "elevenlabs" | "anthropic";
 export type KeysPresent = {
 	elevenlabs: boolean,
 	anthropic: boolean,
+};
+
+/**
+ *  The outcome of a reconcile pass: which rows were added (new valid folders),
+ *  which were removed (folders that vanished), and which folders carried an
+ *  invalid manifest (left in place).
+ */
+export type ReconcileReport = {
+	added: string[],
+	removed: string[],
+	invalid_manifests: InvalidManifest[],
 };
 
 /**

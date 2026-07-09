@@ -31,6 +31,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::onboarding::key_present,
             commands::onboarding::detect_claude,
             commands::onboarding::complete_onboarding,
+            commands::projects::rescan_projects,
             commands::shell::set_autostart,
             commands::shell::get_autostart,
             commands::shell::sleep_to_tray,
@@ -57,6 +58,29 @@ fn bootstrap_state(app: &tauri::App) -> Result<state::AppState, Box<dyn std::err
     Ok(state::AppState { db, jobs })
 }
 
+/// Reconcile the projects index against the studio-root folders at launch —
+/// folders are truth. Skips (and records a `reconcile_skipped_unmounted` event)
+/// when the root is configured but unreachable; does nothing pre-onboarding. Any
+/// scan/DB failure is swallowed so a bad reconcile never blocks app startup.
+fn launch_reconcile(app: &tauri::App) {
+    let db = app.state::<state::AppState>().db.clone();
+    let outcome = tauri::async_runtime::block_on(db.call(|conn| {
+        match db::settings::get(conn, "studio_root")? {
+            Some(root) if paths::root_mounted(std::path::Path::new(&root)) => {
+                projects::reconcile::reconcile_root(conn, &root).map(Some)
+            }
+            Some(_) => {
+                db::events::record(conn, "reconcile_skipped_unmounted", None, None)?;
+                Ok(None)
+            }
+            None => Ok(None),
+        }
+    }));
+    if let Err(err) = outcome {
+        eprintln!("launch reconcile failed: {err}");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = specta_builder();
@@ -76,6 +100,7 @@ pub fn run() {
             builder.mount_events(app);
             keychain::init()?;
             app.manage(bootstrap_state(app)?);
+            launch_reconcile(app);
 
             let handle = app.handle();
             tray::create(handle)?;
