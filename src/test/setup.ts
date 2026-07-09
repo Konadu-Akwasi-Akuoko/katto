@@ -10,6 +10,13 @@ if (!globalThis.crypto?.getRandomValues) {
 	Object.defineProperty(globalThis, "crypto", { value: webcrypto });
 }
 
+// Tests run against mockIPC, i.e. "inside Tauri"; isTauri() checks this
+// global, which the tauri mocks module does not set.
+Object.defineProperty(globalThis, "isTauri", {
+	value: true,
+	configurable: true,
+});
+
 // cmdk scrolls the selected palette item into view; jsdom has no layout.
 if (!Element.prototype.scrollIntoView) {
 	Element.prototype.scrollIntoView = () => {};

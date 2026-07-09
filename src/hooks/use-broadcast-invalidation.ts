@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { isTauri } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 import {
 	onDriveStatusChanged,
@@ -17,6 +18,9 @@ import { jobsKeys } from "@/lib/ipc/jobs";
 export function useBroadcastInvalidation(): void {
 	const queryClient = useQueryClient();
 	useEffect(() => {
+		// In a plain browser (design QA against the vite server) there is no
+		// IPC bridge; listen() would throw synchronously and unmount the app.
+		if (!isTauri()) return;
 		const subscriptions = [
 			onEventsAppended(() => {
 				void queryClient.invalidateQueries({ queryKey: eventsKeys.all });
