@@ -4,5 +4,6 @@ pub mod ideas;
 pub mod jobs;
 pub mod onboarding;
 pub mod projects;
+pub mod schedule;
 pub mod settings;
 pub mod shell;

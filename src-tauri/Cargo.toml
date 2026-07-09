@@ -41,6 +41,10 @@ fs4 = { version = "1.1", features = ["sync"] }
 # Direct dep with `formatting` so file mtimes render as RFC3339; 0.3.47 is already
 # in the graph transitively (via tauri → cookie), this only enables the feature.
 time = { version = "0.3", features = ["formatting"] }
+# Weekday name (`%A`) for the tray's next-shoot line; already in the graph
+# transitively (via serde_with), this makes it a direct dep. No `clock` feature —
+# the date is passed in, never read from the wall clock.
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1.0", features = ["keychain"] }

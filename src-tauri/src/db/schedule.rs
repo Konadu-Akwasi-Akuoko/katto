@@ -8,6 +8,9 @@ use crate::error::Result;
 /// [`upsert`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 pub struct ScheduleEntry {
+    // Exported as `number` (an AUTOINCREMENT rowid that never approaches 2^53),
+    // matching `RowId`; specta forbids a bare `i64` crossing to TypeScript.
+    #[specta(type = i32)]
     pub id: i64,
     pub project_slug: String,
     pub kind: String,

@@ -119,6 +119,19 @@ export const commands = {
 	 */
 	promoteIdea: (id: string) => typedError<PromoteResult, Error>(__TAURI_INVOKE("promote_idea", { id })),
 	/**
+	 *  Schedule entries whose date falls within `[from, to]` (inclusive ISO bounds),
+	 *  ordered by date. Drives the calendar's month/week views.
+	 */
+	listSchedule: (from: string, to: string) => typedError<ScheduleEntry[], Error>(__TAURI_INVOKE("list_schedule", { from, to })),
+	/**
+	 *  Pin a project to a date. There is at most one entry per `(project_slug, kind)`
+	 *  pair, so this inserts or updates in place. Broadcasts `schedule-changed`, which
+	 *  also refreshes the tray's next-shoot line.
+	 */
+	upsertScheduleEntry: (projectSlug: string, kind: string, date: string, note: string | null) => typedError<ScheduleEntry, Error>(__TAURI_INVOKE("upsert_schedule_entry", { projectSlug, kind, date, note })),
+	/**  Remove a schedule entry by id and broadcast `schedule-changed`. */
+	deleteScheduleEntry: (id: RowId) => typedError<null, Error>(__TAURI_INVOKE("delete_schedule_entry", { id })),
+	/**
 	 *  Enable or disable launch-at-login, recording the change in the activity
 	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
 	 */
@@ -141,6 +154,7 @@ export const events = {
 	ideasChanged: makeEvent<IdeasChanged>("ideas-changed"),
 	jobsChanged: makeEvent<JobsChanged>("jobs-changed"),
 	projectsChanged: makeEvent<ProjectsChanged>("projects-changed"),
+	scheduleChanged: makeEvent<ScheduleChanged>("schedule-changed"),
 };
 
 /* Types */
@@ -363,6 +377,25 @@ export type RootCheck = {
  *  transmits `i64` as a JS number anyway.
  */
 export type RowId = number;
+
+/**
+ *  Broadcast after any schedule entry is upserted or deleted; the calendar
+ *  refetches and the tray's next-shoot line refreshes.
+ */
+export type ScheduleChanged = null;
+
+/**
+ *  A planner schedule entry pinning a project to a date. `kind` is `shoot` or
+ *  `publish`. There is at most one entry per `(project_slug, kind)` pair — see
+ *  [`upsert`].
+ */
+export type ScheduleEntry = {
+	id: number,
+	project_slug: string,
+	kind: string,
+	date: string,
+	note: string | null,
+};
 
 /**
  *  The app's settings as the frontend sees them, assembled from the key/value

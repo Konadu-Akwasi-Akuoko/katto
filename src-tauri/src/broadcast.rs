@@ -27,6 +27,11 @@ pub struct ProjectsChanged;
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
 pub struct IdeasChanged;
 
+/// Broadcast after any schedule entry is upserted or deleted; the calendar
+/// refetches and the tray's next-shoot line refreshes.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct ScheduleChanged;
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -38,12 +43,21 @@ pub fn jobs_changed(app: &AppHandle) {
     let _ = JobsChanged.emit(app);
 }
 
-/// Best-effort, same contract as [`events_appended`].
+/// Best-effort, same contract as [`events_appended`]. A project change can move
+/// the tray's current-project line, so the planner lines refresh here too.
 pub fn projects_changed(app: &AppHandle) {
     let _ = ProjectsChanged.emit(app);
+    crate::tray::refresh_planner_lines(app);
 }
 
 /// Best-effort, same contract as [`events_appended`].
 pub fn ideas_changed(app: &AppHandle) {
     let _ = IdeasChanged.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`]. Refreshes the tray's
+/// next-shoot line alongside the broadcast.
+pub fn schedule_changed(app: &AppHandle) {
+    let _ = ScheduleChanged.emit(app);
+    crate::tray::refresh_planner_lines(app);
 }

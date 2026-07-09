@@ -43,6 +43,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::ideas::update_idea,
             commands::ideas::discard_idea,
             commands::ideas::promote_idea,
+            commands::schedule::list_schedule,
+            commands::schedule::upsert_schedule_entry,
+            commands::schedule::delete_schedule_entry,
             commands::shell::set_autostart,
             commands::shell::get_autostart,
             commands::shell::sleep_to_tray,
@@ -54,6 +57,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::DriveStatusChanged,
             broadcast::ProjectsChanged,
             broadcast::IdeasChanged,
+            broadcast::ScheduleChanged,
         ])
 }
 
@@ -117,6 +121,7 @@ pub fn run() {
 
             let handle = app.handle();
             tray::create(handle)?;
+            tray::refresh_planner_lines(handle);
             window::setup(handle)?;
             tauri::async_runtime::spawn(drive::watch(handle.clone()));
             Ok(())
