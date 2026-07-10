@@ -11,6 +11,7 @@ import { CaptureForm } from "@/features/capture/capture-form";
 import { Dashboard } from "@/features/dashboard/dashboard";
 import { OnboardingGate } from "@/features/onboarding/gate";
 import { Palette } from "@/features/palette/palette";
+import { PaletteDialogs } from "@/features/palette/palette-dialogs";
 import { PlannerPage } from "@/features/planner/planner-page";
 import { ProjectDetail } from "@/features/projects/detail/project-detail";
 import { ProjectsList } from "@/features/projects/list/projects-list";
@@ -86,6 +87,7 @@ function MainApp() {
 					{surface === "settings" && <SettingsPage />}
 				</AppShell>
 				<Palette />
+				<PaletteDialogs />
 			</OnboardingGate>
 			<Toaster theme={dark ? "dark" : "light"} position="bottom-right" />
 		</Providers>
