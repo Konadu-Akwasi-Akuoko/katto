@@ -21,6 +21,10 @@ export const onIdeasChanged = (callback: () => void): Promise<Unlisten> =>
 export const onProjectsChanged = (callback: () => void): Promise<Unlisten> =>
 	events.projectsChanged.listen(() => callback());
 
+/** A schedule entry was upserted or deleted — refetch calendar ranges. */
+export const onScheduleChanged = (callback: () => void): Promise<Unlisten> =>
+	events.scheduleChanged.listen(() => callback());
+
 /** The studio root mounted or disconnected. */
 export const onDriveStatusChanged = (
 	callback: (status: DriveStatusChanged) => void,

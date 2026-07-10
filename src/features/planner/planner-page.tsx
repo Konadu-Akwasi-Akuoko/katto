@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BacklogView } from "@/features/planner/backlog/backlog-view";
 import { BoardView } from "@/features/planner/board/board-view";
+import { CalendarView } from "@/features/planner/calendar/calendar-view";
 
 export function PlannerPage() {
 	return (
@@ -17,9 +17,7 @@ export function PlannerPage() {
 					<BoardView />
 				</TabsContent>
 				<TabsContent value="calendar" className="min-h-0">
-					<Placeholder>
-						The calendar arrives next, with shoot and publish dates as chips.
-					</Placeholder>
+					<CalendarView />
 				</TabsContent>
 				<TabsContent value="backlog" className="min-h-0">
 					<BacklogView />
@@ -27,8 +25,4 @@ export function PlannerPage() {
 			</Tabs>
 		</div>
 	);
-}
-
-function Placeholder({ children }: { children: ReactNode }) {
-	return <p className="text-sm text-fg-muted">{children}</p>;
 }

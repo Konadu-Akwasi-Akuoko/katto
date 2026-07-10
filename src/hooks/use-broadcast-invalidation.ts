@@ -7,12 +7,14 @@ import {
 	onIdeasChanged,
 	onJobsChanged,
 	onProjectsChanged,
+	onScheduleChanged,
 } from "@/lib/ipc/broadcast";
 import { driveKeys } from "@/lib/ipc/drive";
 import { eventsKeys } from "@/lib/ipc/events";
 import { ideasKeys } from "@/lib/ipc/ideas";
 import { jobsKeys } from "@/lib/ipc/jobs";
 import { projectsKeys } from "@/lib/ipc/projects";
+import { scheduleKeys } from "@/lib/ipc/schedule";
 
 /**
  * Bridge backend broadcasts into TanStack Query. Listeners attach per WebView
@@ -37,6 +39,9 @@ export function useBroadcastInvalidation(): void {
 			}),
 			onProjectsChanged(() => {
 				void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
+			}),
+			onScheduleChanged(() => {
+				void queryClient.invalidateQueries({ queryKey: scheduleKeys.all });
 			}),
 			onDriveStatusChanged(() => {
 				void queryClient.invalidateQueries({ queryKey: driveKeys.status });
