@@ -32,6 +32,14 @@ pub struct IdeasChanged;
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
 pub struct ScheduleChanged;
 
+/// Broadcast when a `katto://` deep link is opened (notification click or OS
+/// LaunchServices open); the frontend router navigates to `route` (`"ideas"` or
+/// `"project/<slug>"`).
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct DeepLinkOpened {
+    pub route: String,
+}
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -60,4 +68,13 @@ pub fn ideas_changed(app: &AppHandle) {
 pub fn schedule_changed(app: &AppHandle) {
     let _ = ScheduleChanged.emit(app);
     crate::tray::refresh_planner_lines(app);
+}
+
+/// Best-effort, same contract as [`events_appended`]. Carries the parsed
+/// `katto://` route to the frontend router.
+pub fn deep_link_opened(app: &AppHandle, route: &str) {
+    let _ = DeepLinkOpened {
+        route: route.to_string(),
+    }
+    .emit(app);
 }

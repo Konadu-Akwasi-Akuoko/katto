@@ -1,7 +1,10 @@
-import type { DriveStatusChanged } from "@/lib/ipc/bindings.gen";
+import type {
+	DeepLinkOpened,
+	DriveStatusChanged,
+} from "@/lib/ipc/bindings.gen";
 import { events } from "@/lib/ipc/bindings.gen";
 
-export type { DriveStatusChanged };
+export type { DeepLinkOpened, DriveStatusChanged };
 
 type Unlisten = () => void;
 
@@ -30,3 +33,9 @@ export const onDriveStatusChanged = (
 	callback: (status: DriveStatusChanged) => void,
 ): Promise<Unlisten> =>
 	events.driveStatusChanged.listen((event) => callback(event.payload));
+
+/** A `katto://` deep link was opened — navigate to its route. */
+export const onDeepLinkOpened = (
+	callback: (payload: DeepLinkOpened) => void,
+): Promise<Unlisten> =>
+	events.deepLinkOpened.listen((event) => callback(event.payload));

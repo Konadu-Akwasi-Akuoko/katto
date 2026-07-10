@@ -6,6 +6,7 @@ pub mod drive;
 pub mod error;
 pub mod jobs;
 pub mod keychain;
+pub mod notify;
 pub mod paths;
 pub mod projects;
 mod state;
@@ -60,6 +61,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::ProjectsChanged,
             broadcast::IdeasChanged,
             broadcast::ScheduleChanged,
+            broadcast::DeepLinkOpened,
         ])
 }
 
@@ -100,6 +102,28 @@ fn launch_reconcile(app: &tauri::App) {
     }
 }
 
+/// Wire `katto://` deep links: register the scheme (Windows/Linux only — macOS
+/// registers it from the bundled `Info.plist`, so this is a no-op there and dev
+/// builds never receive OS opens) and forward every recognized open to the
+/// frontend router as a `DeepLinkOpened` broadcast. Unparseable urls are dropped.
+fn setup_deep_links(app: &tauri::AppHandle) {
+    use tauri_plugin_deep_link::DeepLinkExt;
+
+    #[cfg(any(windows, target_os = "linux"))]
+    {
+        let _ = app.deep_link().register_all();
+    }
+
+    let handle = app.clone();
+    app.deep_link().on_open_url(move |event| {
+        for url in event.urls() {
+            if let Some(route) = notify::parse_deep_link(url.as_str()) {
+                broadcast::deep_link_opened(&handle, &route.as_wire());
+            }
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = specta_builder();
@@ -115,6 +139,7 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_deep_link::init())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -127,6 +152,7 @@ pub fn run() {
             tray::refresh_planner_lines(handle);
             window::setup(handle)?;
             capture::setup(handle);
+            setup_deep_links(handle);
             tauri::async_runtime::spawn(drive::watch(handle.clone()));
             Ok(())
         })

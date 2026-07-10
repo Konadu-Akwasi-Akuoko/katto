@@ -16,12 +16,14 @@ import { ProjectDetail } from "@/features/projects/detail/project-detail";
 import { ProjectsList } from "@/features/projects/list/projects-list";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { useBroadcastInvalidation } from "@/hooks/use-broadcast-invalidation";
+import { useDeepLinkRouter } from "@/hooks/use-deep-link-router";
 import { queryClient } from "@/lib/query-client";
 import { applyTheme, storedTheme } from "@/lib/theme";
 import { useUiStore } from "@/stores/ui";
 
 function BroadcastBridge() {
 	useBroadcastInvalidation();
+	useDeepLinkRouter();
 	return null;
 }
 

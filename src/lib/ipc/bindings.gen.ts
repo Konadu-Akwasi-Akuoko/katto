@@ -156,6 +156,7 @@ export const commands = {
 
 /** Events */
 export const events = {
+	deepLinkOpened: makeEvent<DeepLinkOpened>("deep-link-opened"),
 	driveStatusChanged: makeEvent<DriveStatusChanged>("drive-status-changed"),
 	eventsAppended: makeEvent<EventsAppended>("events-appended"),
 	ideasChanged: makeEvent<IdeasChanged>("ideas-changed"),
@@ -165,6 +166,15 @@ export const events = {
 };
 
 /* Types */
+/**
+ *  Broadcast when a `katto://` deep link is opened (notification click or OS
+ *  LaunchServices open); the frontend router navigates to `route` (`"ideas"` or
+ *  `"project/<slug>"`).
+ */
+export type DeepLinkOpened = {
+	route: string,
+};
+
 /**
  *  Snapshot of the studio root's reachability. `path: None` means no root is
  *  configured yet (pre-onboarding) — reported as mounted so no banner shows.
