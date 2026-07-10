@@ -64,6 +64,28 @@ pub async fn create_idea(
     Ok(idea)
 }
 
+/// Land a quick-capture idea into the backlog and broadcast. Same defaults as
+/// [`create_idea`] (`type='manual'`, `status='backlog'`), reshaped for the capture
+/// window's flat `title`/`note`/`kind` fields. The capture window closes itself on
+/// the frontend once this resolves.
+#[tauri::command]
+#[specta::specta]
+pub async fn capture_submit(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    title: String,
+    note: Option<String>,
+    kind: Option<String>,
+) -> Result<()> {
+    let now = now_rfc3339()?;
+    state
+        .db
+        .call(move |conn| capture_submit_inner(conn, title, note, kind, &now))
+        .await?;
+    crate::broadcast::ideas_changed(&app);
+    Ok(())
+}
+
 /// Patch an idea's editable fields and return the updated row.
 #[tauri::command]
 #[specta::specta]
@@ -144,6 +166,27 @@ fn create_idea_inner(conn: &Connection, input: IdeaCreate, now: &str) -> Result<
     };
     db::ideas::create(conn, &idea)?;
     Ok(idea)
+}
+
+/// Build a backlog idea from the capture window's flat fields, mapping its single
+/// `note` onto the idea's `notes` column. Factored out so it is testable against an
+/// in-memory DB without a live Tauri app.
+fn capture_submit_inner(
+    conn: &Connection,
+    title: String,
+    note: Option<String>,
+    kind: Option<String>,
+    now: &str,
+) -> Result<Idea> {
+    create_idea_inner(
+        conn,
+        IdeaCreate {
+            title,
+            kind,
+            notes: note,
+        },
+        now,
+    )
 }
 
 /// Apply a patch and return the resulting row.
@@ -328,6 +371,27 @@ mod tests {
 
         let got = db::ideas::get(&conn, &idea.id).unwrap().unwrap();
         assert_eq!(got.title, "NVMe Deep Dive");
+    }
+
+    #[test]
+    fn capture_submit_inner_lands_backlog_idea_with_note() {
+        let conn = test_db();
+        let idea = capture_submit_inner(
+            &conn,
+            "Quick thought".to_string(),
+            Some("from the hotkey".to_string()),
+            None,
+            "2026-07-09T10:00:00Z",
+        )
+        .unwrap();
+
+        assert_eq!(idea.r#type, "manual");
+        assert_eq!(idea.status, "backlog");
+        assert_eq!(idea.kind, "unset");
+        assert_eq!(idea.notes.as_deref(), Some("from the hotkey"));
+
+        let got = db::ideas::get(&conn, &idea.id).unwrap().unwrap();
+        assert_eq!(got.title, "Quick thought");
     }
 
     #[test]

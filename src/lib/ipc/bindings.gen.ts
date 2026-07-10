@@ -119,6 +119,13 @@ export const commands = {
 	 */
 	promoteIdea: (id: string) => typedError<PromoteResult, Error>(__TAURI_INVOKE("promote_idea", { id })),
 	/**
+	 *  Land a quick-capture idea into the backlog and broadcast. Same defaults as
+	 *  [`create_idea`] (`type='manual'`, `status='backlog'`), reshaped for the capture
+	 *  window's flat `title`/`note`/`kind` fields. The capture window closes itself on
+	 *  the frontend once this resolves.
+	 */
+	captureSubmit: (title: string, note: string | null, kind: string | null) => typedError<null, Error>(__TAURI_INVOKE("capture_submit", { title, note, kind })),
+	/**
 	 *  Schedule entries whose date falls within `[from, to]` (inclusive ISO bounds),
 	 *  ordered by date. Drives the calendar's month/week views.
 	 */

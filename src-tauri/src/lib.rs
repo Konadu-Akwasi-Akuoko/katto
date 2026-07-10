@@ -1,4 +1,5 @@
 pub mod broadcast;
+pub mod capture;
 pub mod commands;
 pub mod db;
 pub mod drive;
@@ -43,6 +44,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::ideas::update_idea,
             commands::ideas::discard_idea,
             commands::ideas::promote_idea,
+            commands::ideas::capture_submit,
             commands::schedule::list_schedule,
             commands::schedule::upsert_schedule_entry,
             commands::schedule::delete_schedule_entry,
@@ -112,6 +114,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::AppleScript,
             None,
         ))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -123,6 +126,7 @@ pub fn run() {
             tray::create(handle)?;
             tray::refresh_planner_lines(handle);
             window::setup(handle)?;
+            capture::setup(handle);
             tauri::async_runtime::spawn(drive::watch(handle.clone()));
             Ok(())
         })

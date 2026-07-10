@@ -33,3 +33,10 @@ export const discardIdea = (id: string): Promise<null> =>
 /** Promote a backlog idea into a real project folder in one transaction. */
 export const promoteIdea = (id: string): Promise<PromoteResult> =>
 	unwrap(commands.promoteIdea(id));
+
+/** Land a quick-capture idea into the backlog from the capture window. */
+export const captureSubmit = (
+	title: string,
+	note: string | null,
+	kind: string | null,
+): Promise<null> => unwrap(commands.captureSubmit(title, note, kind));

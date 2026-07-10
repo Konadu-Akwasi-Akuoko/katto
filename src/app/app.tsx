@@ -1,3 +1,4 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 import { registerAppCommands } from "@/app/commands";
 import { Providers } from "@/app/providers";
@@ -6,6 +7,7 @@ import { DriveBanner } from "@/components/layout/drive-banner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Titlebar } from "@/components/layout/titlebar";
 import { Toaster } from "@/components/ui/sonner";
+import { CaptureForm } from "@/features/capture/capture-form";
 import { Dashboard } from "@/features/dashboard/dashboard";
 import { OnboardingGate } from "@/features/onboarding/gate";
 import { Palette } from "@/features/palette/palette";
@@ -23,7 +25,31 @@ function BroadcastBridge() {
 	return null;
 }
 
+/** The window label, defaulting to `main` when the Tauri context is absent (tests, plain browser). */
+function windowLabel(): string {
+	try {
+		return getCurrentWindow().label;
+	} catch {
+		return "main";
+	}
+}
+
 export default function App() {
+	const [dark] = useState(() => storedTheme() === "dark");
+
+	if (windowLabel() === "capture") {
+		return (
+			<Providers>
+				<CaptureForm />
+				<Toaster theme={dark ? "dark" : "light"} position="bottom-right" />
+			</Providers>
+		);
+	}
+
+	return <MainApp />;
+}
+
+function MainApp() {
 	const [dark, setDark] = useState(() => storedTheme() === "dark");
 	const surface = useUiStore((s) => s.surface);
 	const selectedProjectSlug = useUiStore((s) => s.selectedProjectSlug);
