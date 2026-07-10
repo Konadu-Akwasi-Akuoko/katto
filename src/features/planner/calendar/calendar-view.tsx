@@ -8,10 +8,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { CalendarCell } from "@/features/planner/model/calendar";
+import type {
+	CalendarCell,
+	CalendarMode,
+} from "@/features/planner/model/calendar";
 import {
+	addDaysIso,
+	addMonthsIso,
 	chipsByDate,
 	monthGrid,
+	periodLabel,
 	weekRow,
 } from "@/features/planner/model/calendar";
 import { listProjects, projectsKeys } from "@/lib/ipc/projects";
@@ -19,8 +25,6 @@ import type { ScheduleEntry } from "@/lib/ipc/schedule";
 import { listSchedule, scheduleKeys } from "@/lib/ipc/schedule";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
-
-type Mode = "month" | "week";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -31,21 +35,9 @@ function todayIso(): string {
 	return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-function addMonthsIso(iso: string, delta: number): string {
-	const [y, m] = iso.split("-").map(Number);
-	const date = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1 + delta, 1));
-	return date.toISOString().slice(0, 10);
-}
-
-function addDaysIso(iso: string, delta: number): string {
-	const [y, m, d] = iso.split("-").map(Number);
-	const date = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, (d ?? 1) + delta));
-	return date.toISOString().slice(0, 10);
-}
-
 export function CalendarView() {
 	const openProject = useUiStore((s) => s.openProject);
-	const [mode, setMode] = useState<Mode>("month");
+	const [mode, setMode] = useState<CalendarMode>("month");
 	const [anchor, setAnchor] = useState(todayIso);
 	const today = todayIso();
 
@@ -207,33 +199,5 @@ function DayCell({
 				))}
 			</div>
 		</div>
-	);
-}
-
-/** "February 2024" in month mode; "Feb 12 – Feb 18" for the week's span. */
-function periodLabel(anchor: string, mode: Mode): string {
-	if (mode === "week") {
-		const row = weekRow(anchor);
-		const start = row[0]?.iso;
-		const end = row[row.length - 1]?.iso;
-		if (start === undefined || end === undefined) return "";
-		return `${shortDate(start)} – ${shortDate(end)}`;
-	}
-	const [y, m] = anchor.split("-").map(Number);
-	return new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, 1)).toLocaleDateString(
-		"en-US",
-		{
-			month: "long",
-			year: "numeric",
-			timeZone: "UTC",
-		},
-	);
-}
-
-function shortDate(iso: string): string {
-	const [y, m, d] = iso.split("-").map(Number);
-	return new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).toLocaleDateString(
-		"en-US",
-		{ month: "short", day: "numeric", timeZone: "UTC" },
 	);
 }

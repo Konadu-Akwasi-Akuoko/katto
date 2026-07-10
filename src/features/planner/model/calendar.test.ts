@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+	addDaysIso,
+	addMonthsIso,
 	chipsByDate,
 	monthGrid,
+	periodLabel,
 	weekRow,
 } from "@/features/planner/model/calendar";
 import { scheduleEntry } from "@/test/fixtures/schedule";
@@ -99,6 +102,54 @@ describe("weekRow", () => {
 			true,
 			true,
 		]);
+	});
+});
+
+describe("addMonthsIso", () => {
+	it("snaps to the first of the resulting month", () => {
+		expect(addMonthsIso("2024-02-15", 1)).toBe("2024-03-01");
+	});
+
+	it("rolls the year over stepping past December", () => {
+		expect(addMonthsIso("2024-12-10", 1)).toBe("2025-01-01");
+	});
+
+	it("rolls the year back stepping before January", () => {
+		expect(addMonthsIso("2024-01-31", -1)).toBe("2023-12-01");
+	});
+});
+
+describe("addDaysIso", () => {
+	it("keeps the day within a month", () => {
+		expect(addDaysIso("2024-02-10", 3)).toBe("2024-02-13");
+	});
+
+	it("crosses into the next month, honouring a leap day", () => {
+		expect(addDaysIso("2024-02-28", 1)).toBe("2024-02-29");
+		expect(addDaysIso("2024-02-29", 1)).toBe("2024-03-01");
+	});
+
+	it("crosses the year boundary in both directions", () => {
+		expect(addDaysIso("2024-12-31", 1)).toBe("2025-01-01");
+		expect(addDaysIso("2024-01-01", -1)).toBe("2023-12-31");
+	});
+
+	it("steps a full week for the week-mode paging stride", () => {
+		expect(addDaysIso("2024-02-15", 7)).toBe("2024-02-22");
+	});
+});
+
+describe("periodLabel", () => {
+	it("names the month and year in month mode", () => {
+		expect(periodLabel("2024-02-15", "month")).toBe("February 2024");
+	});
+
+	it("spans the Monday-through-Sunday week in week mode", () => {
+		expect(periodLabel("2024-02-15", "week")).toBe("Feb 12 – Feb 18");
+	});
+
+	it("spans a week straddling a month boundary in week mode", () => {
+		expect(periodLabel("2024-02-01", "week")).toBe("Jan 29 – Feb 4");
 	});
 });
 

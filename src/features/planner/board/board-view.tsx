@@ -19,6 +19,7 @@ import {
 	groupByStatus,
 	isBoardColumn,
 } from "@/features/planner/model/board";
+import { formatShortDate } from "@/lib/date";
 import type { Project } from "@/lib/ipc/projects";
 import {
 	listProjects,
@@ -160,26 +161,15 @@ function DateChips({ project }: { project: Project }) {
 			{project.shoot_date ? (
 				<Badge variant="secondary" className="gap-1 font-normal">
 					<CameraIcon />
-					{formatChipDate(project.shoot_date)}
+					{formatShortDate(project.shoot_date)}
 				</Badge>
 			) : null}
 			{project.publish_date ? (
 				<Badge variant="secondary" className="gap-1 font-normal">
 					<UploadSimpleIcon />
-					{formatChipDate(project.publish_date)}
+					{formatShortDate(project.publish_date)}
 				</Badge>
 			) : null}
 		</div>
 	);
-}
-
-/** ISO date (`2026-07-10`) → compact `Jul 10`, UTC-anchored to dodge TZ drift. */
-function formatChipDate(iso: string): string {
-	const date = new Date(`${iso}T00:00:00.000Z`);
-	if (Number.isNaN(date.getTime())) return iso;
-	return date.toLocaleDateString("en-US", {
-		month: "short",
-		day: "numeric",
-		timeZone: "UTC",
-	});
 }

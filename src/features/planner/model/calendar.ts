@@ -1,4 +1,8 @@
+import { formatShortDate } from "@/lib/date";
 import type { ScheduleEntry } from "@/lib/ipc/schedule";
+
+/** Whether the calendar shows a whole month or a single Monday-first week. */
+export type CalendarMode = "month" | "week";
 
 /** One day cell in a calendar grid. */
 export interface CalendarCell {
@@ -76,6 +80,48 @@ export function weekRow(anchorIso: string): CalendarCell[] {
 		row.push(cellOf(addDays(monday, day), year, month));
 	}
 	return row;
+}
+
+/**
+ * Shift an ISO date by whole months, snapping to the first of the resulting
+ * month. `delta` may be negative; month/year rollover is handled by
+ * `Date.UTC`'s normalisation (e.g. December + 1 → the next January).
+ */
+export function addMonthsIso(iso: string, delta: number): string {
+	const [y, m] = iso.split("-").map(Number);
+	const date = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1 + delta, 1));
+	return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Shift an ISO date by whole days, keeping the day-of-month. `delta` may be
+ * negative; month and year boundaries (including leap days) are normalised by
+ * `Date.UTC`.
+ */
+export function addDaysIso(iso: string, delta: number): string {
+	const [y, m, d] = iso.split("-").map(Number);
+	const date = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, (d ?? 1) + delta));
+	return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Heading for the current view: "February 2024" in month mode; the Monday-first
+ * week's span ("Feb 12 – Feb 18") in week mode. Returns an empty string only
+ * for a malformed anchor that yields no week.
+ */
+export function periodLabel(anchorIso: string, mode: CalendarMode): string {
+	if (mode === "week") {
+		const row = weekRow(anchorIso);
+		const start = row[0]?.iso;
+		const end = row[row.length - 1]?.iso;
+		if (start === undefined || end === undefined) return "";
+		return `${formatShortDate(start)} – ${formatShortDate(end)}`;
+	}
+	const [y, m] = anchorIso.split("-").map(Number);
+	return new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, 1)).toLocaleDateString(
+		"en-US",
+		{ month: "long", year: "numeric", timeZone: "UTC" },
+	);
 }
 
 /**
