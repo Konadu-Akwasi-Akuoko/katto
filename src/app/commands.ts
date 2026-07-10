@@ -15,6 +15,13 @@ export function registerAppCommands(queryClient: QueryClient): void {
 		run: () => useUiStore.getState().setSurface("dashboard"),
 	});
 	registerCommand({
+		id: "nav.projects",
+		title: "Open projects",
+		keywords: ["project", "folders", "detail", "freshness"],
+		group: "Navigate",
+		run: () => useUiStore.getState().setSurface("projects"),
+	});
+	registerCommand({
 		id: "nav.settings",
 		title: "Open settings",
 		keywords: ["preferences", "keys", "root", "autostart"],

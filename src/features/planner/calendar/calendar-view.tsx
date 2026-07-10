@@ -44,7 +44,7 @@ function addDaysIso(iso: string, delta: number): string {
 }
 
 export function CalendarView() {
-	const setSurface = useUiStore((s) => s.setSurface);
+	const openProject = useUiStore((s) => s.openProject);
 	const [mode, setMode] = useState<Mode>("month");
 	const [anchor, setAnchor] = useState(todayIso);
 	const today = todayIso();
@@ -80,12 +80,6 @@ export function CalendarView() {
 				? addDaysIso(current, delta * 7)
 				: addMonthsIso(current, delta),
 		);
-	}
-
-	function openProject(_slug: string) {
-		// v1 routes to the projects surface; per-project detail deep-linking lands
-		// with the projects list/detail surface (Task 14).
-		setSurface("projects");
 	}
 
 	return (

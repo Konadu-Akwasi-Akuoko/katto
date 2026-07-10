@@ -1,4 +1,8 @@
-import type { Project } from "@/lib/ipc/projects";
+import type {
+	FolderFreshness,
+	Project,
+	ProjectDetail,
+} from "@/lib/ipc/projects";
 
 /** A project row with sensible defaults; spread-override per scenario. */
 export function project(
@@ -12,6 +16,35 @@ export function project(
 		publish_date: null,
 		created_at: "2026-07-01T00:00:00.000Z",
 		last_touched_at: null,
+		...overrides,
+	};
+}
+
+/** Per-subfolder freshness with a couple of populated folders and empties. */
+export const freshnessFixture: FolderFreshness[] = [
+	{
+		subfolder: "footage",
+		file_count: 12,
+		latest_mtime: "2026-07-08T10:00:00.000Z",
+	},
+	{
+		subfolder: "audio",
+		file_count: 3,
+		latest_mtime: "2026-07-08T09:00:00.000Z",
+	},
+	{ subfolder: "thumbnails", file_count: 0, latest_mtime: null },
+	{ subfolder: "exports", file_count: 0, latest_mtime: null },
+];
+
+/** A project-detail payload; defaults to a valid manifest + populated grid. */
+export function projectDetail(
+	proj: Project,
+	overrides: Partial<Omit<ProjectDetail, "project">> = {},
+): ProjectDetail {
+	return {
+		project: proj,
+		manifest_error: null,
+		freshness: freshnessFixture,
 		...overrides,
 	};
 }

@@ -10,7 +10,8 @@ import { Dashboard } from "@/features/dashboard/dashboard";
 import { OnboardingGate } from "@/features/onboarding/gate";
 import { Palette } from "@/features/palette/palette";
 import { PlannerPage } from "@/features/planner/planner-page";
-import { ProjectsStub } from "@/features/projects/projects-stub";
+import { ProjectDetail } from "@/features/projects/detail/project-detail";
+import { ProjectsList } from "@/features/projects/list/projects-list";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { useBroadcastInvalidation } from "@/hooks/use-broadcast-invalidation";
 import { queryClient } from "@/lib/query-client";
@@ -25,6 +26,7 @@ function BroadcastBridge() {
 export default function App() {
 	const [dark, setDark] = useState(() => storedTheme() === "dark");
 	const surface = useUiStore((s) => s.surface);
+	const selectedProjectSlug = useUiStore((s) => s.selectedProjectSlug);
 
 	useEffect(() => {
 		registerAppCommands(queryClient);
@@ -47,7 +49,12 @@ export default function App() {
 				>
 					{surface === "dashboard" && <Dashboard />}
 					{surface === "planner" && <PlannerPage />}
-					{surface === "projects" && <ProjectsStub />}
+					{surface === "projects" &&
+						(selectedProjectSlug !== null ? (
+							<ProjectDetail slug={selectedProjectSlug} />
+						) : (
+							<ProjectsList />
+						))}
 					{surface === "settings" && <SettingsPage />}
 				</AppShell>
 				<Palette />
