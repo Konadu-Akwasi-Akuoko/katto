@@ -12,6 +12,29 @@ Projects are the noun every later phase acts on (ingest files into them, the cut
 inside them, the dock works in their folders). The promote flow fixes the slug contract early
 — everything downstream joins on folder name.
 
+## Progress
+
+Living checklist — the durable record of what's landed vs. outstanding on `feat/phase-1-tray-window`.
+
+- [x] CI rust job moved to `macos-latest` (Phase 2 lands objc2/macOS-only deps)
+- [x] Slug contract — `kebab_slug` + `project_slug` ported byte-compatible from the hyper-frames studio source (collision ladder table-tested)
+- [x] `project.json` manifest — schema-validated read/write, atomic `.tmp` → rename round-trip
+- [x] D6 folder anatomy skeleton + guarded rollback removal (never recreates, never deletes on invalid manifest)
+- [x] Migration 002 (`projects.last_touched_at`) + `db/projects.rs` repository
+- [x] `db/ideas.rs` + `db/schedule.rs` repositories
+- [x] Reconcile — folder scan + pure diff + launch hook + `rescan_projects` (folders are truth)
+- [x] Projects commands — CRUD + freshness grid + `projects-changed` broadcast
+- [x] Ideas commands — CRUD + one-transaction promote with rollback and folder cleanup
+- [x] Schedule commands + tray current-project and next-shoot lines
+- [x] Planner shell + Backlog triage surface
+- [x] Board — kanban with drag-to-status (dnd-kit)
+- [x] Calendar — month/week grids with shoot + publish chips + week-ahead model
+- [x] Projects list + detail surfaces (freshness grid, reveal-in-Finder)
+- [x] Quick capture — global hotkey + capture window into the backlog
+- [x] Notifications + `katto://` deep links (dev degrades to tray)
+- [x] Palette commands — new idea, promote idea, new project, go to project, open studio root
+- [ ] Exit criteria: owner's manual pass (hotkey → promote → folder + Board card; Calendar shoot date; tray shoot line; Finder-delete → rescan; SSD unplug/replug)
+
 ## User stories
 
 - Watching a video at lunch, I hit the global hotkey, type an idea, hit return — it's in the
