@@ -86,6 +86,6 @@ const PRIORITY: Record<Exclude<PriorityLevel, "none">, Appearance> = {
  * unprioritised project renders no priority chrome at all.
  */
 export function priorityAppearance(priority: string): Appearance | null {
-	if (priority === "none" || !isPriorityLevel(priority)) return null;
-	return PRIORITY[priority as Exclude<PriorityLevel, "none">];
+	if (!isPriorityLevel(priority) || priority === "none") return null;
+	return PRIORITY[priority];
 }
