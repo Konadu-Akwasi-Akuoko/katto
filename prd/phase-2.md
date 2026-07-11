@@ -14,7 +14,7 @@ inside them, the dock works in their folders). The promote flow fixes the slug c
 
 ## Progress
 
-Living checklist — the durable record of what's landed vs. outstanding on `feat/phase-1-tray-window`.
+Living checklist — the durable record of what's landed vs. outstanding on `feat/phase-2-projects-planner`.
 
 - [x] CI rust job moved to `macos-latest` (Phase 2 lands objc2/macOS-only deps)
 - [x] Slug contract — `kebab_slug` + `project_slug` ported byte-compatible from the hyper-frames studio source (collision ladder table-tested)
@@ -33,6 +33,9 @@ Living checklist — the durable record of what's landed vs. outstanding on `fea
 - [x] Quick capture — global hotkey + capture window into the backlog
 - [x] Notifications + `katto://` deep links (dev degrades to tray)
 - [x] Palette commands — new idea, promote idea, new project, go to project, open studio root
+- [x] Capture window opens on the active Space (`visible_on_all_workspaces`) with a soft `--r-lg` frame; tray gained a "Quick capture" item
+- [ ] Settings rebind for `capture_shortcut` — nothing writes the key, so the default is currently the only binding
+- [ ] Capture window over a **fullscreen** Space — `visible_on_all_workspaces` alone may not float above one ([tauri#11488](https://github.com/tauri-apps/tauri/issues/11488)); needs `NSWindowCollectionBehaviorFullScreenAuxiliary` via `objc2` if the manual pass shows it hidden
 - [ ] Exit criteria: owner's manual pass (hotkey → promote → folder + Board card; Calendar shoot date; tray shoot line; Finder-delete → rescan; SSD unplug/replug)
 
 ## User stories
@@ -57,7 +60,7 @@ Living checklist — the durable record of what's landed vs. outstanding on `fea
 | Ideas CRUD | create (manual), edit title/kind/notes, discard (status=`discarded`, kept as audit), list by status; **no score/rank fields anywhere** (D7) |
 | Promote | One transaction: idea → `status='promoted'` + `promoted_slug`; project row inserted; folder skeleton created; failure anywhere rolls back DB and removes any partial folder; `events` row |
 | Schedule | shoot/publish rows per project; week-ahead query for tray + dashboard |
-| Quick capture | Global hotkey (default ⌥⌘I, rebindable in Settings) opens a small always-on-top borderless window (title input, optional note, kind picker) from any app; Enter saves `ideas` row (type=`manual`, status=`backlog`) + closes; Esc cancels; works while main window hidden |
+| Quick capture | Global hotkey (default ⌥⌘K, rebindable in Settings) opens a small always-on-top borderless window (title input, optional note, kind picker) from any app; Enter saves `ideas` row (type=`manual`, status=`backlog`) + closes; Esc cancels; works while main window hidden, and opens on the **active** Space, not the app's own |
 | Notifications + deep links | `notify(title, body, url)` via `objc2-user-notifications` (bundled identified app required — official plugin has no desktop click handlers); clicking opens/focuses katto at `katto://ideas` or `katto://project/<slug>`; in dev (unsigned), notifications degrade to tray attention + events row |
 | Planner Board | Kanban columns over project status (`idea → shooting → editing → published` v1 vocabulary); drag card between columns persists status; card shows title, next date chip, latest-artifact hint |
 | Planner Calendar | Month + week views; shoot chips and publish chips; click → project detail |

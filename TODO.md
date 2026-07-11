@@ -38,6 +38,18 @@ slice with its own exit criterion. Update `prd/index.md`'s status tracker as pha
 The original M-milestones live on inside the phases: M0 ✅ (workspace) · M1–M3 → Phase 4 ·
 M4 → Phase 5 · M5 → Phases 4–5 · M6 → Phase 5 · M7 → Phases 1 + 4 + 6 · M8 → Phase 7.
 
+## Parked issues (revisit)
+
+- [ ] **Quick-capture hotkey doesn't surface the window over a fullscreen Space.** `⌥⌘K` fires
+      and the window is built with `visible_on_all_workspaces(true)`
+      (`NSWindowCollectionBehaviorCanJoinAllSpaces`), which fixes ordinary Spaces — but on a
+      *fullscreen* Space the window still opens out of sight. Restarted app, still reproduces.
+      Suspected fix: also set `NSWindowCollectionBehaviorFullScreenAuxiliary` on the capture
+      `NSWindow` via `objc2` after build (the app already links `objc2`/`objc2-foundation`),
+      and/or `MoveToActiveSpace`. See [tauri#11488](https://github.com/tauri-apps/tauri/issues/11488).
+      Owner runs multiple fullscreen katto Spaces, so this is the common case for them.
+      File: `src-tauri/src/capture.rs` `open_capture_window`.
+
 ## Cross-cutting checklist (apply throughout)
 
 - Rational time end-to-end in the engine; floats only at UI/model edges
