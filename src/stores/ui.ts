@@ -11,11 +11,14 @@ export type PaletteDialog = "promote-idea" | "go-to-project" | "new-project";
 type UiState = {
 	surface: Surface;
 	selectedProjectSlug: string | null;
+	peekSlug: string | null;
 	paletteOpen: boolean;
 	paletteDialog: PaletteDialog | null;
 	setSurface: (surface: Surface) => void;
 	openProject: (slug: string) => void;
 	setSelectedProjectSlug: (slug: string | null) => void;
+	openPeek: (slug: string) => void;
+	closePeek: () => void;
 	setPaletteOpen: (open: boolean) => void;
 	togglePalette: () => void;
 	openPaletteDialog: (dialog: PaletteDialog) => void;
@@ -26,18 +29,23 @@ type UiState = {
  * Global UI state: active surface + palette visibility. Read via selectors only.
  * `selectedProjectSlug` is the intra-projects list↔detail selection; switching
  * surfaces clears it, while `openProject` jumps straight to a project's detail
- * (the calendar chip's cross-surface navigation channel). `paletteDialog` is the
- * secondary surface a two-step palette command (promote/go-to/new-project) opens.
+ * (the calendar chip's cross-surface navigation channel). `peekSlug` is the project
+ * the shared peek drawer is showing (opened from board/calendar; the drawer is mounted
+ * once at the shell). `paletteDialog` is the secondary surface a two-step palette
+ * command (promote/go-to/new-project) opens.
  */
 export const useUiStore = create<UiState>((set) => ({
 	surface: "dashboard",
 	selectedProjectSlug: null,
+	peekSlug: null,
 	paletteOpen: false,
 	paletteDialog: null,
 	setSurface: (surface) => set({ surface, selectedProjectSlug: null }),
 	openProject: (slug) =>
 		set({ surface: "projects", selectedProjectSlug: slug }),
 	setSelectedProjectSlug: (slug) => set({ selectedProjectSlug: slug }),
+	openPeek: (slug) => set({ peekSlug: slug }),
+	closePeek: () => set({ peekSlug: null }),
 	setPaletteOpen: (open) => set({ paletteOpen: open }),
 	togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
 	openPaletteDialog: (dialog) => set({ paletteDialog: dialog }),
