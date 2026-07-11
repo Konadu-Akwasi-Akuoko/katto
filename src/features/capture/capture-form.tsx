@@ -46,7 +46,7 @@ export function CaptureForm() {
 
 	return (
 		<form
-			className="flex h-dvh flex-col gap-2 bg-surface p-3"
+			className="grain flex h-dvh flex-col gap-2 overflow-hidden rounded-lg border bg-surface p-3 shadow-[var(--shadow)]"
 			onSubmit={(event) => {
 				event.preventDefault();
 				if (!trimmed || submit.isPending) return;

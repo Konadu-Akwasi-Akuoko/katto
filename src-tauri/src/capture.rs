@@ -9,9 +9,12 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use crate::db;
 use crate::state::AppState;
 
-/// Default quick-capture accelerator (`⌥⌘I`). Rebindable via the `capture_shortcut`
+/// Default quick-capture accelerator (`⌥⌘K`). Rebindable via the `capture_shortcut`
 /// settings key; parsed by the global-shortcut plugin's accelerator grammar.
-pub const DEFAULT_CAPTURE_SHORTCUT: &str = "alt+cmd+i";
+///
+/// Not `⌥⌘I`: that is WKWebView's Web Inspector binding, so it fires the inspector
+/// alongside the capture window in a dev build, and browsers claim it for devtools.
+pub const DEFAULT_CAPTURE_SHORTCUT: &str = "alt+cmd+k";
 
 /// Window label for the capture window. The frontend switches on this label to
 /// render only the capture form; the capability file scopes its permissions to it.
@@ -56,6 +59,15 @@ pub fn register_capture_hotkey(
 /// Show the capture window, focusing an existing one or building a fresh
 /// borderless, always-on-top, centered ~420×160 window that loads the SPA (which
 /// renders only the capture form for the `capture` label).
+///
+/// `visible_on_all_workspaces` is what makes capture-from-anywhere true: without
+/// it the `NSWindow` belongs to the Space it was born on, so a hotkey pressed on
+/// another Space opens the window out of sight (and drags the app's Space forward
+/// instead). It maps to `NSWindowCollectionBehaviorCanJoinAllSpaces`.
+///
+/// The frame is transparent because the form paints its own rounded surface;
+/// a decorationless `NSWindow` is otherwise a hard-cornered rectangle. This is
+/// why the app opts into `macOSPrivateApi`.
 pub fn open_capture_window(app: &AppHandle) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window(CAPTURE) {
         let _ = window.show();
@@ -66,8 +78,10 @@ pub fn open_capture_window(app: &AppHandle) -> tauri::Result<()> {
         .title("katto — capture")
         .inner_size(420.0, 160.0)
         .always_on_top(true)
+        .visible_on_all_workspaces(true)
         .skip_taskbar(true)
         .decorations(false)
+        .transparent(true)
         .resizable(false)
         .center()
         .focused(true)

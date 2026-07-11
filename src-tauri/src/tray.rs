@@ -4,6 +4,7 @@ use tauri::{
     tray::TrayIconBuilder,
 };
 
+use crate::capture;
 use crate::state::AppState;
 use crate::window;
 
@@ -18,6 +19,7 @@ struct TrayState {
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let toggle = MenuItem::with_id(app, "toggle", "Hide window", true, None::<&str>)?;
+    let capture = MenuItem::with_id(app, "capture", "Quick capture", true, None::<&str>)?;
     let job = MenuItem::with_id(app, "job", "No active job", false, None::<&str>)?;
     let project = MenuItem::with_id(app, "project", "No project", false, None::<&str>)?;
     let shoot = MenuItem::with_id(app, "shoot", "No shoot scheduled", false, None::<&str>)?;
@@ -29,6 +31,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         app,
         &[
             &toggle,
+            &capture,
             &sep_top,
             &job,
             &project,
@@ -44,6 +47,9 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "toggle" => window::toggle_main(app),
+            "capture" => {
+                let _ = capture::open_capture_window(app);
+            }
             "quit" => app.exit(0),
             _ => {}
         })
