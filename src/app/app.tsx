@@ -11,6 +11,7 @@ import { Dashboard } from "@/features/dashboard/dashboard";
 import { OnboardingGate } from "@/features/onboarding/gate";
 import { Palette } from "@/features/palette/palette";
 import { PaletteDialogs } from "@/features/palette/palette-dialogs";
+import { ProjectPeek } from "@/features/planner/peek/project-peek";
 import { PlannerPage } from "@/features/planner/planner-page";
 import { ProjectDetail } from "@/features/projects/detail/project-detail";
 import { ProjectsList } from "@/features/projects/list/projects-list";
@@ -79,6 +80,7 @@ function MainApp() {
 				</AppShell>
 				<Palette />
 				<PaletteDialogs />
+				<ProjectPeek />
 			</OnboardingGate>
 			<Toaster theme={dark ? "dark" : "light"} position="bottom-right" />
 		</Providers>
