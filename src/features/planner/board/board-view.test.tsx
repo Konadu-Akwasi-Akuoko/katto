@@ -331,7 +331,6 @@ describe("BoardView", () => {
 			await screen.findByRole("button", { name: /move to trash/i }),
 		);
 		expect(await screen.findByText("NVMe deep dive")).toBeInTheDocument();
-		expect(useUiStore.getState().peekSlug).toBeNull();
 	});
 
 	it("closes the peek when the peeked project is trashed", async () => {

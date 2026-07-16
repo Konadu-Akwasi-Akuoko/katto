@@ -184,8 +184,10 @@ export function BoardView() {
 
 			{/* Controlled, and a sibling of every menu tree: a DialogTrigger inside
 			    the ContextMenuItem would unmount with the menu on select. The
-			    content is mounted with the pending project rather than reading it
-			    optionally, so closing can't blank the title mid-fade. */}
+			    content is rendered only while a project is pending rather than
+			    reading it optionally: Radix's Presence holds closed content for
+			    the 200ms exit animation, so `pendingDelete?.title` would flash an
+			    empty name on every close. Unmounting trades that fade away. */}
 			<Dialog
 				open={pendingDelete !== null}
 				onOpenChange={(open) => {
