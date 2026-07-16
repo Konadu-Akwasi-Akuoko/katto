@@ -50,6 +50,13 @@ async function flushRefetch(client: QueryClient): Promise<void> {
 	});
 }
 
+/** The card element wrapping a title — dnd-kit's attributes give it role="button". */
+function cardFor(title: string): HTMLElement {
+	const card = screen.getByText(title).closest('[role="button"]');
+	if (!(card instanceof HTMLElement)) throw new Error(`no card for ${title}`);
+	return card;
+}
+
 function columnFor(label: string): HTMLElement {
 	const heading = screen.getByRole("heading", { name: label });
 	const section = heading.closest("section");
@@ -147,7 +154,12 @@ describe("BoardView", () => {
 			project({ slug: "cold-2026-07-01", title: "Cold one", priority: "none" }),
 		]);
 		await screen.findByText("Hot one");
-		expect(screen.getByText("High")).toBeInTheDocument();
-		expect(screen.queryByText("None")).not.toBeInTheDocument();
+		// Scoped per card, and the negative asserts on a label that *can* render:
+		// "None" has no appearance entry, so querying for it would pass against
+		// any implementation, including one with no tab guard at all.
+		expect(within(cardFor("Hot one")).getByText("High")).toBeInTheDocument();
+		expect(
+			within(cardFor("Cold one")).queryByText("High"),
+		).not.toBeInTheDocument();
 	});
 });
