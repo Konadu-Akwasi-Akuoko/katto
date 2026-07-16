@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { act, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BoardView } from "@/features/planner/board/board-view";
 import type { Project } from "@/lib/ipc/projects";
 import { projectsKeys } from "@/lib/ipc/projects";
-import { boardFixture } from "@/test/fixtures/projects";
+import { useUiStore } from "@/stores/ui";
+import { boardFixture, project } from "@/test/fixtures/projects";
 
 const COLUMN_LABELS = ["Idea", "Shooting", "Editing", "Published"];
 
@@ -56,6 +58,8 @@ function columnFor(label: string): HTMLElement {
 }
 
 describe("BoardView", () => {
+	afterEach(() => useUiStore.setState({ peekSlug: null }));
+
 	it("renders the four workflow columns", async () => {
 		renderBoard();
 		await screen.findByText("NVMe deep dive");
@@ -129,5 +133,21 @@ describe("BoardView", () => {
 		expect(
 			screen.queryByText(/couldn't load your projects/i),
 		).not.toBeInTheDocument();
+	});
+
+	it("opens the peek when a card is clicked", async () => {
+		renderBoard();
+		await userEvent.click(await screen.findByText("NVMe deep dive"));
+		expect(useUiStore.getState().peekSlug).toBe("nvme-deep-dive-2026-07-08");
+	});
+
+	it("shows a priority tab only on prioritised cards", async () => {
+		renderBoard([
+			project({ slug: "hot-2026-07-01", title: "Hot one", priority: "high" }),
+			project({ slug: "cold-2026-07-01", title: "Cold one", priority: "none" }),
+		]);
+		await screen.findByText("Hot one");
+		expect(screen.getByText("High")).toBeInTheDocument();
+		expect(screen.queryByText("None")).not.toBeInTheDocument();
 	});
 });

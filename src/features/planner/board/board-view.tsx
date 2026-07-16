@@ -14,6 +14,7 @@ import type { Icon } from "@phosphor-icons/react";
 import {
 	CameraIcon,
 	CheckCircleIcon,
+	FlagIcon,
 	LightbulbIcon,
 	ScissorsIcon,
 	UploadSimpleIcon,
@@ -22,7 +23,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { groupByStatus } from "@/features/planner/model/board";
-import { statusAppearance } from "@/lib/appearance";
+import { priorityAppearance, statusAppearance } from "@/lib/appearance";
 import { formatShortDate } from "@/lib/date";
 import type { Project } from "@/lib/ipc/projects";
 import {
@@ -33,6 +34,7 @@ import {
 import type { ProjectStatus } from "@/lib/project-status";
 import { isProjectStatus, PROJECT_STATUSES } from "@/lib/project-status";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/stores/ui";
 
 const COLUMN_ICONS: Record<ProjectStatus, Icon> = {
 	idea: LightbulbIcon,
@@ -158,23 +160,44 @@ function Column({
 function Card({ project }: { project: Project }) {
 	const { attributes, listeners, setNodeRef, transform, isDragging } =
 		useDraggable({ id: project.slug });
+	const openPeek = useUiStore((s) => s.openPeek);
+	const priority = priorityAppearance(project.priority);
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: {...attributes} supplies role="button" + tabIndex={0} at runtime (useDraggable's defaultRole); Biome can't see through the spread
+		// biome-ignore lint/a11y/useKeyWithClickEvents: {...listeners} already carries the KeyboardSensor's onKeyDown activator — a JSX onKeyDown after the spread would replace it and kill keyboard drag. Enter starts a drag; the context menu's Open item is the keyboard route to the peek
 		<div
 			ref={setNodeRef}
 			{...listeners}
 			{...attributes}
+			onClick={() => openPeek(project.slug)}
 			style={{ transform: CSS.Translate.toString(transform) }}
 			className={cn(
-				"grain flex cursor-default touch-none flex-col gap-1.5 rounded-lg border bg-surface p-3",
+				"grain flex cursor-default touch-none flex-col overflow-hidden rounded-lg border bg-surface",
 				"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember",
 				isDragging && "opacity-50",
 			)}
 		>
-			<span className="text-sm text-fg">{project.title}</span>
-			{/* v1 hint is the shoot/publish chip; the latest-artifact hint waits on
-			    the cheaper detail freshness data (Task 14). */}
-			<DateChips project={project} />
+			{priority ? (
+				<div
+					className={cn(
+						"flex w-fit items-center gap-1 rounded-br-lg px-2 py-0.5",
+						// The one sanctioned uppercase-letterspaced label in the app
+						// (spec §Design-rule exception, board card only). Scale steps
+						// only — no arbitrary type values anywhere in this repo.
+						"text-xs uppercase tracking-wider",
+						priority.tint,
+						priority.fg,
+					)}
+				>
+					<FlagIcon className="size-3" />
+					{priority.label}
+				</div>
+			) : null}
+			<div className="flex flex-col gap-1.5 p-3 pt-2.5">
+				<span className="text-sm text-fg">{project.title}</span>
+				<DateChips project={project} />
+			</div>
 		</div>
 	);
 }
