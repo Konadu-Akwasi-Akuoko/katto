@@ -5,14 +5,15 @@ import { isProjectStatus } from "@/lib/project-status";
 export type { PriorityLevel };
 
 /**
- * The token-class quartet a status/priority renders with. `dot`/`tint` are
- * background utilities (the chip dot and the chip fill), `fg` is the text/icon
- * colour. Class strings are literals here so the Tailwind scanner emits them.
+ * The token-class pair a status/priority renders with: `fg` is the text/icon
+ * colour, `tint` the chip fill. The chip's dot inherits colour from `fg` via
+ * `bg-current` (see `Badge`'s `[&>.dot]:bg-current`), so there is no separate
+ * dot class here. Class strings are literals here so the Tailwind scanner
+ * emits them.
  */
 export type Appearance = {
 	label: string;
 	fg: string;
-	dot: string;
 	tint: string;
 };
 
@@ -20,25 +21,21 @@ const STATUS: Record<ProjectStatus, Appearance> = {
 	idea: {
 		label: "Idea",
 		fg: "text-status-idea",
-		dot: "bg-status-idea",
 		tint: "bg-status-idea-tint",
 	},
 	shooting: {
 		label: "Shooting",
 		fg: "text-status-shooting",
-		dot: "bg-status-shooting",
 		tint: "bg-status-shooting-tint",
 	},
 	editing: {
 		label: "Editing",
 		fg: "text-status-editing",
-		dot: "bg-status-editing",
 		tint: "bg-status-editing-tint",
 	},
 	published: {
 		label: "Published",
 		fg: "text-status-published",
-		dot: "bg-status-published",
 		tint: "bg-status-published-tint",
 	},
 };
@@ -72,19 +69,16 @@ const PRIORITY: Record<Exclude<PriorityLevel, "none">, Appearance> = {
 	low: {
 		label: "Low",
 		fg: "text-priority-low",
-		dot: "bg-priority-low",
 		tint: "bg-priority-low-tint",
 	},
 	medium: {
 		label: "Medium",
 		fg: "text-priority-medium",
-		dot: "bg-priority-medium",
 		tint: "bg-priority-medium-tint",
 	},
 	high: {
 		label: "High",
 		fg: "text-priority-high",
-		dot: "bg-priority-high",
 		tint: "bg-priority-high-tint",
 	},
 };
