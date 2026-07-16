@@ -10,7 +10,7 @@ Migrations are numbered, embedded, and forward-only. Shipped migrations are immu
 ## Checklist (todo per item)
 
 1. **New migration, never an edit.** Append the next `M::up(...)` to the migrations list in `src-tauri/src/db/migrations.rs`. Never modify an existing entry — even a typo ships as a new migration.
-2. **Idempotent column additions.** Post-ship additions to an existing table use the `PRAGMA table_info` guard pattern (check column presence before `ALTER TABLE ADD COLUMN`) — same pattern as hyper-frames' `ensureColumns`.
+2. **Column additions are a plain `ALTER`.** `ALTER TABLE <t> ADD COLUMN <c> …;` in the `.sql` file — no presence guard. `rusqlite_migration` tracks `user_version` and applies each entry exactly once, so a guard protects against nothing. It is also not expressible: `PRAGMA table_info` returns rows and plain SQLite cannot branch on them, so a guard would force `M::up_with_hook` and Rust-side logic for no gain. Follow `002_last_touched.sql` / `003_priority.sql`. (hyper-frames' `ensureColumns` is the right pattern *there* — it has no migration ladder, so nothing else guarantees once-only. Do not port it here.)
 3. **Validate test.** The mandatory migrations test (`migrations_apply_on_fresh_memory_db`) must still pass — it runs the full ladder on `Connection::open_in_memory()`.
 4. **Repository layer.** Add/adjust the query functions in `src-tauri/src/db/<aggregate>.rs` (functions take `&Connection`, return typed rows). No SQL anywhere else.
 5. **Tests.** New/changed repository functions get in-memory DB tests via the shared `test_db()` helper (all migrations applied, production pragmas minus WAL).
