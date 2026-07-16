@@ -4,6 +4,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BoardView } from "@/features/planner/board/board-view";
+import type { DriveStatus } from "@/lib/ipc/drive";
 import type { Project } from "@/lib/ipc/projects";
 import { projectsKeys } from "@/lib/ipc/projects";
 import { useUiStore } from "@/stores/ui";
@@ -25,12 +26,23 @@ function renderWithClient() {
 	return { client };
 }
 
-function renderBoard(initial: Project[] = boardFixture) {
+const MOUNTED: DriveStatus = {
+	mounted: true,
+	path: "/Volumes/Studio",
+	free_gb: 512,
+};
+
+function renderBoard(
+	initial: Project[] = boardFixture,
+	drive: DriveStatus = MOUNTED,
+) {
 	const calls = vi.fn();
 	mockIPC((cmd, payload) => {
 		calls(cmd, payload);
 		if (cmd === "list_projects") return initial;
+		if (cmd === "get_drive_status") return drive;
 		if (cmd === "set_project_status") return null;
+		if (cmd === "set_project_priority") return null;
 		throw new Error(`unexpected command: ${cmd}`);
 	});
 	return { calls, ...renderWithClient() };
@@ -161,5 +173,102 @@ describe("BoardView", () => {
 		expect(
 			within(cardFor("Cold one")).queryByText("High"),
 		).not.toBeInTheDocument();
+	});
+
+	it("opens the peek from the context menu, the card's keyboard route", async () => {
+		renderBoard();
+		await userEvent.pointer({
+			keys: "[MouseRight]",
+			target: await screen.findByText("NVMe deep dive"),
+		});
+		await userEvent.click(
+			await screen.findByRole("menuitem", { name: "Open" }),
+		);
+		expect(useUiStore.getState().peekSlug).toBe("nvme-deep-dive-2026-07-08");
+	});
+
+	it("sets a priority from the context menu", async () => {
+		const { calls } = renderBoard();
+		await userEvent.pointer({
+			keys: "[MouseRight]",
+			target: await screen.findByText("NVMe deep dive"),
+		});
+		await userEvent.click(
+			await screen.findByRole("menuitem", { name: /set priority/i }),
+		);
+		await userEvent.click(
+			await screen.findByRole("menuitemradio", { name: "High" }),
+		);
+		expect(calls).toHaveBeenCalledWith("set_project_priority", {
+			slug: "nvme-deep-dive-2026-07-08",
+			priority: "high",
+		});
+	});
+
+	it("moves a project's status from the context menu", async () => {
+		const { calls } = renderBoard();
+		await userEvent.pointer({
+			keys: "[MouseRight]",
+			target: await screen.findByText("Why RAID is dead"),
+		});
+		await userEvent.click(
+			await screen.findByRole("menuitem", { name: /move to/i }),
+		);
+		await userEvent.click(
+			await screen.findByRole("menuitemradio", { name: "Editing" }),
+		);
+		expect(calls).toHaveBeenCalledWith("set_project_status", {
+			slug: "why-raid-is-dead-2026-07-07",
+			status: "editing",
+		});
+	});
+
+	it("won't move a project to the status it is already in", async () => {
+		renderBoard();
+		await userEvent.pointer({
+			keys: "[MouseRight]",
+			target: await screen.findByText("Why RAID is dead"),
+		});
+		await userEvent.click(
+			await screen.findByRole("menuitem", { name: /move to/i }),
+		);
+		expect(
+			await screen.findByRole("menuitemradio", { name: "Idea" }),
+		).toHaveAttribute("aria-disabled", "true");
+	});
+
+	it("disables the mutating actions when the studio drive is unmounted", async () => {
+		const { calls } = renderBoard(boardFixture, {
+			mounted: false,
+			path: null,
+			free_gb: null,
+		});
+		await screen.findByText("NVMe deep dive");
+		await userEvent.pointer({
+			keys: "[MouseRight]",
+			target: screen.getByText("NVMe deep dive"),
+		});
+		for (const name of [/set priority/i, /move to/i]) {
+			expect(await screen.findByRole("menuitem", { name })).toHaveAttribute(
+				"aria-disabled",
+				"true",
+			);
+		}
+		expect(screen.getByRole("menuitem", { name: "Open" })).not.toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+		// A disabled trigger must not merely look disabled: activating it opens
+		// no submenu, so no write can be reached from here at all.
+		await userEvent.click(
+			screen.getByRole("menuitem", { name: /set priority/i }),
+		);
+		expect(
+			screen.queryByRole("menuitemradio", { name: "High" }),
+		).not.toBeInTheDocument();
+		expect(calls).not.toHaveBeenCalledWith(
+			"set_project_priority",
+			expect.anything(),
+		);
 	});
 });
