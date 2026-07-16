@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { StatusChip } from "@/features/projects/components/status-chip";
+import { StatusChip } from "@/components/ui/status-chip";
 import { formatDate } from "@/features/projects/model/format";
 import type { Project } from "@/lib/ipc/projects";
 import { listProjects, projectsKeys } from "@/lib/ipc/projects";

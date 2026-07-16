@@ -32,6 +32,11 @@ const invalidManifestDetail: ProjectDetail = {
 	freshness: [],
 };
 
+const prioritisedDetail: ProjectDetail = {
+	...detail,
+	project: { ...detail.project, priority: "high" },
+};
+
 function renderPeek(fixture: ProjectDetail = detail) {
 	const calls = vi.fn();
 	mockIPC((cmd, payload) => {
@@ -95,6 +100,37 @@ describe("ProjectPeek", () => {
 			screen.getByText(/invalid manifest: missing required field/i),
 		).toBeInTheDocument();
 		expect(screen.queryByText("Shoot")).not.toBeInTheDocument();
+	});
+
+	it("shows the priority chip when the project has one", async () => {
+		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
+		renderPeek(prioritisedDetail);
+		expect(await screen.findByText("High")).toBeInTheDocument();
+	});
+
+	it("renders no priority chip for an unprioritised project", async () => {
+		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
+		renderPeek();
+		await screen.findByText("NVMe deep dive");
+		expect(screen.queryByText(/^(High|Medium|Low)$/)).not.toBeInTheDocument();
+	});
+
+	it("says the project couldn't load when the query fails", async () => {
+		mockIPC(() => {
+			throw new Error("studio root is not mounted: /Volumes/Studio");
+		});
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
+		render(
+			<QueryClientProvider client={client}>
+				<ProjectPeek />
+			</QueryClientProvider>,
+		);
+		expect(
+			await screen.findByText(/couldn't load this project/i),
+		).toBeInTheDocument();
 	});
 
 	it("reveals the project folder on Reveal in Finder", async () => {

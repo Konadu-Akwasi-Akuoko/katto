@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	priorityAppearance,
-	statusAppearance,
-} from "@/features/planner/model/appearance";
+import { priorityAppearance, statusAppearance } from "@/lib/appearance";
 
 describe("statusAppearance", () => {
 	it("maps each known status to its label", () => {

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { StatusChip } from "@/features/projects/components/status-chip";
+import { StatusChip } from "@/components/ui/status-chip";
 import { relativeMtime } from "@/features/projects/model/format";
 import type { FolderFreshness, Project } from "@/lib/ipc/projects";
 import {

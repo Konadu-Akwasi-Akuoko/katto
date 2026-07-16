@@ -1,21 +1,6 @@
 import type { Project } from "@/lib/ipc/projects";
-
-/** The v1 status vocabulary, in workflow order — one board column each. */
-export const BOARD_COLUMNS = [
-	"idea",
-	"shooting",
-	"editing",
-	"published",
-] as const;
-
-export type BoardColumn = (typeof BOARD_COLUMNS)[number];
-
-const COLUMN_SET: ReadonlySet<string> = new Set(BOARD_COLUMNS);
-
-/** Whether a raw status string is one of the four board columns. */
-export function isBoardColumn(status: string): status is BoardColumn {
-	return COLUMN_SET.has(status);
-}
+import type { ProjectStatus } from "@/lib/project-status";
+import { isProjectStatus, PROJECT_STATUSES } from "@/lib/project-status";
 
 /** Most-recently-touched first; rows never touched sort last. */
 function byTouchedDesc(a: Project, b: Project): number {
@@ -33,18 +18,18 @@ function byTouchedDesc(a: Project, b: Project): number {
  */
 export function groupByStatus(
 	projects: Project[],
-): Record<BoardColumn, Project[]> {
-	const groups: Record<BoardColumn, Project[]> = {
+): Record<ProjectStatus, Project[]> {
+	const groups: Record<ProjectStatus, Project[]> = {
 		idea: [],
 		shooting: [],
 		editing: [],
 		published: [],
 	};
 	for (const project of projects) {
-		const column = isBoardColumn(project.status) ? project.status : "idea";
+		const column = isProjectStatus(project.status) ? project.status : "idea";
 		groups[column].push(project);
 	}
-	for (const column of BOARD_COLUMNS) {
+	for (const column of PROJECT_STATUSES) {
 		groups[column].sort(byTouchedDesc);
 	}
 	return groups;

@@ -46,7 +46,7 @@ describe("ProjectsList", () => {
 		renderList();
 		expect(await screen.findByText("NVMe deep dive")).toBeInTheDocument();
 		expect(screen.getByText("Why RAID is dead")).toBeInTheDocument();
-		expect(screen.getByText("editing")).toBeInTheDocument();
+		expect(screen.getByText("Editing")).toBeInTheDocument();
 	});
 
 	it("selects a project when its row is clicked", async () => {

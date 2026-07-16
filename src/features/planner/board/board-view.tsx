@@ -13,12 +13,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { CameraIcon, UploadSimpleIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import type { BoardColumn } from "@/features/planner/model/board";
-import {
-	BOARD_COLUMNS,
-	groupByStatus,
-	isBoardColumn,
-} from "@/features/planner/model/board";
+import { groupByStatus } from "@/features/planner/model/board";
 import { formatShortDate } from "@/lib/date";
 import type { Project } from "@/lib/ipc/projects";
 import {
@@ -26,9 +21,11 @@ import {
 	projectsKeys,
 	setProjectStatus,
 } from "@/lib/ipc/projects";
+import type { ProjectStatus } from "@/lib/project-status";
+import { isProjectStatus, PROJECT_STATUSES } from "@/lib/project-status";
 import { cn } from "@/lib/utils";
 
-const COLUMN_LABELS: Record<BoardColumn, string> = {
+const COLUMN_LABELS: Record<ProjectStatus, string> = {
 	idea: "Idea",
 	shooting: "Shooting",
 	editing: "Editing",
@@ -43,7 +40,7 @@ export function BoardView() {
 	});
 
 	const move = useMutation({
-		mutationFn: ({ slug, status }: { slug: string; status: BoardColumn }) =>
+		mutationFn: ({ slug, status }: { slug: string; status: ProjectStatus }) =>
 			setProjectStatus(slug, status),
 		onMutate: async ({ slug, status }) => {
 			await queryClient.cancelQueries({ queryKey: projectsKeys.all });
@@ -72,7 +69,7 @@ export function BoardView() {
 
 	function onDragEnd(event: DragEndEvent) {
 		const target = event.over?.id;
-		if (typeof target !== "string" || !isBoardColumn(target)) return;
+		if (typeof target !== "string" || !isProjectStatus(target)) return;
 		const slug = String(event.active.id);
 		const current = projects?.find((project) => project.slug === slug);
 		if (!current || current.status === target) return;
@@ -88,7 +85,7 @@ export function BoardView() {
 			onDragEnd={onDragEnd}
 		>
 			<div className="flex h-full min-h-0 gap-3 overflow-x-auto pb-2">
-				{BOARD_COLUMNS.map((column) => (
+				{PROJECT_STATUSES.map((column) => (
 					<Column key={column} column={column} projects={groups[column]} />
 				))}
 			</div>
@@ -100,7 +97,7 @@ function Column({
 	column,
 	projects,
 }: {
-	column: BoardColumn;
+	column: ProjectStatus;
 	projects: Project[];
 }) {
 	const { setNodeRef, isOver } = useDroppable({ id: column });

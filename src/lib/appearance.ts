@@ -1,5 +1,8 @@
-import type { BoardColumn } from "@/features/planner/model/board";
-import { isBoardColumn } from "@/features/planner/model/board";
+import type { PriorityLevel } from "@/lib/ipc/projects";
+import type { ProjectStatus } from "@/lib/project-status";
+import { isProjectStatus } from "@/lib/project-status";
+
+export type { PriorityLevel };
 
 /**
  * The token-class quartet a status/priority renders with. `dot`/`tint` are
@@ -13,7 +16,7 @@ export type Appearance = {
 	tint: string;
 };
 
-const STATUS: Record<BoardColumn, Appearance> = {
+const STATUS: Record<ProjectStatus, Appearance> = {
 	idea: {
 		label: "Idea",
 		fg: "text-status-idea",
@@ -46,12 +49,17 @@ const STATUS: Record<BoardColumn, Appearance> = {
  * badges into the first column rather than dropping the project.
  */
 export function statusAppearance(status: string): Appearance {
-	return STATUS[isBoardColumn(status) ? status : "idea"];
+	return STATUS[isProjectStatus(status) ? status : "idea"];
 }
 
-/** The priority axis, low→high, plus the unset sentinel. */
-export const PRIORITY_LEVELS = ["none", "low", "medium", "high"] as const;
-export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
+/** The priority axis, low→high, plus the unset sentinel. Ordered for menus; the
+ *  vocabulary itself comes from Rust via the generated union. */
+export const PRIORITY_LEVELS: readonly PriorityLevel[] = [
+	"none",
+	"low",
+	"medium",
+	"high",
+];
 
 const PRIORITY_SET: ReadonlySet<string> = new Set(PRIORITY_LEVELS);
 

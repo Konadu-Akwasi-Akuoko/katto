@@ -5,9 +5,10 @@ import {
 	FolderIcon,
 	UploadSimpleIcon,
 } from "@phosphor-icons/react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { PriorityChip } from "@/components/ui/priority-chip";
 import {
 	Sheet,
 	SheetContent,
@@ -15,7 +16,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
-import { statusAppearance } from "@/features/planner/model/appearance";
+import { StatusChip } from "@/components/ui/status-chip";
 import { formatShortDate } from "@/lib/date";
 import type { ProjectDetail } from "@/lib/ipc/projects";
 import {
@@ -23,7 +24,6 @@ import {
 	projectsKeys,
 	revealProjectFolder,
 } from "@/lib/ipc/projects";
-import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
 
 /**
@@ -36,9 +36,9 @@ export function ProjectPeek() {
 	const closePeek = useUiStore((s) => s.closePeek);
 	const openProject = useUiStore((s) => s.openProject);
 
-	const { data, isLoading } = useQuery({
+	const { data, isError } = useQuery({
 		queryKey: projectsKeys.detail(peekSlug ?? ""),
-		queryFn: () => getProject(peekSlug as string),
+		queryFn: peekSlug === null ? skipToken : () => getProject(peekSlug),
 		enabled: peekSlug !== null,
 	});
 
@@ -54,7 +54,15 @@ export function ProjectPeek() {
 			}}
 		>
 			<SheetContent aria-describedby={undefined}>
-				{peekSlug === null || isLoading || !data ? (
+				{peekSlug === null ? null : isError ? (
+					<SheetHeader>
+						<SheetTitle>Couldn't load this project</SheetTitle>
+						<p className="text-sm text-fg-muted">
+							The studio drive may be unmounted, or the folder may have moved.
+							Rescan from Projects to reconcile.
+						</p>
+					</SheetHeader>
+				) : !data ? (
 					<SheetHeader>
 						<SheetTitle>Loading…</SheetTitle>
 					</SheetHeader>
@@ -83,15 +91,14 @@ function PeekBody({
 	onReveal: () => void;
 }) {
 	const { project, manifest_error, freshness } = detail;
-	const status = statusAppearance(project.status);
 
 	return (
 		<>
 			<SheetHeader>
 				<SheetTitle>{project.title}</SheetTitle>
-				<div className="flex items-center gap-1.5 text-sm text-fg-muted">
-					<span className={cn("size-2 rounded-full", status.dot)} />
-					{status.label}
+				<div className="flex flex-wrap items-center gap-1.5">
+					<StatusChip status={project.status} />
+					<PriorityChip priority={project.priority} />
 				</div>
 			</SheetHeader>
 
