@@ -284,6 +284,7 @@ where
         root_path: project_dir.to_string_lossy().into_owned(),
         status: "idea".to_string(),
         target_nle: default_nle.to_string(),
+        priority: "none".to_string(),
         shoot_date: None,
         publish_date: None,
         created_at: now.to_string(),

@@ -12,6 +12,7 @@ export function project(
 		root_path: `/studio/Projects/${overrides.slug}`,
 		status: "idea",
 		target_nle: "resolve",
+		priority: "none",
 		shoot_date: null,
 		publish_date: null,
 		created_at: "2026-07-01T00:00:00.000Z",

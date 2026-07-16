@@ -281,6 +281,7 @@ fn create_project_inner(
         root_path: project_dir.to_string_lossy().into_owned(),
         status: "idea".to_string(),
         target_nle: target_nle.to_string(),
+        priority: "none".to_string(),
         shoot_date: shoot_date.map(str::to_string),
         publish_date: None,
         created_at: now.to_string(),

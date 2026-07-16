@@ -1,7 +1,33 @@
 use rusqlite::{Connection, OptionalExtension, Row, params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
+
+/// The per-project priority axis. Columns encode *status*; cards encode
+/// *priority* — the two axes never share a colour, so a card in a same-hued
+/// column can never be misread. This is the write boundary: rows are read back
+/// as a lenient `String` (a stale value badges rather than dropping the
+/// project), but nothing can *persist* a value outside this set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum PriorityLevel {
+    None,
+    Low,
+    Medium,
+    High,
+}
+
+impl PriorityLevel {
+    /// The stored column value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PriorityLevel::None => "none",
+            PriorityLevel::Low => "low",
+            PriorityLevel::Medium => "medium",
+            PriorityLevel::High => "high",
+        }
+    }
+}
 
 /// A project row. The folder on disk is the source of truth; this row is an index
 /// reconciled on launch. `last_touched_at` records the most recent interaction and
@@ -13,13 +39,16 @@ pub struct Project {
     pub root_path: String,
     pub status: String,
     pub target_nle: String,
+    /// `none | low | medium | high`. Read leniently: an unrecognised value is
+    /// carried verbatim and renders no priority chrome.
+    pub priority: String,
     pub shoot_date: Option<String>,
     pub publish_date: Option<String>,
     pub created_at: String,
     pub last_touched_at: Option<String>,
 }
 
-const SELECT_COLUMNS: &str = "slug, title, root_path, status, target_nle, shoot_date, publish_date, created_at, last_touched_at";
+const SELECT_COLUMNS: &str = "slug, title, root_path, status, target_nle, priority, shoot_date, publish_date, created_at, last_touched_at";
 
 fn from_row(row: &Row) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -28,6 +57,7 @@ fn from_row(row: &Row) -> rusqlite::Result<Project> {
         root_path: row.get("root_path")?,
         status: row.get("status")?,
         target_nle: row.get("target_nle")?,
+        priority: row.get("priority")?,
         shoot_date: row.get("shoot_date")?,
         publish_date: row.get("publish_date")?,
         created_at: row.get("created_at")?,
@@ -39,14 +69,15 @@ fn from_row(row: &Row) -> rusqlite::Result<Project> {
 pub fn insert(conn: &Connection, p: &Project) -> Result<()> {
     conn.execute(
         "INSERT INTO projects
-           (slug, title, root_path, status, target_nle, shoot_date, publish_date, created_at, last_touched_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+           (slug, title, root_path, status, target_nle, priority, shoot_date, publish_date, created_at, last_touched_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             p.slug,
             p.title,
             p.root_path,
             p.status,
             p.target_nle,
+            p.priority,
             p.shoot_date,
             p.publish_date,
             p.created_at,
@@ -60,13 +91,14 @@ pub fn insert(conn: &Connection, p: &Project) -> Result<()> {
 pub fn upsert(conn: &Connection, p: &Project) -> Result<()> {
     conn.execute(
         "INSERT INTO projects
-           (slug, title, root_path, status, target_nle, shoot_date, publish_date, created_at, last_touched_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+           (slug, title, root_path, status, target_nle, priority, shoot_date, publish_date, created_at, last_touched_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          ON CONFLICT(slug) DO UPDATE SET
            title = excluded.title,
            root_path = excluded.root_path,
            status = excluded.status,
            target_nle = excluded.target_nle,
+           priority = excluded.priority,
            shoot_date = excluded.shoot_date,
            publish_date = excluded.publish_date,
            created_at = excluded.created_at,
@@ -77,6 +109,7 @@ pub fn upsert(conn: &Connection, p: &Project) -> Result<()> {
             p.root_path,
             p.status,
             p.target_nle,
+            p.priority,
             p.shoot_date,
             p.publish_date,
             p.created_at,
@@ -113,6 +146,15 @@ pub fn set_status(conn: &Connection, slug: &str, status: &str) -> Result<()> {
     conn.execute(
         "UPDATE projects SET status = ?2 WHERE slug = ?1",
         params![slug, status],
+    )?;
+    Ok(())
+}
+
+/// Update a project's priority.
+pub fn set_priority(conn: &Connection, slug: &str, priority: &PriorityLevel) -> Result<()> {
+    conn.execute(
+        "UPDATE projects SET priority = ?2 WHERE slug = ?1",
+        params![slug, priority.as_str()],
     )?;
     Ok(())
 }
@@ -170,6 +212,7 @@ mod tests {
             root_path: format!("/Volumes/Studio/Projects/{slug}"),
             status: "idea".to_string(),
             target_nle: "fcp".to_string(),
+            priority: "none".to_string(),
             shoot_date: None,
             publish_date: None,
             created_at: "2026-07-09T00:00:00Z".to_string(),
@@ -306,5 +349,43 @@ mod tests {
         touch(&conn, "b-2026-07-09", "2026-07-09T12:00:00Z").unwrap();
         let slugs: Vec<String> = list(&conn).unwrap().into_iter().map(|p| p.slug).collect();
         assert_eq!(slugs, vec!["b-2026-07-09", "a-2026-07-09"]);
+    }
+
+    #[test]
+    fn priority_defaults_to_none_on_insert() {
+        let conn = test_db();
+        let p = sample("pri-2026-07-16");
+        insert(&conn, &p).unwrap();
+        assert_eq!(get(&conn, &p.slug).unwrap().unwrap().priority, "none");
+    }
+
+    #[test]
+    fn set_priority_updates() {
+        let conn = test_db();
+        let p = sample("pri2-2026-07-16");
+        insert(&conn, &p).unwrap();
+        set_priority(&conn, &p.slug, &PriorityLevel::High).unwrap();
+        assert_eq!(get(&conn, &p.slug).unwrap().unwrap().priority, "high");
+    }
+
+    #[test]
+    fn from_row_keeps_an_unrecognised_priority_verbatim() {
+        let conn = test_db();
+        let p = sample("pri3-2026-07-16");
+        insert(&conn, &p).unwrap();
+        conn.execute(
+            "UPDATE projects SET priority = 'archived' WHERE slug = ?1",
+            [&p.slug],
+        )
+        .unwrap();
+        // Folders are truth: a stale value badges (the TS priorityAppearance
+        // returns null for it), it never fails the read.
+        assert_eq!(get(&conn, &p.slug).unwrap().unwrap().priority, "archived");
+    }
+
+    #[test]
+    fn priority_level_maps_to_its_stored_string() {
+        assert_eq!(PriorityLevel::Medium.as_str(), "medium");
+        assert_eq!(PriorityLevel::None.as_str(), "none");
     }
 }

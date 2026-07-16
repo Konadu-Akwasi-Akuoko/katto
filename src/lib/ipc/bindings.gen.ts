@@ -333,6 +333,11 @@ export type Project = {
 	root_path: string,
 	status: string,
 	target_nle: string,
+	/**
+	 *  `none | low | medium | high`. Read leniently: an unrecognised value is
+	 *  carried verbatim and renders no priority chrome.
+	 */
+	priority: string,
 	shoot_date: string | null,
 	publish_date: string | null,
 	created_at: string,

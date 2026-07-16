@@ -1,0 +1,1 @@
+ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT 'none';

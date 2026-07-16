@@ -14,6 +14,7 @@ const detail: ProjectDetail = {
 		root_path: "/studio/Projects/nvme-deep-dive-2026-07-01",
 		status: "editing",
 		target_nle: "resolve",
+		priority: "none",
 		shoot_date: "2026-07-03",
 		publish_date: null,
 		created_at: "2026-07-01",

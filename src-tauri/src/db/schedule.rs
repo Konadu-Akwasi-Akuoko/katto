@@ -126,6 +126,7 @@ mod tests {
                 root_path: format!("/Volumes/Studio/Projects/{slug}"),
                 status: "idea".to_string(),
                 target_nle: "fcp".to_string(),
+                priority: "none".to_string(),
                 shoot_date: None,
                 publish_date: None,
                 created_at: "2026-07-09T00:00:00Z".to_string(),
