@@ -89,6 +89,13 @@ export const commands = {
 	 */
 	setProjectStatus: (slug: string, status: string) => typedError<null, Error>(__TAURI_INVOKE("set_project_status", { slug, status })),
 	/**
+	 *  Set a project's priority. Writes both the manifest (atomic) and the row —
+	 *  folders are truth — then touches the row, records an event, and broadcasts.
+	 *  `PriorityLevel` is an enum, so an out-of-vocabulary value is rejected at the
+	 *  IPC boundary and never reaches the manifest.
+	 */
+	setProjectPriority: (slug: string, priority: PriorityLevel) => typedError<null, Error>(__TAURI_INVOKE("set_project_priority", { slug, priority })),
+	/**
 	 *  Set (or clear) a project's shoot and publish dates. Writes the manifest
 	 *  (atomic) and the row, touches, records an event, and broadcasts.
 	 */
@@ -321,6 +328,15 @@ export type KeysPresent = {
 	elevenlabs: boolean,
 	anthropic: boolean,
 };
+
+/**
+ *  The per-project priority axis. Columns encode *status*; cards encode
+ *  *priority* — the two axes never share a colour, so a card in a same-hued
+ *  column can never be misread. This is the write boundary: rows are read back
+ *  as a lenient `String` (a stale value badges rather than dropping the
+ *  project), but nothing can *persist* a value outside this set.
+ */
+export type PriorityLevel = "none" | "low" | "medium" | "high";
 
 /**
  *  A project row. The folder on disk is the source of truth; this row is an index

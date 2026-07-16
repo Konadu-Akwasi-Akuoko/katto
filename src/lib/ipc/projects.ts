@@ -1,6 +1,7 @@
 import type {
 	FolderFreshness,
 	InvalidManifest,
+	PriorityLevel,
 	Project,
 	ProjectDetail,
 	ReconcileReport,
@@ -11,6 +12,7 @@ import { unwrap } from "@/lib/ipc/result";
 export type {
 	FolderFreshness,
 	InvalidManifest,
+	PriorityLevel,
 	Project,
 	ProjectDetail,
 	ReconcileReport,
@@ -46,6 +48,12 @@ export const createProject = (
 /** Move a project through the status vocabulary (writes manifest + row). */
 export const setProjectStatus = (slug: string, status: string): Promise<null> =>
 	unwrap(commands.setProjectStatus(slug, status));
+
+/** Set a project's priority (writes manifest + row). */
+export const setProjectPriority = (
+	slug: string,
+	priority: PriorityLevel,
+): Promise<null> => unwrap(commands.setProjectPriority(slug, priority));
 
 /** Set or clear a project's shoot and publish dates (writes manifest + row). */
 export const setProjectDates = (

@@ -38,6 +38,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::projects::get_project,
             commands::projects::create_project,
             commands::projects::set_project_status,
+            commands::projects::set_project_priority,
             commands::projects::set_project_dates,
             commands::projects::reveal_project_folder,
             commands::ideas::list_ideas,
