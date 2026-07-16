@@ -1,10 +1,27 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { BoardView } from "@/features/planner/board/board-view";
 import type { Project } from "@/lib/ipc/projects";
+import { projectsKeys } from "@/lib/ipc/projects";
 import { boardFixture } from "@/test/fixtures/projects";
+
+const COLUMN_LABELS = ["Idea", "Shooting", "Editing", "Published"];
+
+const UNMOUNTED = "studio root is not mounted: /Volumes/Studio";
+
+function renderWithClient() {
+	const client = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	});
+	render(
+		<QueryClientProvider client={client}>
+			<BoardView />
+		</QueryClientProvider>,
+	);
+	return { client };
+}
 
 function renderBoard(initial: Project[] = boardFixture) {
 	const calls = vi.fn();
@@ -14,15 +31,21 @@ function renderBoard(initial: Project[] = boardFixture) {
 		if (cmd === "set_project_status") return null;
 		throw new Error(`unexpected command: ${cmd}`);
 	});
-	const client = new QueryClient({
-		defaultOptions: { queries: { retry: false } },
+	return { calls, ...renderWithClient() };
+}
+
+/**
+ * Settle a refetch all the way into the DOM. Awaiting the refetch promise only
+ * settles the fetch: Query hands observer results to React through
+ * notifyManager, whose default scheduler is a `setTimeout(_, 0)`. Without
+ * crossing that macrotask the DOM is still the pre-refetch render, and any
+ * assertion about the result is vacuous.
+ */
+async function flushRefetch(client: QueryClient): Promise<void> {
+	await act(async () => {
+		await client.refetchQueries({ queryKey: projectsKeys.all });
+		await new Promise((resolve) => setTimeout(resolve, 0));
 	});
-	render(
-		<QueryClientProvider client={client}>
-			<BoardView />
-		</QueryClientProvider>,
-	);
-	return { calls };
 }
 
 function columnFor(label: string): HTMLElement {
@@ -36,7 +59,7 @@ describe("BoardView", () => {
 	it("renders the four workflow columns", async () => {
 		renderBoard();
 		await screen.findByText("NVMe deep dive");
-		for (const label of ["Idea", "Shooting", "Editing", "Published"]) {
+		for (const label of COLUMN_LABELS) {
 			expect(screen.getByRole("heading", { name: label })).toBeInTheDocument();
 		}
 	});
@@ -60,21 +83,51 @@ describe("BoardView", () => {
 
 	it("shows the board's error state instead of four empty columns", async () => {
 		mockIPC(() => {
-			throw new Error("studio root is not mounted: /Volumes/Studio");
+			throw new Error(UNMOUNTED);
 		});
-		const client = new QueryClient({
-			defaultOptions: { queries: { retry: false } },
-		});
-		render(
-			<QueryClientProvider client={client}>
-				<BoardView />
-			</QueryClientProvider>,
-		);
+		renderWithClient();
 		expect(
 			await screen.findByText(/couldn't load your projects/i),
 		).toBeInTheDocument();
 		expect(
 			screen.queryByRole("heading", { name: "Idea" }),
+		).not.toBeInTheDocument();
+	});
+
+	it("renders the empty columns for a studio with no projects", async () => {
+		renderBoard([]);
+		for (const label of COLUMN_LABELS) {
+			expect(
+				await screen.findByRole("heading", { name: label }),
+			).toBeInTheDocument();
+		}
+		expect(
+			screen.queryByText(/couldn't load your projects/i),
+		).not.toBeInTheDocument();
+	});
+
+	it("keeps a loaded board on screen when a background refetch fails", async () => {
+		let listed = 0;
+		mockIPC((cmd) => {
+			if (cmd !== "list_projects")
+				throw new Error(`unexpected command: ${cmd}`);
+			listed += 1;
+			if (listed > 1) throw new Error(UNMOUNTED);
+			return boardFixture;
+		});
+		const { client } = renderWithClient();
+		await screen.findByText("NVMe deep dive");
+
+		await flushRefetch(client);
+
+		expect(listed).toBe(2);
+		expect(client.getQueryState(projectsKeys.all)?.status).toBe("error");
+		expect(screen.getByText("NVMe deep dive")).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", { name: "Editing" }),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByText(/couldn't load your projects/i),
 		).not.toBeInTheDocument();
 	});
 });

@@ -30,12 +30,35 @@ port_up() {
   curl -s -o /dev/null --max-time 2 http://localhost:1420
 }
 
+# Start the dev server as a detached process whose pid we can record exactly.
+# The subshell `exec`s the server, so $! is the server itself rather than a
+# short-lived wrapper; stdio is pinned to the log so the server can never hold
+# this hook's stdout/stderr open and wedge the Stop pipeline.
+start_our_server() {
+  root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+  bun_bin=$(command -v bun || echo /opt/homebrew/bin/bun)
+  [ -x "$bun_bin" ] || return 1
+  (
+    cd "$root" || exit 1
+    exec "$bun_bin" run dev
+  ) < /dev/null > "${marker}.devserver.log" 2>&1 &
+  srv=$!
+  disown "$srv" 2>/dev/null || true
+  printf '%s\n' "$srv" > "$server_pid_file"
+  return 0
+}
+
 # Stop only the server this gate started (never the owner's own).
 stop_our_server() {
   [ -f "$server_pid_file" ] || return 0
   pid=$(cat "$server_pid_file" 2>/dev/null)
   rm -f "$server_pid_file"
-  if [ -n "$pid" ]; then
+  # A malformed pid file must never turn into a kill of this hook or of init.
+  case "$pid" in
+    '' | *[!0-9]*) pid="" ;;
+    "$$" | 1) pid="" ;;
+  esac
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
     pkill -P "$pid" 2>/dev/null
     kill "$pid" 2>/dev/null
   fi
@@ -64,11 +87,7 @@ fi
 
 started_note=""
 if ! port_up; then
-  root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-  bun_bin=$(command -v bun || echo /opt/homebrew/bin/bun)
-  [ -x "$bun_bin" ] || exit 0
-  (cd "$root" && nohup "$bun_bin" run dev > "${marker}.devserver.log" 2>&1 &
-   echo $! > "$server_pid_file")
+  start_our_server || exit 0
   up=""
   for _ in $(seq 1 40); do
     if port_up; then up=1; break; fi

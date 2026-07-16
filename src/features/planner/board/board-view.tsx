@@ -85,7 +85,11 @@ export function BoardView() {
 		move.mutate({ slug, status: target });
 	}
 
-	if (isError) {
+	// Only a cold failed load earns the error screen. Query keeps `data` and
+	// flips to `error` on any background refetch failure (refetch-on-focus,
+	// the drop mutation's invalidate) — blanking a good board there would be
+	// worse than the toast the QueryCache already raises.
+	if (isError && projects === undefined) {
 		return (
 			<div className="flex h-full flex-col items-center justify-center gap-1 text-sm">
 				<p className="text-fg">Couldn't load your projects.</p>

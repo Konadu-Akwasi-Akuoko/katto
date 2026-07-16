@@ -1,4 +1,8 @@
 {
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "95",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "500000"
+  },
   "permissions": {
     "deny": [
       "Read(./.env)",
