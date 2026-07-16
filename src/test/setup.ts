@@ -22,6 +22,16 @@ if (!Element.prototype.scrollIntoView) {
 	Element.prototype.scrollIntoView = () => {};
 }
 
+// Radix's Select trigger checks pointer capture before deciding a press is a
+// click rather than a drag; jsdom implements no Pointer Capture API at all.
+// These are jsdom gaps, not component behaviour — nothing here fakes a result
+// the real DOM wouldn't give.
+if (!Element.prototype.hasPointerCapture) {
+	Element.prototype.hasPointerCapture = () => false;
+	Element.prototype.setPointerCapture = () => {};
+	Element.prototype.releasePointerCapture = () => {};
+}
+
 // cmdk observes its list for resize; jsdom ships no ResizeObserver.
 if (!globalThis.ResizeObserver) {
 	globalThis.ResizeObserver = class {

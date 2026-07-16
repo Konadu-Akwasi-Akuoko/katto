@@ -4,6 +4,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectPeek } from "@/features/planner/peek/project-peek";
+import type { DriveStatus } from "@/lib/ipc/drive";
 import type { ProjectDetail } from "@/lib/ipc/projects";
 import { useUiStore } from "@/stores/ui";
 
@@ -37,12 +38,23 @@ const prioritisedDetail: ProjectDetail = {
 	project: { ...detail.project, priority: "high" },
 };
 
-function renderPeek(fixture: ProjectDetail = detail) {
+const MOUNTED: DriveStatus = {
+	mounted: true,
+	path: "/Volumes/Studio",
+	free_gb: 512,
+};
+
+function renderPeek(
+	fixture: ProjectDetail = detail,
+	drive: DriveStatus = MOUNTED,
+) {
 	const calls = vi.fn();
 	mockIPC((cmd, payload) => {
 		calls(cmd, payload);
 		if (cmd === "get_project") return fixture;
+		if (cmd === "get_drive_status") return drive;
 		if (cmd === "reveal_project_folder") return null;
+		if (cmd === "set_project_priority") return null;
 		throw new Error(`unexpected command: ${cmd}`);
 	});
 	const client = new QueryClient({
@@ -131,6 +143,49 @@ describe("ProjectPeek", () => {
 		expect(
 			await screen.findByText(/couldn't load this project/i),
 		).toBeInTheDocument();
+	});
+
+	it("sets priority from the peek", async () => {
+		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
+		const { calls } = renderPeek();
+		await screen.findByText("NVMe deep dive");
+
+		await userEvent.click(screen.getByRole("combobox", { name: /priority/i }));
+		await userEvent.click(await screen.findByRole("option", { name: "High" }));
+
+		const writes = calls.mock.calls.filter(
+			([cmd]) => cmd === "set_project_priority",
+		);
+		expect(writes).toEqual([
+			[
+				"set_project_priority",
+				{ slug: "nvme-deep-dive-2026-07-01", priority: "high" },
+			],
+		]);
+	});
+
+	it("disables the priority control on an unmounted studio root", async () => {
+		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
+		const { calls } = renderPeek(detail, {
+			mounted: false,
+			path: null,
+			free_gb: null,
+		});
+		await screen.findByText("NVMe deep dive");
+
+		const control = screen.getByRole("combobox", { name: /priority/i });
+		expect(control).toBeDisabled();
+
+		// Disabled has to mean disabled, not just look it: activating opens no
+		// listbox, so no write is reachable.
+		await userEvent.click(control);
+		expect(
+			screen.queryByRole("option", { name: "High" }),
+		).not.toBeInTheDocument();
+		expect(calls).not.toHaveBeenCalledWith(
+			"set_project_priority",
+			expect.anything(),
+		);
 	});
 
 	it("reveals the project folder on Reveal in Finder", async () => {

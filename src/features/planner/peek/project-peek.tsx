@@ -5,10 +5,22 @@ import {
 	FolderIcon,
 	UploadSimpleIcon,
 } from "@phosphor-icons/react";
-import { skipToken, useMutation, useQuery } from "@tanstack/react-query";
+import {
+	skipToken,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { PriorityChip } from "@/components/ui/priority-chip";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import {
 	Sheet,
 	SheetContent,
@@ -17,14 +29,32 @@ import {
 	SheetTitle,
 } from "@/components/ui/sheet";
 import { StatusChip } from "@/components/ui/status-chip";
+import { useDriveStatus } from "@/hooks/use-drive-status";
+import {
+	isPriorityLevel,
+	PRIORITY_LEVELS,
+	priorityAppearance,
+} from "@/lib/appearance";
 import { formatShortDate } from "@/lib/date";
-import type { ProjectDetail } from "@/lib/ipc/projects";
+import type { PriorityLevel, Project, ProjectDetail } from "@/lib/ipc/projects";
 import {
 	getProject,
 	projectsKeys,
 	revealProjectFolder,
+	setProjectPriority,
 } from "@/lib/ipc/projects";
+import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
+
+/** Menu-only labels — `priorityAppearance` returns null for "none", because a
+ *  project renders no priority chrome when it has none. The control still has to
+ *  offer it as a real, choosable value. Exhaustive over the generated union. */
+const PRIORITY_MENU_LABELS: Record<PriorityLevel, string> = {
+	none: "None",
+	low: "Low",
+	medium: "Medium",
+	high: "High",
+};
 
 /**
  * The shared project peek: a right-side drawer with a scan of one project
@@ -98,7 +128,7 @@ function PeekBody({
 				<SheetTitle>{project.title}</SheetTitle>
 				<div className="flex flex-wrap items-center gap-1.5">
 					<StatusChip status={project.status} />
-					<PriorityChip priority={project.priority} />
+					<PriorityControl project={project} />
 				</div>
 			</SheetHeader>
 
@@ -166,6 +196,68 @@ function PeekBody({
 				</Button>
 			</SheetFooter>
 		</>
+	);
+}
+
+/**
+ * The peek's priority axis, readable and writable. Phase 4 opens this drawer
+ * from a calendar event — a surface with no card and no context menu — so the
+ * chip alone would be a dead end there. `PriorityChip` stays pure display; this
+ * wraps it. Disabled on an unmounted root: priority is folder-truth, so the
+ * write sits behind the engine's require_mounted guard like every other one.
+ */
+function PriorityControl({ project }: { project: Project }) {
+	const queryClient = useQueryClient();
+	const mounted = useDriveStatus().data?.mounted ?? false;
+
+	const setPriority = useMutation({
+		mutationFn: (level: PriorityLevel) =>
+			setProjectPriority(project.slug, level),
+		onSettled: () => {
+			void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
+			void queryClient.invalidateQueries({
+				queryKey: projectsKeys.detail(project.slug),
+			});
+		},
+	});
+
+	return (
+		<Select
+			value={project.priority}
+			disabled={!mounted}
+			onValueChange={(value) => {
+				if (isPriorityLevel(value)) setPriority.mutate(value);
+			}}
+		>
+			<SelectTrigger
+				size="sm"
+				aria-label="Priority"
+				className="border-none px-0"
+			>
+				<SelectValue>
+					{priorityAppearance(project.priority) ? (
+						<PriorityChip priority={project.priority} />
+					) : (
+						<span className="text-sm text-fg-faint">Set priority</span>
+					)}
+				</SelectValue>
+			</SelectTrigger>
+			<SelectContent>
+				{PRIORITY_LEVELS.map((level) => (
+					<SelectItem key={level} value={level}>
+						{/* The same colour cue the context menu's radio set carries — the
+						    two are one control in two places and must not drift. */}
+						<span
+							className={cn(
+								"size-2 rounded-full bg-current",
+								priorityAppearance(level)?.fg ?? "text-fg-faint",
+							)}
+						/>
+						{PRIORITY_MENU_LABELS[level]}
+					</SelectItem>
+				))}
+			</SelectContent>
+		</Select>
 	);
 }
 
