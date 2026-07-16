@@ -268,6 +268,7 @@ fn create_project_inner(
         title: title.to_string(),
         status: "idea".to_string(),
         target_nle: target_nle.to_string(),
+        priority: None,
         shoot_date: shoot_date.map(str::to_string),
         publish_date: None,
         created_at: now.to_string(),

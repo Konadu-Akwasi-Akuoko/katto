@@ -169,7 +169,10 @@ fn project_from(manifest: &ProjectManifest, path: &Path) -> db::projects::Projec
         root_path: path.to_string_lossy().into_owned(),
         status: manifest.status.clone(),
         target_nle: manifest.target_nle.clone(),
-        priority: "none".to_string(),
+        priority: manifest
+            .priority
+            .clone()
+            .unwrap_or_else(|| "none".to_string()),
         shoot_date: manifest.shoot_date.clone(),
         publish_date: manifest.publish_date.clone(),
         created_at: manifest.created_at.clone(),
@@ -190,6 +193,7 @@ mod tests {
             title: "NVMe Deep Dive".to_string(),
             status: "idea".to_string(),
             target_nle: "resolve".to_string(),
+            priority: None,
             shoot_date: None,
             publish_date: None,
             created_at: "2026-07-09T00:00:00Z".to_string(),
@@ -362,6 +366,21 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let entries = scan(&root.path().join("Projects")).unwrap();
         assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn project_from_carries_the_manifests_priority() {
+        let mut m = manifest("pri-2026-07-16");
+        m.priority = Some("high".to_string());
+        let p = project_from(&m, Path::new("/studio/Projects/pri-2026-07-16"));
+        assert_eq!(p.priority, "high");
+    }
+
+    #[test]
+    fn project_from_defaults_priority_when_the_manifest_omits_it() {
+        let m = manifest("old-2026-07-16");
+        let p = project_from(&m, Path::new("/studio/Projects/old-2026-07-16"));
+        assert_eq!(p.priority, "none");
     }
 
     #[test]

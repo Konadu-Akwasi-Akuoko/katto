@@ -154,6 +154,7 @@ mod tests {
             title: "NVMe Deep Dive".to_string(),
             status: "idea".to_string(),
             target_nle: "resolve".to_string(),
+            priority: None,
             shoot_date: None,
             publish_date: None,
             created_at: "2026-07-09T10:00:00Z".to_string(),

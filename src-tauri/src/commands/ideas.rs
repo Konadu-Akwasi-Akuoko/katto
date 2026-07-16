@@ -268,6 +268,7 @@ where
         title: idea.title.clone(),
         status: "idea".to_string(),
         target_nle: default_nle.to_string(),
+        priority: None,
         shoot_date: None,
         publish_date: None,
         created_at: now.to_string(),

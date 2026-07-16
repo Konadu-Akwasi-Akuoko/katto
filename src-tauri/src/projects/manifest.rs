@@ -28,6 +28,10 @@ pub struct ProjectManifest {
     /// `idea | shooting | editing | published` (v1 vocabulary).
     pub status: String,
     pub target_nle: String,
+    /// `none | low | medium | high`. Absent in manifests written before this
+    /// field existed — the project simply has no priority, which is `none`.
+    #[serde(default)]
+    pub priority: Option<String>,
     pub shoot_date: Option<String>,
     pub publish_date: Option<String>,
     pub created_at: String,
@@ -121,6 +125,7 @@ mod tests {
             title: "NVMe Deep Dive".to_string(),
             status: "idea".to_string(),
             target_nle: "resolve".to_string(),
+            priority: None,
             shoot_date: Some("2026-07-12".to_string()),
             publish_date: None,
             created_at: "2026-07-09T10:00:00Z".to_string(),
@@ -181,6 +186,22 @@ mod tests {
         std::fs::write(proj.join(MANIFEST_FILE), b"{ not json").unwrap();
         let err = read_manifest(&proj).unwrap_err();
         assert!(matches!(err, Error::InvalidManifest(_)), "got {err:?}");
+    }
+
+    #[test]
+    fn manifest_without_priority_still_parses() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_dir = dir.path().join("legacy-2026-07-16");
+        std::fs::create_dir_all(&project_dir).unwrap();
+        std::fs::write(
+            project_dir.join(MANIFEST_FILE),
+            r#"{"schema_version":1,"slug":"legacy-2026-07-16","title":"Legacy",
+                "status":"idea","target_nle":"fcp","shoot_date":null,
+                "publish_date":null,"created_at":"2026-07-01T00:00:00Z","links":{}}"#,
+        )
+        .unwrap();
+        let m = read_manifest(&project_dir).unwrap();
+        assert_eq!(m.priority, None);
     }
 
     #[test]
