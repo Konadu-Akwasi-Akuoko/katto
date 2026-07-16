@@ -33,6 +33,7 @@ import { useDriveStatus } from "@/hooks/use-drive-status";
 import {
 	isPriorityLevel,
 	PRIORITY_LEVELS,
+	PRIORITY_MENU_LABELS,
 	priorityAppearance,
 } from "@/lib/appearance";
 import { formatShortDate } from "@/lib/date";
@@ -45,16 +46,6 @@ import {
 } from "@/lib/ipc/projects";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
-
-/** Menu-only labels — `priorityAppearance` returns null for "none", because a
- *  project renders no priority chrome when it has none. The control still has to
- *  offer it as a real, choosable value. Exhaustive over the generated union. */
-const PRIORITY_MENU_LABELS: Record<PriorityLevel, string> = {
-	none: "None",
-	low: "Low",
-	medium: "Medium",
-	high: "High",
-};
 
 /**
  * The shared project peek: a right-side drawer with a scan of one project
@@ -229,10 +220,13 @@ function PriorityControl({ project }: { project: Project }) {
 				if (isPriorityLevel(value)) setPriority.mutate(value);
 			}}
 		>
+			{/* The chip is the control's whole face: the primitive's border, padding
+			    and shadow would box a chip that already reads as one thing, and a
+			    shadow on an inline control isn't the floating layer --shadow is for. */}
 			<SelectTrigger
 				size="sm"
 				aria-label="Priority"
-				className="border-none px-0"
+				className="border-none px-0 shadow-none"
 			>
 				<SelectValue>
 					{priorityAppearance(project.priority) ? (
