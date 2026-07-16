@@ -165,7 +165,7 @@ function Card({ project }: { project: Project }) {
 
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: {...attributes} supplies role="button" + tabIndex={0} at runtime (useDraggable's defaultRole); Biome can't see through the spread
-		// biome-ignore lint/a11y/useKeyWithClickEvents: {...listeners} already carries the KeyboardSensor's onKeyDown activator — a JSX onKeyDown after the spread would replace it and kill keyboard drag. Enter starts a drag; the context menu's Open item is the keyboard route to the peek
+		// biome-ignore lint/a11y/useKeyWithClickEvents: satisfying this literally would replace the KeyboardSensor's onKeyDown activator (listeners already carries it) and kill keyboard drag. Not a false positive: the click action is NOT yet keyboard-reachable. Task 9's context-menu Open item is the intended route — revisit when it lands.
 		<div
 			ref={setNodeRef}
 			{...listeners}
