@@ -116,10 +116,14 @@ export const commands = {
 	 *  both the folder and the row untouched, so the board is never lying about a
 	 *  project that still exists on disk.
 	 * 
-	 *  Reversible by design: Finder's "Put Back" restores the folder to
-	 *  `<studio_root>/Projects/<slug>`, and the next reconcile re-adds the row from
-	 *  its manifest. The `schedule` rows go with it via ON DELETE CASCADE
-	 *  (foreign_keys is ON — see `db::apply_pragmas`).
+	 *  Put Back restores the folder to `<studio_root>/Projects/<slug>`, and the next
+	 *  reconcile re-adds the row from its manifest — so the folder, the row, and the
+	 *  manifest's `shoot_date`/`publish_date` all come back. The `schedule` rows do
+	 *  **not**: `schedule.project_slug` is ON DELETE CASCADE (foreign_keys is ON —
+	 *  see `db::apply_pragmas`), the manifest does not carry them, and reconcile
+	 *  never writes that table. They are therefore serialised into the
+	 *  `project-trashed` event's payload before the delete, so nothing is destroyed;
+	 *  restoring them from that payload is a manual step for now.
 	 */
 	trashProject: (slug: string) => typedError<null, Error>(__TAURI_INVOKE("trash_project", { slug })),
 	/**  Ideas with the given status, newest-first. */

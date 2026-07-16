@@ -87,6 +87,20 @@ pub fn list_range(conn: &Connection, from: &str, to: &str) -> Result<Vec<Schedul
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+/// Every entry for one project, ordered by date ascending. Callers capture this
+/// into the audit log before deleting a project row — `schedule.project_slug` is
+/// ON DELETE CASCADE, so the rows are gone the instant the project is.
+pub fn list_for_project(conn: &Connection, project_slug: &str) -> Result<Vec<ScheduleEntry>> {
+    let sql = format!(
+        "SELECT {SELECT_COLUMNS} FROM schedule
+         WHERE project_slug = ?1
+         ORDER BY date ASC, id ASC"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![project_slug], from_row)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 /// Delete a schedule entry by id.
 pub fn delete(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM schedule WHERE id = ?1", [id])?;
@@ -179,6 +193,44 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn list_for_project_returns_only_that_projects_entries_with_notes() {
+        let conn = test_db();
+        seed_project(&conn, "a-2026-07-09");
+        seed_project(&conn, "b-2026-07-09");
+        upsert(
+            &conn,
+            "a-2026-07-09",
+            "publish",
+            "2026-08-20",
+            Some("goes live"),
+        )
+        .unwrap();
+        upsert(
+            &conn,
+            "a-2026-07-09",
+            "shoot",
+            "2026-08-01",
+            Some("studio B"),
+        )
+        .unwrap();
+        upsert(&conn, "b-2026-07-09", "shoot", "2026-08-02", None).unwrap();
+
+        let got = list_for_project(&conn, "a-2026-07-09").unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].date, "2026-08-01");
+        assert_eq!(got[0].note.as_deref(), Some("studio B"));
+        assert_eq!(got[1].note.as_deref(), Some("goes live"));
+        assert!(got.iter().all(|e| e.project_slug == "a-2026-07-09"));
+    }
+
+    #[test]
+    fn list_for_project_is_empty_for_an_unscheduled_project() {
+        let conn = test_db();
+        seed_project(&conn, "p-2026-07-09");
+        assert!(list_for_project(&conn, "p-2026-07-09").unwrap().is_empty());
     }
 
     #[test]

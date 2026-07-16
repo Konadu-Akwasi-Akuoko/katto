@@ -260,10 +260,14 @@ pub async fn reveal_project_folder(
 /// both the folder and the row untouched, so the board is never lying about a
 /// project that still exists on disk.
 ///
-/// Reversible by design: Finder's "Put Back" restores the folder to
-/// `<studio_root>/Projects/<slug>`, and the next reconcile re-adds the row from
-/// its manifest. The `schedule` rows go with it via ON DELETE CASCADE
-/// (foreign_keys is ON — see `db::apply_pragmas`).
+/// Put Back restores the folder to `<studio_root>/Projects/<slug>`, and the next
+/// reconcile re-adds the row from its manifest — so the folder, the row, and the
+/// manifest's `shoot_date`/`publish_date` all come back. The `schedule` rows do
+/// **not**: `schedule.project_slug` is ON DELETE CASCADE (foreign_keys is ON —
+/// see `db::apply_pragmas`), the manifest does not carry them, and reconcile
+/// never writes that table. They are therefore serialised into the
+/// `project-trashed` event's payload before the delete, so nothing is destroyed;
+/// restoring them from that payload is a manual step for now.
 #[tauri::command]
 #[specta::specta]
 pub async fn trash_project(state: State<'_, AppState>, app: AppHandle, slug: String) -> Result<()> {
@@ -281,15 +285,26 @@ pub async fn trash_project(state: State<'_, AppState>, app: AppHandle, slug: Str
 
     state
         .db
-        .call(move |conn| {
-            let tx = conn.transaction()?;
-            db::projects::delete(&tx, &slug)?;
-            db::events::record(&tx, "project-trashed", Some(&slug), None)?;
-            tx.commit()?;
-            Ok(())
-        })
+        .call(move |conn| trash_project_commit(conn, &slug))
         .await?;
     crate::broadcast::projects_changed(&app);
+    Ok(())
+}
+
+/// The index half of `trash_project`, factored out so the schedule capture is
+/// testable against an in-memory DB without a live Tauri app or a real Trash.
+///
+/// The schedule read shares the delete's transaction and must precede it: the
+/// cascade fires with the project row, so once the delete has run there is
+/// nothing left to capture.
+fn trash_project_commit(conn: &mut Connection, slug: &str) -> Result<()> {
+    let tx = conn.transaction()?;
+    let schedule = db::schedule::list_for_project(&tx, slug)?;
+    let payload = serde_json::to_string(&serde_json::json!({ "schedule": schedule }))
+        .map_err(|e| Error::Io(e.to_string()))?;
+    db::projects::delete(&tx, slug)?;
+    db::events::record(&tx, "project-trashed", Some(slug), Some(&payload))?;
+    tx.commit()?;
     Ok(())
 }
 
@@ -466,6 +481,80 @@ mod tests {
             trash_project_lookup(&conn, "no-such-2026-07-16"),
             Err(Error::Io(_))
         ));
+    }
+
+    #[test]
+    fn trash_project_commit_captures_schedule_entries_into_the_event_payload() {
+        let mut conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let project = create_project_inner(
+            &conn,
+            &root.path().join("Projects"),
+            "NVMe Deep Dive",
+            None,
+            "resolve",
+            "2026-07-09T10:00:00Z",
+        )
+        .unwrap();
+        db::schedule::upsert(
+            &conn,
+            &project.slug,
+            "shoot",
+            "2026-08-01",
+            Some("studio B"),
+        )
+        .unwrap();
+        db::schedule::upsert(&conn, &project.slug, "publish", "2026-08-20", None).unwrap();
+
+        trash_project_commit(&mut conn, &project.slug).unwrap();
+
+        // The cascade fired: the schedule rows only survive in the payload now.
+        assert!(db::projects::get(&conn, &project.slug).unwrap().is_none());
+        assert!(
+            db::schedule::list_for_project(&conn, &project.slug)
+                .unwrap()
+                .is_empty()
+        );
+
+        let events = db::events::list(&conn, 10, None).unwrap();
+        let trashed = events
+            .iter()
+            .find(|e| e.kind == "project-trashed")
+            .expect("a project-trashed event must be recorded");
+        assert_eq!(trashed.project_slug.as_deref(), Some(project.slug.as_str()));
+
+        let payload: serde_json::Value =
+            serde_json::from_str(trashed.payload_json.as_deref().unwrap()).unwrap();
+        let schedule = payload["schedule"].as_array().unwrap();
+        assert_eq!(schedule.len(), 2);
+        assert_eq!(schedule[0]["kind"], "shoot");
+        assert_eq!(schedule[0]["date"], "2026-08-01");
+        assert_eq!(schedule[0]["note"], "studio B");
+        assert_eq!(schedule[1]["kind"], "publish");
+        assert!(schedule[1]["note"].is_null());
+    }
+
+    #[test]
+    fn trash_project_commit_records_an_empty_schedule_for_an_unscheduled_project() {
+        let mut conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let project = create_project_inner(
+            &conn,
+            &root.path().join("Projects"),
+            "NVMe Deep Dive",
+            None,
+            "resolve",
+            "2026-07-09T10:00:00Z",
+        )
+        .unwrap();
+
+        trash_project_commit(&mut conn, &project.slug).unwrap();
+
+        let events = db::events::list(&conn, 10, None).unwrap();
+        let trashed = events.iter().find(|e| e.kind == "project-trashed").unwrap();
+        let payload: serde_json::Value =
+            serde_json::from_str(trashed.payload_json.as_deref().unwrap()).unwrap();
+        assert!(payload["schedule"].as_array().unwrap().is_empty());
     }
 
     #[test]
