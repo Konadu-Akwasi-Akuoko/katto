@@ -234,7 +234,7 @@ function Card({
 		<ContextMenu>
 			<ContextMenuTrigger asChild>
 				{/* biome-ignore lint/a11y/noStaticElementInteractions: {...attributes} supplies role="button" + tabIndex={0} at runtime (useDraggable's defaultRole); Biome can't see through the spread */}
-				{/* biome-ignore lint/a11y/useKeyWithClickEvents: satisfying this literally would replace the KeyboardSensor's onKeyDown activator (listeners already carries it) and kill keyboard drag. The click action reaches the keyboard through the context menu's Open item instead — the menu opens on Shift+F10 / the Menu key. */}
+				{/* biome-ignore lint/a11y/useKeyWithClickEvents: satisfying this literally would replace the KeyboardSensor's onKeyDown activator (listeners already carries it) and kill keyboard drag. Task 9's context-menu Open item was meant to close this, and does NOT: Radix's trigger opens on contextmenu/pointerdown only, with no keydown of its own, so it inherits the platform's keyboard route to a context menu — and macOS has none (no Menu key, no Shift+F10). The click action is still not keyboard-reachable. Fixing it needs a route that isn't the card's own onKeyDown: a menubar/palette command, or a keyboard shortcut bound above the card. */}
 				<div
 					ref={setNodeRef}
 					{...listeners}

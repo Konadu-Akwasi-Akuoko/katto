@@ -175,7 +175,7 @@ describe("BoardView", () => {
 		).not.toBeInTheDocument();
 	});
 
-	it("opens the peek from the context menu, the card's keyboard route", async () => {
+	it("opens the peek from the context menu", async () => {
 		renderBoard();
 		await userEvent.pointer({
 			keys: "[MouseRight]",
