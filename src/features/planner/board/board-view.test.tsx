@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BoardView } from "@/features/planner/board/board-view";
@@ -43,6 +43,7 @@ function renderBoard(
 		if (cmd === "get_drive_status") return drive;
 		if (cmd === "set_project_status") return null;
 		if (cmd === "set_project_priority") return null;
+		if (cmd === "trash_project") return null;
 		throw new Error(`unexpected command: ${cmd}`);
 	});
 	return { calls, ...renderWithClient() };
@@ -248,7 +249,7 @@ describe("BoardView", () => {
 			keys: "[MouseRight]",
 			target: screen.getByText("NVMe deep dive"),
 		});
-		for (const name of [/set priority/i, /move to/i]) {
+		for (const name of [/set priority/i, /^move to$/i, /^delete$/i]) {
 			expect(await screen.findByRole("menuitem", { name })).toHaveAttribute(
 				"aria-disabled",
 				"true",
@@ -270,5 +271,86 @@ describe("BoardView", () => {
 			"set_project_priority",
 			expect.anything(),
 		);
+	});
+
+	it("trashes a project only after the confirm", async () => {
+		const { calls } = renderBoard();
+		await userEvent.pointer({
+			keys: "[MouseRight]",
+			target: await screen.findByText("NVMe deep dive"),
+		});
+		await userEvent.click(
+			await screen.findByRole("menuitem", { name: "Delete" }),
+		);
+		expect(calls).not.toHaveBeenCalledWith("trash_project", expect.anything());
+
+		await userEvent.click(
+			await screen.findByRole("button", { name: /move to trash/i }),
+		);
+		expect(calls).toHaveBeenCalledWith("trash_project", {
+			slug: "nvme-deep-dive-2026-07-08",
+		});
+	});
+
+	it("does not trash the project when the confirm is cancelled", async () => {
+		const { calls } = renderBoard();
+		await userEvent.pointer({
+			keys: "[MouseRight]",
+			target: await screen.findByText("NVMe deep dive"),
+		});
+		await userEvent.click(
+			await screen.findByRole("menuitem", { name: "Delete" }),
+		);
+		await userEvent.click(
+			await screen.findByRole("button", { name: "Cancel" }),
+		);
+
+		expect(
+			screen.queryByRole("button", { name: /move to trash/i }),
+		).not.toBeInTheDocument();
+		expect(calls).not.toHaveBeenCalledWith("trash_project", expect.anything());
+		expect(screen.getByText("NVMe deep dive")).toBeInTheDocument();
+	});
+
+	it("leaves the card in place when the Trash fails", async () => {
+		mockIPC((cmd) => {
+			if (cmd === "list_projects") return boardFixture;
+			if (cmd === "get_drive_status") return MOUNTED;
+			if (cmd === "trash_project") throw new Error("permission denied");
+			throw new Error(`unexpected command: ${cmd}`);
+		});
+		renderWithClient();
+		await userEvent.pointer({
+			keys: "[MouseRight]",
+			target: await screen.findByText("NVMe deep dive"),
+		});
+		await userEvent.click(
+			await screen.findByRole("menuitem", { name: "Delete" }),
+		);
+		await userEvent.click(
+			await screen.findByRole("button", { name: /move to trash/i }),
+		);
+		expect(await screen.findByText("NVMe deep dive")).toBeInTheDocument();
+		expect(useUiStore.getState().peekSlug).toBeNull();
+	});
+
+	it("closes the peek when the peeked project is trashed", async () => {
+		const { calls } = renderBoard();
+		await userEvent.click(await screen.findByText("NVMe deep dive"));
+		expect(useUiStore.getState().peekSlug).toBe("nvme-deep-dive-2026-07-08");
+		await userEvent.pointer({
+			keys: "[MouseRight]",
+			target: screen.getByText("NVMe deep dive"),
+		});
+		await userEvent.click(
+			await screen.findByRole("menuitem", { name: "Delete" }),
+		);
+		await userEvent.click(
+			await screen.findByRole("button", { name: /move to trash/i }),
+		);
+		await waitFor(() => expect(useUiStore.getState().peekSlug).toBeNull());
+		expect(calls).toHaveBeenCalledWith("trash_project", {
+			slug: "nvme-deep-dive-2026-07-08",
+		});
 	});
 });

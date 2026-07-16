@@ -19,22 +19,34 @@ import {
 	FlagIcon,
 	LightbulbIcon,
 	ScissorsIcon,
+	TrashIcon,
 	UploadSimpleIcon,
 	VideoCameraIcon,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
 	ContextMenuRadioGroup,
 	ContextMenuRadioItem,
+	ContextMenuSeparator,
 	ContextMenuSub,
 	ContextMenuSubContent,
 	ContextMenuSubTrigger,
 	ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { groupByStatus } from "@/features/planner/model/board";
 import { useDriveStatus } from "@/hooks/use-drive-status";
 import {
@@ -51,6 +63,7 @@ import {
 	projectsKeys,
 	setProjectPriority,
 	setProjectStatus,
+	trashProject,
 } from "@/lib/ipc/projects";
 import type { ProjectStatus } from "@/lib/project-status";
 import { isProjectStatus, PROJECT_STATUSES } from "@/lib/project-status";
@@ -94,9 +107,27 @@ export function BoardView() {
 		},
 	});
 
-	// Priority and status are folder-truth, so both writes sit behind the
-	// engine's require_mounted guard. Disabling here is what turns that guard
-	// into something the owner can see before clicking.
+	const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
+	const closePeek = useUiStore((s) => s.closePeek);
+
+	// Deliberately not optimistic. A Trash that the OS refuses leaves the folder
+	// on disk, so removing the card first would have the board lying about what
+	// is there; MutationCache.onError already surfaces the failure.
+	const trash = useMutation({
+		mutationFn: (slug: string) => trashProject(slug),
+		onSuccess: (_data, slug) => {
+			// The peek is very likely open on the card that was just right-clicked;
+			// leaving it would refetch a project that no longer exists and report a
+			// load failure for a deliberate delete.
+			if (useUiStore.getState().peekSlug === slug) closePeek();
+			void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
+		},
+		onSettled: () => setPendingDelete(null),
+	});
+
+	// Priority, status and delete are folder-truth, so all three writes sit
+	// behind the engine's require_mounted guard. Disabling here is what turns
+	// that guard into something the owner can see before clicking.
 	const mounted = useDriveStatus().data?.mounted ?? false;
 
 	const sensors = useSensors(
@@ -131,23 +162,67 @@ export function BoardView() {
 	const groups = groupByStatus(projects ?? []);
 
 	return (
-		<DndContext
-			sensors={sensors}
-			collisionDetection={closestCorners}
-			onDragEnd={onDragEnd}
-		>
-			<div className="flex h-full min-h-0 gap-3 overflow-x-auto pb-2">
-				{PROJECT_STATUSES.map((column) => (
-					<Column
-						key={column}
-						column={column}
-						projects={groups[column]}
-						mounted={mounted}
-						onMove={(slug, status) => move.mutate({ slug, status })}
-					/>
-				))}
-			</div>
-		</DndContext>
+		<>
+			<DndContext
+				sensors={sensors}
+				collisionDetection={closestCorners}
+				onDragEnd={onDragEnd}
+			>
+				<div className="flex h-full min-h-0 gap-3 overflow-x-auto pb-2">
+					{PROJECT_STATUSES.map((column) => (
+						<Column
+							key={column}
+							column={column}
+							projects={groups[column]}
+							mounted={mounted}
+							onMove={(slug, status) => move.mutate({ slug, status })}
+							onRequestDelete={setPendingDelete}
+						/>
+					))}
+				</div>
+			</DndContext>
+
+			{/* Controlled, and a sibling of every menu tree: a DialogTrigger inside
+			    the ContextMenuItem would unmount with the menu on select. The
+			    content is mounted with the pending project rather than reading it
+			    optionally, so closing can't blank the title mid-fade. */}
+			<Dialog
+				open={pendingDelete !== null}
+				onOpenChange={(open) => {
+					if (!open) setPendingDelete(null);
+				}}
+			>
+				{pendingDelete ? (
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>
+								Move “{pendingDelete.title}” to the Trash?
+							</DialogTitle>
+							<DialogDescription>
+								The project folder goes to the Trash and its row is removed. Put
+								it back from the Trash and katto picks it up on the next rescan.
+							</DialogDescription>
+						</DialogHeader>
+						<DialogFooter>
+							<Button
+								variant="secondary"
+								onClick={() => setPendingDelete(null)}
+							>
+								Cancel
+							</Button>
+							<Button
+								variant="destructive"
+								disabled={trash.isPending}
+								onClick={() => trash.mutate(pendingDelete.slug)}
+							>
+								<TrashIcon />
+								Move to Trash
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				) : null}
+			</Dialog>
+		</>
 	);
 }
 
@@ -156,11 +231,13 @@ function Column({
 	projects,
 	mounted,
 	onMove,
+	onRequestDelete,
 }: {
 	column: ProjectStatus;
 	projects: Project[];
 	mounted: boolean;
 	onMove: (slug: string, status: ProjectStatus) => void;
+	onRequestDelete: (project: Project) => void;
 }) {
 	const { setNodeRef, isOver } = useDroppable({ id: column });
 	const { label, fg } = statusAppearance(column);
@@ -191,6 +268,7 @@ function Column({
 						project={project}
 						mounted={mounted}
 						onMove={onMove}
+						onRequestDelete={onRequestDelete}
 					/>
 				))}
 			</div>
@@ -202,10 +280,12 @@ function Card({
 	project,
 	mounted,
 	onMove,
+	onRequestDelete,
 }: {
 	project: Project;
 	mounted: boolean;
 	onMove: (slug: string, status: ProjectStatus) => void;
+	onRequestDelete: (project: Project) => void;
 }) {
 	const queryClient = useQueryClient();
 	const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -316,6 +396,17 @@ function Card({
 						</ContextMenuRadioGroup>
 					</ContextMenuSubContent>
 				</ContextMenuSub>
+
+				<ContextMenuSeparator />
+
+				<ContextMenuItem
+					variant="destructive"
+					disabled={!mounted}
+					onSelect={() => onRequestDelete(project)}
+				>
+					<TrashIcon />
+					Delete
+				</ContextMenuItem>
 			</ContextMenuContent>
 		</ContextMenu>
 	);
