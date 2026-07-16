@@ -63,6 +63,12 @@ objc2-user-notifications = "0.3"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 block2 = "0.6"
+# Move-to-Trash for project Delete. There is no Tauri 2 trash API (tauri#5680);
+# tauri-plugin-opener only reveals. Default DeleteMethod::Finder is kept so the
+# Trash item keeps its "Put Back" — "reversible" per the spec means restored to
+# <studio_root>/Projects/<slug>, not just landed in ~/.Trash. Its objc2 0.6.2 /
+# objc2-foundation 0.3.2 unify with the pins above.
+trash = "5.2.6"
 
 [dev-dependencies]
 rstest = "0.26.1"

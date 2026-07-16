@@ -251,6 +251,55 @@ pub async fn reveal_project_folder(
     Ok(())
 }
 
+/// Move a project's folder to the macOS Trash and drop its index row.
+///
+/// The folder move runs first and **outside** the DB writer thread: `trash`
+/// shells out to Finder, which can block on an Apple-event round-trip or a
+/// permissions dialog, and parking the single writer on that would stall every
+/// other command. Trash-then-row is also the safe order — a Trash failure leaves
+/// both the folder and the row untouched, so the board is never lying about a
+/// project that still exists on disk.
+///
+/// Reversible by design: Finder's "Put Back" restores the folder to
+/// `<studio_root>/Projects/<slug>`, and the next reconcile re-adds the row from
+/// its manifest. The `schedule` rows go with it via ON DELETE CASCADE
+/// (foreign_keys is ON — see `db::apply_pragmas`).
+#[tauri::command]
+#[specta::specta]
+pub async fn trash_project(state: State<'_, AppState>, app: AppHandle, slug: String) -> Result<()> {
+    let lookup = slug.clone();
+    let project = state
+        .db
+        .call(move |conn| trash_project_lookup(conn, &lookup))
+        .await?;
+
+    let root_path = project.root_path.clone();
+    tauri::async_runtime::spawn_blocking(move || trash::delete(&root_path))
+        .await
+        .map_err(|e| Error::Io(e.to_string()))?
+        .map_err(|e| Error::Io(format!("could not move project to Trash: {e}")))?;
+
+    state
+        .db
+        .call(move |conn| {
+            let tx = conn.transaction()?;
+            db::projects::delete(&tx, &slug)?;
+            db::events::record(&tx, "project-trashed", Some(&slug), None)?;
+            tx.commit()?;
+            Ok(())
+        })
+        .await?;
+    crate::broadcast::projects_changed(&app);
+    Ok(())
+}
+
+/// The lookup + guard half of `trash_project`, factored out so the failure paths
+/// are testable against an in-memory DB without a live Tauri app or a real Trash.
+fn trash_project_lookup(conn: &Connection, slug: &str) -> Result<Project> {
+    require_mounted(conn)?;
+    db::projects::get(conn, slug)?.ok_or_else(|| Error::Io(format!("no such project: {slug}")))
+}
+
 /// Resolve the configured studio root, failing with `StudioRootUnmounted` when it
 /// is unset or unreachable. Every folder-touching command guards through here
 /// before walking the filesystem.
@@ -396,6 +445,38 @@ mod tests {
         assert_eq!(first.slug, "nvme-deep-dive-2026-07-09");
         assert_eq!(second.slug, "nvme-deep-dive-2-2026-07-09");
         assert!(projects_root.join(&second.slug).is_dir());
+    }
+
+    #[test]
+    fn trash_project_lookup_rejects_an_unmounted_root() {
+        let conn = test_db();
+        db::settings::set(&conn, "studio_root", "/Volumes/Nope").unwrap();
+        assert!(matches!(
+            trash_project_lookup(&conn, "whatever"),
+            Err(Error::StudioRootUnmounted(_))
+        ));
+    }
+
+    #[test]
+    fn trash_project_lookup_rejects_an_unknown_slug() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = test_db();
+        db::settings::set(&conn, "studio_root", &dir.path().to_string_lossy()).unwrap();
+        assert!(matches!(
+            trash_project_lookup(&conn, "no-such-2026-07-16"),
+            Err(Error::Io(_))
+        ));
+    }
+
+    #[test]
+    #[ignore = "moves a real folder to the macOS Trash; may prompt for Automation access"]
+    fn trash_delete_moves_a_real_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let victim = dir.path().join("katto-trash-probe");
+        std::fs::create_dir_all(victim.join("footage")).unwrap();
+        std::fs::write(victim.join("footage/clip.mov"), b"not really a movie").unwrap();
+        trash::delete(&victim).unwrap();
+        assert!(!victim.exists());
     }
 
     #[test]

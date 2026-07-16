@@ -106,6 +106,22 @@ export const commands = {
 	 *  directory.
 	 */
 	revealProjectFolder: (slug: string, subfolder: string | null) => typedError<null, Error>(__TAURI_INVOKE("reveal_project_folder", { slug, subfolder })),
+	/**
+	 *  Move a project's folder to the macOS Trash and drop its index row.
+	 * 
+	 *  The folder move runs first and **outside** the DB writer thread: `trash`
+	 *  shells out to Finder, which can block on an Apple-event round-trip or a
+	 *  permissions dialog, and parking the single writer on that would stall every
+	 *  other command. Trash-then-row is also the safe order — a Trash failure leaves
+	 *  both the folder and the row untouched, so the board is never lying about a
+	 *  project that still exists on disk.
+	 * 
+	 *  Reversible by design: Finder's "Put Back" restores the folder to
+	 *  `<studio_root>/Projects/<slug>`, and the next reconcile re-adds the row from
+	 *  its manifest. The `schedule` rows go with it via ON DELETE CASCADE
+	 *  (foreign_keys is ON — see `db::apply_pragmas`).
+	 */
+	trashProject: (slug: string) => typedError<null, Error>(__TAURI_INVOKE("trash_project", { slug })),
 	/**  Ideas with the given status, newest-first. */
 	listIdeas: (status: string) => typedError<Idea[], Error>(__TAURI_INVOKE("list_ideas", { status })),
 	/**  Capture a new idea into the backlog and broadcast. */

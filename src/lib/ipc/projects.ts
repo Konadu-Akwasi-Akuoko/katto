@@ -67,3 +67,10 @@ export const revealProjectFolder = (
 	slug: string,
 	subfolder: string | null = null,
 ): Promise<null> => unwrap(commands.revealProjectFolder(slug, subfolder));
+
+/**
+ * Move a project's folder to the macOS Trash and drop its row. Reversible:
+ * Finder's "Put Back" restores the folder, and the next reconcile re-adds it.
+ */
+export const trashProject = (slug: string): Promise<null> =>
+	unwrap(commands.trashProject(slug));
