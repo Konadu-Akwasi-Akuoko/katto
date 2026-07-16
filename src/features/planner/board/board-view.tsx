@@ -10,10 +10,19 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { CameraIcon, UploadSimpleIcon } from "@phosphor-icons/react";
+import type { Icon } from "@phosphor-icons/react";
+import {
+	CameraIcon,
+	CheckCircleIcon,
+	LightbulbIcon,
+	ScissorsIcon,
+	UploadSimpleIcon,
+	VideoCameraIcon,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { groupByStatus } from "@/features/planner/model/board";
+import { statusAppearance } from "@/lib/appearance";
 import { formatShortDate } from "@/lib/date";
 import type { Project } from "@/lib/ipc/projects";
 import {
@@ -25,16 +34,16 @@ import type { ProjectStatus } from "@/lib/project-status";
 import { isProjectStatus, PROJECT_STATUSES } from "@/lib/project-status";
 import { cn } from "@/lib/utils";
 
-const COLUMN_LABELS: Record<ProjectStatus, string> = {
-	idea: "Idea",
-	shooting: "Shooting",
-	editing: "Editing",
-	published: "Published",
+const COLUMN_ICONS: Record<ProjectStatus, Icon> = {
+	idea: LightbulbIcon,
+	shooting: VideoCameraIcon,
+	editing: ScissorsIcon,
+	published: CheckCircleIcon,
 };
 
 export function BoardView() {
 	const queryClient = useQueryClient();
-	const { data: projects } = useQuery({
+	const { data: projects, isError } = useQuery({
 		queryKey: projectsKeys.all,
 		queryFn: listProjects,
 	});
@@ -76,6 +85,17 @@ export function BoardView() {
 		move.mutate({ slug, status: target });
 	}
 
+	if (isError) {
+		return (
+			<div className="flex h-full flex-col items-center justify-center gap-1 text-sm">
+				<p className="text-fg">Couldn't load your projects.</p>
+				<p className="text-fg-muted">
+					Check that the studio drive is mounted, then rescan from Projects.
+				</p>
+			</div>
+		);
+	}
+
 	const groups = groupByStatus(projects ?? []);
 
 	return (
@@ -101,11 +121,16 @@ function Column({
 	projects: Project[];
 }) {
 	const { setNodeRef, isOver } = useDroppable({ id: column });
+	const { label, fg } = statusAppearance(column);
+	const ColumnIcon = COLUMN_ICONS[column];
 
 	return (
 		<section className="flex w-64 shrink-0 flex-col gap-2">
-			<header className="flex items-baseline justify-between px-1">
-				<h2 className="text-sm font-medium text-fg">{COLUMN_LABELS[column]}</h2>
+			<header className="flex items-center justify-between px-1">
+				<h2 className={cn("flex items-center gap-1.5 text-sm font-medium", fg)}>
+					<ColumnIcon className="size-4" />
+					{label}
+				</h2>
 				<span className="tabular-nums text-xs text-fg-faint">
 					{projects.length}
 				</span>

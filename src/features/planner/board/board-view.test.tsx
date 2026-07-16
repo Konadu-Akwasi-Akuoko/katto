@@ -57,4 +57,24 @@ describe("BoardView", () => {
 			within(columnFor("Published")).getByText("RAID rebuild diary"),
 		).toBeInTheDocument();
 	});
+
+	it("shows the board's error state instead of four empty columns", async () => {
+		mockIPC(() => {
+			throw new Error("studio root is not mounted: /Volumes/Studio");
+		});
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		render(
+			<QueryClientProvider client={client}>
+				<BoardView />
+			</QueryClientProvider>,
+		);
+		expect(
+			await screen.findByText(/couldn't load your projects/i),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("heading", { name: "Idea" }),
+		).not.toBeInTheDocument();
+	});
 });
