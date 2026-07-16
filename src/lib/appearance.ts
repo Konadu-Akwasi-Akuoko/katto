@@ -58,6 +58,20 @@ export const PRIORITY_LEVELS: readonly PriorityLevel[] = [
 	"high",
 ];
 
+/**
+ * Menu labels for the priority axis. Separate from {@link priorityAppearance},
+ * which returns null for "none" because a project renders no chrome for an unset
+ * priority — a menu still has to offer "none" as a real, choosable value. Shared
+ * so the board's context menu and the peek's control cannot drift apart.
+ * Exhaustive over the generated union: a new Rust variant breaks this.
+ */
+export const PRIORITY_MENU_LABELS: Record<PriorityLevel, string> = {
+	none: "None",
+	low: "Low",
+	medium: "Medium",
+	high: "High",
+};
+
 const PRIORITY_SET: ReadonlySet<string> = new Set(PRIORITY_LEVELS);
 
 /** Whether a raw string is one of the four priority levels. */

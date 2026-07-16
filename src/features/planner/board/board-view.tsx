@@ -40,6 +40,7 @@ import { useDriveStatus } from "@/hooks/use-drive-status";
 import {
 	isPriorityLevel,
 	PRIORITY_LEVELS,
+	PRIORITY_MENU_LABELS,
 	priorityAppearance,
 	statusAppearance,
 } from "@/lib/appearance";
@@ -61,16 +62,6 @@ const COLUMN_ICONS: Record<ProjectStatus, Icon> = {
 	shooting: VideoCameraIcon,
 	editing: ScissorsIcon,
 	published: CheckCircleIcon,
-};
-
-/** Menu-only labels: "None" is a real radio value here, but priorityAppearance
- *  returns null for it because a card renders no chrome for an unset priority.
- *  Record<PriorityLevel, string> is exhaustive — a new Rust variant breaks it. */
-const PRIORITY_MENU_LABELS: Record<PriorityLevel, string> = {
-	none: "None",
-	low: "Low",
-	medium: "Medium",
-	high: "High",
 };
 
 export function BoardView() {
