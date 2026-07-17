@@ -248,8 +248,13 @@ function Column({
 	return (
 		<section className="flex w-64 shrink-0 flex-col gap-2">
 			<header className="flex items-center justify-between px-1">
-				<h2 className={cn("flex items-center gap-1.5 text-sm font-medium", fg)}>
-					<ColumnIcon className="size-4" />
+				{/* The status colour rides on the icon, not the label. A status hue on
+				    body-size text over the plain --bg lands at ~3.2:1 for editing and
+				    ~3.5:1 for shooting — under the 4.5:1 text floor. A 16px icon is a
+				    non-text graphic (3:1 floor), which both clear, so the state stays
+				    encoded once in colour + glyph and the label keeps its ~12:1. */}
+				<h2 className="flex items-center gap-1.5 text-sm font-medium text-fg">
+					<ColumnIcon className={cn("size-4", fg)} />
 					{label}
 				</h2>
 				<span className="tabular-nums text-xs text-fg-faint">
