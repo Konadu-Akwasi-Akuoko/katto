@@ -32,7 +32,7 @@ paths:
 
 - Tailwind v4 CSS-first: tokens in the `@theme` block of `src/styles/main.css`; semantic tokens (`--color-surface`) over raw palette values. No `@apply` outside rare base-layer cases. Variants via cva + `cn()`.
 - Reach for an existing `src/components/ui/` primitive before writing a new interactive component; add new primitives via the shadcn CLI, then edit them freely — they're our code.
-- Class order is machine-owned (prettier-plugin-tailwindcss); never hand-order.
+- Tailwind class order: no sorter is wired up (Biome's useSortedClasses stays off — nursery, and it breaks on our custom CSS-first utilities). Keep class strings tidy by hand; never install prettier for this.
 
 ## TypeScript
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="currentColor" role="img" aria-label="katto mark">
+  
+  <defs><clipPath id="g"><rect x="12" y="12" width="40" height="40" rx="10"></rect></clipPath></defs>
+  <g clip-path="url(#g)">
+    <polygon points="6,6 58,6 6,58" transform="translate(-2.1,-2.1)"></polygon>
+    <polygon points="58,6 58,58 6,58" transform="translate(2.1,2.1)"></polygon>
+  </g>
+</svg>

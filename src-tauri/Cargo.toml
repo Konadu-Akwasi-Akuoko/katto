@@ -18,8 +18,59 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = [
+  "tray-icon",
+  "image-png",
+  "specta",
+  # transparent capture window; pairs with `app.macOSPrivateApi` in tauri.conf.json
+  "macos-private-api",
+] }
 tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-deep-link = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 katto-engine = {path ="../crates/katto-engine"}
+rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite_migration = "2.6"
+thiserror = { workspace = true }
+# specta/tauri-specta RCs require Rust 1.95+ (fmt::from_fn); pinned exact per the RC
+# churn caveat in the tauri-specta docs.
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+specta-typescript = "0.0.12"
+tokio = { workspace = true, features = ["time"] }
+uuid = { version = "1", features = ["v4"] }
+keyring-core = "1.0"
+fs4 = { version = "1.1", features = ["sync"] }
+# Direct dep with `formatting` so file mtimes render as RFC3339; 0.3.47 is already
+# in the graph transitively (via tauri → cookie), this only enables the feature.
+time = { version = "0.3", features = ["formatting"] }
+# Weekday name (`%A`) for the tray's next-shoot line; already in the graph
+# transitively (via serde_with), this makes it a direct dep. No `clock` feature —
+# the date is passed in, never read from the wall clock.
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
+# Native macOS notification center for bundled/signed builds. objc2 0.6.4,
+# objc2-foundation 0.3.2, block2 0.6.2 are already resolved transitively; these
+# make them direct deps and add the user-notifications bindings.
+objc2-user-notifications = "0.3"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+block2 = "0.6"
+# Move-to-Trash for project Delete. There is no Tauri 2 trash API (tauri#5680);
+# tauri-plugin-opener only reveals. Default DeleteMethod::Finder is kept so the
+# Trash item keeps its "Put Back" — "reversible" per the spec means restored to
+# <studio_root>/Projects/<slug>, not just landed in ~/.Trash. Its objc2 0.6.2 /
+# objc2-foundation 0.3.2 unify with the pins above.
+trash = "5.2.6"
+
+[dev-dependencies]
+rstest = "0.26.1"
+tempfile = "3.27.0"
+tokio = { workspace = true, features = ["rt"] }

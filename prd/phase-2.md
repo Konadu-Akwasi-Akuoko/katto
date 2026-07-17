@@ -12,6 +12,32 @@ Projects are the noun every later phase acts on (ingest files into them, the cut
 inside them, the dock works in their folders). The promote flow fixes the slug contract early
 — everything downstream joins on folder name.
 
+## Progress
+
+Living checklist — the durable record of what's landed vs. outstanding on `feat/phase-2-projects-planner`.
+
+- [x] CI rust job moved to `macos-latest` (Phase 2 lands objc2/macOS-only deps)
+- [x] Slug contract — `kebab_slug` + `project_slug` ported byte-compatible from the hyper-frames studio source (collision ladder table-tested)
+- [x] `project.json` manifest — schema-validated read/write, atomic `.tmp` → rename round-trip
+- [x] D6 folder anatomy skeleton + guarded rollback removal (never recreates, never deletes on invalid manifest)
+- [x] Migration 002 (`projects.last_touched_at`) + `db/projects.rs` repository
+- [x] `db/ideas.rs` + `db/schedule.rs` repositories
+- [x] Reconcile — folder scan + pure diff + launch hook + `rescan_projects` (folders are truth)
+- [x] Projects commands — CRUD + freshness grid + `projects-changed` broadcast
+- [x] Ideas commands — CRUD + one-transaction promote with rollback and folder cleanup
+- [x] Schedule commands + tray current-project and next-shoot lines
+- [x] Planner shell + Backlog triage surface
+- [x] Board — kanban with drag-to-status (dnd-kit)
+- [x] Calendar — month/week grids with shoot + publish chips + week-ahead model
+- [x] Projects list + detail surfaces (freshness grid, reveal-in-Finder)
+- [x] Quick capture — global hotkey + capture window into the backlog
+- [x] Notifications + `katto://` deep links (dev degrades to tray)
+- [x] Palette commands — new idea, promote idea, new project, go to project, open studio root
+- [x] Capture window opens on the active Space (`visible_on_all_workspaces`) with a soft `--r-lg` frame; tray gained a "Quick capture" item
+- [ ] Settings rebind for `capture_shortcut` — nothing writes the key, so the default is currently the only binding
+- [ ] Capture window over a **fullscreen** Space — `visible_on_all_workspaces` alone may not float above one ([tauri#11488](https://github.com/tauri-apps/tauri/issues/11488)); needs `NSWindowCollectionBehaviorFullScreenAuxiliary` via `objc2` if the manual pass shows it hidden
+- [ ] Exit criteria: owner's manual pass (hotkey → promote → folder + Board card; Calendar shoot date; tray shoot line; Finder-delete → rescan; SSD unplug/replug)
+
 ## User stories
 
 - Watching a video at lunch, I hit the global hotkey, type an idea, hit return — it's in the
@@ -34,7 +60,7 @@ inside them, the dock works in their folders). The promote flow fixes the slug c
 | Ideas CRUD | create (manual), edit title/kind/notes, discard (status=`discarded`, kept as audit), list by status; **no score/rank fields anywhere** (D7) |
 | Promote | One transaction: idea → `status='promoted'` + `promoted_slug`; project row inserted; folder skeleton created; failure anywhere rolls back DB and removes any partial folder; `events` row |
 | Schedule | shoot/publish rows per project; week-ahead query for tray + dashboard |
-| Quick capture | Global hotkey (default ⌥⌘I, rebindable in Settings) opens a small always-on-top borderless window (title input, optional note, kind picker) from any app; Enter saves `ideas` row (type=`manual`, status=`backlog`) + closes; Esc cancels; works while main window hidden |
+| Quick capture | Global hotkey (default ⌥⌘K, rebindable in Settings) opens a small always-on-top borderless window (title input, optional note, kind picker) from any app; Enter saves `ideas` row (type=`manual`, status=`backlog`) + closes; Esc cancels; works while main window hidden, and opens on the **active** Space, not the app's own |
 | Notifications + deep links | `notify(title, body, url)` via `objc2-user-notifications` (bundled identified app required — official plugin has no desktop click handlers); clicking opens/focuses katto at `katto://ideas` or `katto://project/<slug>`; in dev (unsigned), notifications degrade to tray attention + events row |
 | Planner Board | Kanban columns over project status (`idea → shooting → editing → published` v1 vocabulary); drag card between columns persists status; card shows title, next date chip, latest-artifact hint |
 | Planner Calendar | Month + week views; shoot chips and publish chips; click → project detail |
@@ -124,6 +150,16 @@ reconcile needs it: `projects.last_touched_at TEXT` (tray "current project" heur
 Ingest (Phase 3), any AI (4/6), notifications-with-actions beyond open-at-route, board stages
 beyond the v1 vocabulary (the 12-stage hyper-frames ladder stays in tools/studio; katto's board
 tracks katto's pipeline).
+
+## Carried forward
+
+- **A refresh control that reconciles folders → DB without relaunching.** `rescan_projects`
+  (`src-tauri/src/commands/projects.rs:39`) and its typed wrapper already exist and work — only
+  the UI trigger is missing, so today reconcile runs on launch and nowhere else. Two strings
+  already promise the control: `board-view.tsx:156` ("then rescan from Projects") and the delete
+  dialog's "katto picks it up on the next rescan" (`:205`). Confirmed by hand 2026-07-17: a
+  trashed project Put Back from the Bin only reappears after a restart. Wire it, and the copy
+  stops lying.
 
 ## Exit criteria
 

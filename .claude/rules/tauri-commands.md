@@ -24,7 +24,7 @@ paths:
 ## Persistence
 
 - rusqlite behind a single dedicated writer (channel-fed task); WAL + `busy_timeout` pragmas set on open.
-- Migrations are numbered and forward-only (`rusqlite_migration`); never edit a shipped migration — add a new one. Post-ship column additions use the `PRAGMA table_info` guard pattern.
+- Migrations are numbered and forward-only (`rusqlite_migration`); never edit a shipped migration — add a new one. Column additions are a plain `ALTER TABLE … ADD COLUMN` — no presence guard: the ladder's `user_version` already applies each entry exactly once, and plain SQLite cannot branch on `PRAGMA table_info` anyway.
 - File writes that replace project artifacts are atomic: write `<name>.tmp`, then `rename`. Versioned exports (`timelines/<slug>-vN.*`) are never overwritten — bump N.
 
 ## Jobs and events

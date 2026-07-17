@@ -1,0 +1,11 @@
+import type { Settings } from "@/lib/ipc/settings";
+
+/** Baseline Settings row for tests; spread-override per scenario. */
+export const settingsFixture: Settings = {
+	studio_root: null,
+	default_nle: null,
+	idle_reap_minutes: 10,
+	onboarding_complete: false,
+	claude_path: null,
+	keys_present: { elevenlabs: false, anthropic: false },
+};

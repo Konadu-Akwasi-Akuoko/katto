@@ -37,6 +37,17 @@ Dependency direction is one-way: app → engine, cli → engine.
 - Dev app: `bun run tauri dev`. Frontend only: `bun run dev`. **The owner runs the dev server
   personally most of the time — don't start it yourself; assume it's already running or ask.**
 
+## Verify before you build
+
+- Whenever code is edited or a new feature is written against an external API — a crate, an
+  npm package, a plugin, a CLI flag — confirm the actual contract first (docs.rs, crates.io,
+  official docs, or the installed package's types) instead of writing signatures from memory.
+  Plans and code carry exact, verified names and signatures; where a version quirk is still
+  possible, note the checked fallback inline.
+- The owner has granted standing permission to research anything not fully understood or in
+  doubt — WebSearch/WebFetch, docs, source mirrors — without asking first. When in doubt,
+  look it up; never guess.
+
 ## Invariants (non-negotiable)
 
 - Rational time (`Rational {num, den}`) end-to-end in the engine; floats only at UI and

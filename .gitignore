@@ -33,6 +33,10 @@ dist-ssr
 /skills
 /agents
 
+# reviewer-agent scratch memory: per-machine, mutable cache derivable from the
+# committed rules; not source of truth
+/.claude/agent-memory
+
 # output
 output
 

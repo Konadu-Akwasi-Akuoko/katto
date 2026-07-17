@@ -94,9 +94,9 @@ Update the table as phases land (link the PR that closed each).
 
 | Phase | Title | Status | PR |
 |---|---|---|---|
-| 0 | PRDs + guidance layer + repo identity | in progress | — |
-| 1 | Shell & First Light | not started | — |
-| 2 | Projects & Planner | not started | — |
+| 0 | PRDs + guidance layer + repo identity | done | — |
+| 1 | Shell & First Light | done on `feat/phase-1-tray-window` (exit criteria passed 2026-07-09), pending merge | — |
+| 2 | Projects & Planner | implemented on `feat/phase-2-projects-planner`, pending owner exit-criteria pass | — |
 | 3 | SD Ingest | not started | — |
 | 4 | Cut Pipeline | not started | — |
 | 5 | Cut Editor & Export | not started | — |

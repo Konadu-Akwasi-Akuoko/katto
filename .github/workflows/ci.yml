@@ -11,25 +11,15 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # Mirrors the Rust half of `just check` 1:1 from the workspace root.
+  # Runs on macOS: Phase 2 lands macOS-only deps (objc2, objc2-user-notifications).
+  # macos-latest -> macos-26 image ships Xcode CLT preinstalled, the only Tauri
+  # macOS build prerequisite, so no setup step is needed.
   rust:
     name: Rust (fmt, clippy, test)
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Tauri Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -38,23 +28,20 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
       - name: cargo fmt
-        working-directory: src-tauri
         run: cargo fmt --all -- --check
 
       - name: cargo clippy
-        working-directory: src-tauri
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: cargo test
-        working-directory: src-tauri
-        run: cargo test --all-features
+        run: cargo test
 
+  # Mirrors the frontend half of `just check` (biome, tsc, vitest) plus a
+  # production-bundle sanity build.
   frontend:
-    name: Frontend (typecheck, build)
+    name: Frontend (biome, typecheck, test, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,8 +54,14 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: biome
+        run: bunx biome ci .
+
       - name: Type check
-        run: bun run tsc --noEmit
+        run: bunx tsc --noEmit
+
+      - name: vitest
+        run: bunx vitest run
 
       - name: Build
         run: bun run build

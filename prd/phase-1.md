@@ -26,11 +26,38 @@ IPC layer into place before any feature code exists to do it wrong.
 - Anything katto does in the background shows up as a job with live progress and lands in an
   activity feed I can read later.
 
+## Progress
+
+Living checklist — the durable record of what's landed vs. outstanding on `feat/phase-1-tray-window`.
+Update as work merges; keep in sync with the acceptance-criteria table below and the tracker in
+`index.md`. Legend: `[x]` done · `[~]` partial · `[ ]` not started.
+
+- [x] Tray residency (icon, left-click menu, dynamic Show/Hide, Quit) — `146be12`
+- [x] Window lifecycle: close destroys WebView, app stays resident, reopen from tray/Dock — `146be12`
+- [x] Single instance (second launch focuses window) — `lib.rs`
+- [x] SQLite bootstrap + numbered migrations (schema 001), single-writer handle — `58c4245`
+- [x] Events log (`record_event` / `list_events`, append-only) — `58c4245`
+- [x] Settings store (SQLite key/value, typed accessors) — `58c4245`
+- [x] Typed IPC: `get_settings` / `set_settings` / `list_events` / `list_jobs` / `job_transition` — `7c2b41b`
+- [x] App icons + menu-bar template — `fd94547`
+- [x] Jobs framework — runtime with `Channel<JobProgress>` streaming, tray mirror, terminal events rows (panic-isolated; `queued→failed` added for failed starts)
+- [x] Keychain commands (`store_key` / `key_present` for `elevenlabs` / `anthropic`)
+- [x] Launch-at-login toggle (autostart plugin) — Settings, survives reboot
+- [x] Studio-root picker (any dir; boot-volume / <100 GB warning) — onboarding + Settings re-pick
+- [x] Studio-root mount check (2 s `/Volumes` poll) + drive-disconnected banner + `get_drive_status`
+- [x] `claude` detection (`zsh -lc "which claude"`, cached in settings)
+- [x] Onboarding wizard (root · ElevenLabs key · claude detection) → Dashboard
+- [x] ⌘K palette — registry + overlay + phase-1 commands (open settings/dashboard, quit, sleep, re-run claude)
+- [x] Dashboard v1 (events feed · active-jobs list · drive-status card) — live queries + broadcast invalidation; DEV smoke-job button
+- [x] Frontend toolchain — Tailwind v4 + shadcn + bindings + Vitest/RTL + TanStack Query + Zustand ui store + Biome 2 + `app/`+`features/` layout
+- [x] Gate/CI extension — `just check` = fmt-check + clippy + test + biome + tsc + vitest; CI mirrors it 1:1 from the workspace root; `just bundle` builds the signed `.app`
+- [x] Exit criteria: `.app` builds signed via `just bundle`, `just check` green, installed to `/Applications`; owner's manual pass (tray, fresh onboarding, quit/relaunch persistence, autostart, drive banner) confirmed 2026-07-09
+
 ## Scope with acceptance criteria
 
 | Feature | Acceptance criteria |
 |---|---|
-| Tray residency | Template icon (dark/light correct); left-click toggles main window; menu shows Open, current-project line (— for now), next-shoot-day line (— for now), Sleep to tray, Quit; menu items update live without rebuilding the tray; no Dock icon (`ActivationPolicy::Accessory`); window close hides instead of quitting |
+| Tray residency | Template icon (dark/light correct); `ActivationPolicy::Regular` — Dock icon + macOS app menu present (matches real Docker Desktop, which shows a Dock icon; supersedes the old Accessory decision — see D21); **left-click opens the tray menu** (does not touch the window); menu shows a dynamic **Show window / Hide window** item that flips with window state, current-project line (— for now), next-shoot-day line (— for now), Quit; menu items update live without rebuilding the tray; window opens **maximized** (fills the work area, not fullscreen); **closing destroys the WebView** (frees its RAM) while the app stays resident in the menu bar (`RunEvent::ExitRequested` → `prevent_exit` when `code` is `None`); reopening from the tray item, the Dock icon (`RunEvent::Reopen`), or a second launch recreates the maximized window; tray **Quit** (`app.exit`, `code` `Some`) exits fully |
 | Launch at login | Toggle in Settings; survives reboot when enabled from a bundled build |
 | Single instance | Second launch focuses the existing window |
 | SQLite bootstrap | DB created at `app_data_dir()/katto.db` with WAL + `busy_timeout=5000` + `synchronous=NORMAL`; full schema below applied via numbered migrations; migrations test green |

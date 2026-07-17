@@ -1,0 +1,7 @@
+# macOS dev builds run through a signing wrapper so keychain "Always Allow"
+# grants survive rebuilds (stable designated requirement instead of a per-build
+# ad-hoc hash). `tauri dev` launches the app via `cargo run`, so this covers it;
+# test binaries pass through the same wrapper (signing them is harmless).
+# No-op on Linux CI, and a no-op locally until a codesigning identity exists.
+[target.'cfg(target_os = "macos")']
+runner = "scripts/macos-dev-sign.sh"
