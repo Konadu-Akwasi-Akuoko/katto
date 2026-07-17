@@ -120,10 +120,14 @@ describe("ProjectPeek", () => {
 		expect(await screen.findByText("High")).toBeInTheDocument();
 	});
 
-	it("renders no priority chip for an unprioritised project", async () => {
+	it("offers to set a priority when the project has none", async () => {
 		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
 		renderPeek();
 		await screen.findByText("NVMe deep dive");
+		// The absence check alone passes by construction — PriorityChip renders
+		// null for "none" — so it would hold even against a trigger with an empty
+		// face. The fallback is the only affordance here; name it.
+		expect(screen.getByText("Set priority")).toBeInTheDocument();
 		expect(screen.queryByText(/^(High|Medium|Low)$/)).not.toBeInTheDocument();
 	});
 
