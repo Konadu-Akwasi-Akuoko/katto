@@ -151,6 +151,16 @@ Ingest (Phase 3), any AI (4/6), notifications-with-actions beyond open-at-route,
 beyond the v1 vocabulary (the 12-stage hyper-frames ladder stays in tools/studio; katto's board
 tracks katto's pipeline).
 
+## Carried forward
+
+- **A refresh control that reconciles folders → DB without relaunching.** `rescan_projects`
+  (`src-tauri/src/commands/projects.rs:39`) and its typed wrapper already exist and work — only
+  the UI trigger is missing, so today reconcile runs on launch and nowhere else. Two strings
+  already promise the control: `board-view.tsx:156` ("then rescan from Projects") and the delete
+  dialog's "katto picks it up on the next rescan" (`:205`). Confirmed by hand 2026-07-17: a
+  trashed project Put Back from the Bin only reappears after a restart. Wire it, and the copy
+  stops lying.
+
 ## Exit criteria
 
 Idea captured via the global hotkey from another app → promoted → real folder in the studio root +
