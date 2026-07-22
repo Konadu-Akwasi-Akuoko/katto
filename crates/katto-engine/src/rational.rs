@@ -90,10 +90,13 @@ impl PartialOrd for Rational {
 }
 
 impl Ord for Rational {
+    /// Order by time value (cross-multiplied exactly); equal instants in
+    /// different timebases tie-break on den so `Equal` coincides with the
+    /// derived structural `PartialEq`/`Hash` (the std consistency contract).
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let lhs = i128::from(self.num) * i128::from(other.den);
         let rhs = i128::from(other.num) * i128::from(self.den);
-        lhs.cmp(&rhs)
+        lhs.cmp(&rhs).then_with(|| self.den.cmp(&other.den))
     }
 }
 
@@ -183,11 +186,25 @@ mod tests {
     #[test]
     fn ordering_is_cross_denominator() {
         assert!(Rational::new(1, 3) < Rational::new(1, 2));
+        // same instant, different timebase: not Equal (structural PartialEq
+        // consistency) — compare instants via rescale instead
+        assert_eq!(
+            Rational::new(30000, 30000).rescale(1000),
+            Rational::new(1000, 1000)
+        );
         assert_eq!(
             Rational::new(30000, 30000).cmp(&Rational::new(1000, 1000)),
-            std::cmp::Ordering::Equal
+            std::cmp::Ordering::Greater
         );
         assert!(Rational::new(-1, 2) < Rational::new(0, 5));
+    }
+
+    #[test]
+    fn ord_equal_iff_structurally_equal() {
+        let a = Rational::new(1, 2);
+        let b = Rational::new(2, 4);
+        assert_ne!(a.cmp(&b), std::cmp::Ordering::Equal);
+        assert_eq!(a.cmp(&a), std::cmp::Ordering::Equal);
     }
 
     #[test]

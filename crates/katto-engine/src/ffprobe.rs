@@ -1,7 +1,7 @@
 //! Pure parser for `ffprobe -show_streams -show_format -print_format json`
-//! output. The single spawn site lives in the app crate; this module only
-//! turns captured JSON into a [`MediaInfo`], so it is unit-tested without
-//! running ffprobe.
+//! output. The spawn sites live elsewhere (app-crate ingest probe, engine
+//! `import`); this module only turns captured JSON into [`MediaInfo`] /
+//! [`ProbeTiming`], so it is unit-tested without running ffprobe.
 
 use serde_json::Value;
 
@@ -146,8 +146,14 @@ fn duration_from_ts(stream: &Value) -> Option<Rational> {
 /// (places clamped to 9, further digits truncated). Never routes through `f64`.
 fn parse_exact_decimal(s: &str) -> Option<Rational> {
     let s = s.trim();
+    let negative = s.starts_with('-');
     let (int_part, frac_part) = s.split_once('.').unwrap_or((s, ""));
-    let frac = &frac_part[..frac_part.len().min(9)];
+    // `get` (not slicing) so non-ASCII garbage yields None instead of a panic
+    let frac = if frac_part.len() <= 9 {
+        frac_part
+    } else {
+        frac_part.get(..9)?
+    };
     let den = 10u32.checked_pow(frac.len() as u32)?;
     let int_val: i64 = int_part.parse().ok()?;
     let frac_val: i64 = if frac.is_empty() {
@@ -155,7 +161,11 @@ fn parse_exact_decimal(s: &str) -> Option<Rational> {
     } else {
         frac.parse().ok()?
     };
-    let signed_frac = if int_val < 0 { -frac_val } else { frac_val };
+    if frac_val < 0 {
+        return None; // a '-' after the dot is not a decimal
+    }
+    // sign from the string, not int_val: "-0.5" has int_val == 0
+    let signed_frac = if negative { -frac_val } else { frac_val };
     let num = int_val
         .checked_mul(i64::from(den))?
         .checked_add(signed_frac)?;
@@ -254,6 +264,19 @@ mod tests {
         let json = r#"{"streams":[{"codec_type":"video","r_frame_rate":"25/1"}],"format":{"duration":"3.5"}}"#;
         let t = parse_probe_timing(json).unwrap();
         assert_eq!(t.duration, Some(Rational::new(35, 10)));
+    }
+
+    #[test]
+    fn exact_decimal_handles_sign_and_garbage() {
+        assert_eq!(parse_exact_decimal("-0.5"), Some(Rational::new(-5, 10)));
+        assert_eq!(parse_exact_decimal("3.5"), Some(Rational::new(35, 10)));
+        // >9 fractional places truncate; multi-byte garbage is None, not a panic
+        assert_eq!(
+            parse_exact_decimal("1.0000000004"),
+            Some(Rational::new(1_000_000_000, 1_000_000_000))
+        );
+        assert_eq!(parse_exact_decimal("1.é0000000000"), None);
+        assert_eq!(parse_exact_decimal("1.-5"), None);
     }
 
     #[test]

@@ -199,12 +199,15 @@ impl SubprocessClaudePlanner {
     ) -> Result<RawAttempt, PlanError> {
         let sub = |e: String| PlanError::Subprocess(e);
         let run = async {
+            // kill_on_drop: a timeout cancels this future mid-await; the child
+            // must die with it, not keep burning the subscription session.
             let mut child = tokio::process::Command::new(&self.claude_path)
                 .current_dir(&self.workdir)
                 .args(argv)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
+                .kill_on_drop(true)
                 .spawn()
                 .map_err(|e| sub(format!("spawn: {e}")))?;
 
@@ -215,6 +218,17 @@ impl SubprocessClaudePlanner {
                     .map_err(|e| sub(format!("stdin: {e}")))?;
                 drop(stdin);
             }
+
+            // Drain stderr concurrently with the stdout line loop — a child
+            // filling the stderr pipe while we only read stdout would deadlock.
+            let stderr_pipe = child.stderr.take();
+            let stderr_task = tokio::spawn(async move {
+                let mut buf = Vec::new();
+                if let Some(mut pipe) = stderr_pipe {
+                    let _ = tokio::io::AsyncReadExt::read_to_end(&mut pipe, &mut buf).await;
+                }
+                buf
+            });
 
             let stdout = child.stdout.take().ok_or_else(|| sub("no stdout".into()))?;
             let mut lines = BufReader::new(stdout).lines();
@@ -236,18 +250,15 @@ impl SubprocessClaudePlanner {
                 }
             }
 
-            let output = child
-                .wait_with_output()
-                .await
-                .map_err(|e| sub(format!("wait: {e}")))?;
-            let stderr = String::from_utf8_lossy(&output.stderr);
+            let status = child.wait().await.map_err(|e| sub(format!("wait: {e}")))?;
+            let stderr_bytes = stderr_task.await.unwrap_or_default();
+            let stderr = String::from_utf8_lossy(&stderr_bytes);
             let envelope = accum.finish();
-            let failed = !output.status.success() || envelope.as_ref().is_none_or(|e| e.is_error);
+            let failed = !status.success() || envelope.as_ref().is_none_or(|e| e.is_error);
             if failed {
                 let text = envelope.as_ref().map(|e| e.text.as_str()).unwrap_or("");
                 return Err(sub(format!(
-                    "claude exited with {}: {} {}",
-                    output.status,
+                    "claude exited with {status}: {} {}",
                     stderr.trim(),
                     text
                 )));
@@ -273,6 +284,7 @@ impl SubprocessClaudePlanner {
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
+                .kill_on_drop(true)
                 .spawn()
                 .map_err(|e| sub(format!("spawn: {e}")))?;
             if let Some(mut stdin) = child.stdin.take() {
