@@ -93,10 +93,10 @@ async fn plan_via_dock(
     let _ = claude_path; // resolution already proved claude exists; spawn re-resolves
     let pool = app.state::<crate::state::AppState>().sessions.clone();
     let cuts_path = bundle_root.join(katto_engine::bundle::CUTS_JSON);
-    // A re-plan must not satisfy the poll with the previous run's file.
-    if cuts_path.exists() {
-        let _ = std::fs::rename(&cuts_path, bundle_root.join("cuts.prev.json"));
-    }
+    let root = bundle_root.to_path_buf();
+    tauri::async_runtime::spawn_blocking(move || clear_previous_plan(&root))
+        .await
+        .map_err(|e| PlanError::Subprocess(e.to_string()))??;
     let stem = footage_path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -120,7 +120,6 @@ async fn plan_via_dock(
         .await
         .map_err(|e| PlanError::Subprocess(e.to_string()))?;
 
-    let mut death_watch = pool.watch_first_stop(&session_id);
     let mut corrected = false;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10 * 60);
     loop {
@@ -130,7 +129,13 @@ async fn plan_via_dock(
                     .to_string(),
             ));
         }
-        match evaluate_plan_file(std::fs::read_to_string(&cuts_path), transcript) {
+        let read = {
+            let path = cuts_path.clone();
+            tauri::async_runtime::spawn_blocking(move || std::fs::read_to_string(path))
+                .await
+                .map_err(|e| PlanError::Subprocess(e.to_string()))?
+        };
+        match evaluate_plan_file(read, transcript) {
             PlanFileVerdict::Valid(cuts) => return Ok(cuts),
             PlanFileVerdict::Invalid { errors_message } => {
                 if corrected {
@@ -142,26 +147,65 @@ async fn plan_via_dock(
                 corrected = true;
                 // Keep the bad attempt as an audit artifact, then push the
                 // correction INTO the visible session (retry contract: once).
-                let _ = std::fs::rename(&cuts_path, bundle_root.join("cuts.invalid-1.json"));
+                // The invalid file MUST leave cuts.json's path: if it survived,
+                // the next poll would re-read it and fail as a second attempt
+                // the session never made.
+                if let Err(rename_err) =
+                    std::fs::rename(&cuts_path, bundle_root.join("cuts.invalid-1.json"))
+                {
+                    std::fs::remove_file(&cuts_path).map_err(|remove_err| {
+                        PlanError::Subprocess(format!(
+                            "could not clear invalid cuts.json before the correction \
+                             (rename: {rename_err}; remove: {remove_err})"
+                        ))
+                    })?;
+                }
                 let correction = format!(
                     "the cuts.json you wrote was invalid: {errors_message}; rewrite \
                      cuts.json as a single valid JSON object matching the schema, then stop."
                 );
-                let _ = pool.write(&session_id, correction.as_bytes());
-                let _ = pool.write(&session_id, b"\r");
+                pool.write(&session_id, correction.as_bytes())
+                    .and_then(|()| pool.write(&session_id, b"\r"))
+                    .map_err(|e| {
+                        PlanError::Subprocess(format!(
+                            "could not push the correction into the dock session: {e}"
+                        ))
+                    })?;
             }
             PlanFileVerdict::Missing => {
-                // Only a session death fails the poll early; a consumed Ok
-                // (first turn finished) keeps polling until file or timeout.
-                if let Ok(Err(error)) = death_watch.try_recv() {
+                // Fail fast on a dead session on ANY turn (a first-turn-only
+                // stop watch would sleep through a death during the correction
+                // turn and burn the whole timeout).
+                if let Some(error) = pool.terminal_error(&session_id) {
                     return Err(PlanError::Subprocess(format!(
-                        "dock session died before writing cuts.json: {error}"
+                        "dock session ended before writing cuts.json: {error}"
                     )));
                 }
             }
         }
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
+}
+
+/// Move a previous run's `cuts.json` aside (kept as `cuts.prev.json`) and
+/// confirm it is gone. A surviving stale file would satisfy the dock-planning
+/// poll with LAST run's plan before the session writes a byte, so failure
+/// here fails the run (surfaced through the job's Failed event + events row).
+fn clear_previous_plan(bundle_root: &std::path::Path) -> std::result::Result<(), PlanError> {
+    let cuts_path = bundle_root.join(katto_engine::bundle::CUTS_JSON);
+    if cuts_path.exists() {
+        std::fs::rename(&cuts_path, bundle_root.join("cuts.prev.json")).map_err(|e| {
+            PlanError::Subprocess(format!(
+                "could not move the previous cuts.json aside before planning: {e}"
+            ))
+        })?;
+    }
+    if cuts_path.exists() {
+        return Err(PlanError::Subprocess(
+            "previous cuts.json is still present after moving it aside".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// The job future: each stage streams a `PipelineEvent` and ticks the jobs
@@ -344,5 +388,28 @@ mod tests {
             classify(&katto_engine::Error::Io("disk".into())),
             FailureKind::Other
         ));
+    }
+
+    #[test]
+    fn clear_previous_plan_moves_stale_cuts_aside() {
+        let dir = tempfile::tempdir().unwrap();
+        let cuts = dir.path().join(katto_engine::bundle::CUTS_JSON);
+        std::fs::write(&cuts, "{\"stale\":true}").unwrap();
+
+        clear_previous_plan(dir.path()).unwrap();
+
+        assert!(!cuts.exists(), "stale cuts.json must be gone");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("cuts.prev.json")).unwrap(),
+            "{\"stale\":true}",
+            "the previous plan is kept as an audit artifact"
+        );
+    }
+
+    #[test]
+    fn clear_previous_plan_is_a_noop_without_a_previous_file() {
+        let dir = tempfile::tempdir().unwrap();
+        clear_previous_plan(dir.path()).unwrap();
+        assert!(!dir.path().join("cuts.prev.json").exists());
     }
 }

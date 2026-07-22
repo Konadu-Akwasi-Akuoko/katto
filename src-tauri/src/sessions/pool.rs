@@ -530,6 +530,21 @@ impl SessionPool {
         rx
     }
 
+    /// `Some(reason)` when the session is absent or terminal (Failed/Closed).
+    /// Pollers use this to fail fast on any turn — unlike the one-shot
+    /// [`Self::watch_first_stop`], which only observes the first.
+    pub fn terminal_error(&self, id: &str) -> Option<String> {
+        let sessions = self.sessions();
+        match sessions.get(id) {
+            None => Some(format!("no session {id}")),
+            Some(entry) => match &entry.state {
+                SessionState::Failed { error } => Some(error.clone()),
+                SessionState::Closed { reason } => Some(format!("session closed ({reason:?})")),
+                _ => None,
+            },
+        }
+    }
+
     /// Degraded-mode timer: sessions the endpoint never heard from go idle
     /// after 45 s of silence; the first such transition per session records a
     /// `session_hooks_degraded` events row (once, D18).
@@ -977,6 +992,21 @@ mod tests {
             .unwrap();
         let rx = pool.watch_first_stop(&id);
         assert!(rx.await.unwrap().is_err());
+    }
+
+    #[tokio::test]
+    async fn terminal_error_reports_absent_live_and_closed() {
+        let pool = SessionPool::new();
+        assert!(pool.terminal_error("nope").is_some(), "absent is terminal");
+
+        let id = pool
+            .spawn_headless(task("t"), Program::Custom("bash -c 'sleep 30'".into()))
+            .await
+            .unwrap();
+        assert!(pool.terminal_error(&id).is_none(), "live session is not");
+
+        pool.close(&id, CloseReason::UserClosed).await.unwrap();
+        assert!(pool.terminal_error(&id).is_some(), "closed is terminal");
     }
 
     /// Live smoke: spawns the owner's real `claude` (subscription auth) once.
