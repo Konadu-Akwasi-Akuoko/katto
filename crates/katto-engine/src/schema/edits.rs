@@ -7,6 +7,7 @@ use crate::rational::Rational;
 
 /// Which edge of a cut a boundary adjustment moves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum CutEdge {
     /// The cut's start edge.
@@ -17,8 +18,10 @@ pub enum CutEdge {
 
 /// A human nudge to one edge of a base cut (index into cuts.json `cuts[]`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct BoundaryAdjustment {
     /// Index of the base cut being adjusted (original cuts.json position).
+    #[cfg_attr(feature = "specta", specta(type = u32))]
     pub cut_index: usize,
     /// Which edge moves.
     pub edge: CutEdge,
@@ -28,6 +31,7 @@ pub struct BoundaryAdjustment {
 
 /// A human-added cut span.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct ManualCut {
     /// Start time.
     pub start: Rational,
@@ -39,14 +43,17 @@ pub struct ManualCut {
 
 /// The `edits.json` document: human review state layered over cuts.json.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Edits {
     /// Wire format version (currently 1).
     pub schema_version: u32,
     /// Indices into cuts.json `cuts[]` the human switched off.
     #[serde(default)]
+    #[cfg_attr(feature = "specta", specta(type = Vec<u32>))]
     pub toggled_off: Vec<usize>,
     /// Indices into `discretionary[]` the human applied.
     #[serde(default)]
+    #[cfg_attr(feature = "specta", specta(type = Vec<u32>))]
     pub applied_discretionary: Vec<usize>,
     /// Human-added cuts.
     #[serde(default)]

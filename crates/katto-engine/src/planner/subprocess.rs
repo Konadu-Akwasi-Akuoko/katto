@@ -124,10 +124,11 @@ impl StreamAccum {
                     return false;
                 }
                 if let Some(text) = delta.and_then(|d| d.get("text")).and_then(Value::as_str)
-                    && !text.is_empty() {
-                        self.text.push_str(text);
-                        return true;
-                    }
+                    && !text.is_empty()
+                {
+                    self.text.push_str(text);
+                    return true;
+                }
                 false
             }
             Some("result") => {
@@ -225,13 +226,14 @@ impl SubprocessClaudePlanner {
                 .map_err(|e| sub(format!("stdout: {e}")))?
             {
                 if accum.push_line(&line)
-                    && let Some(obs) = &self.observer {
-                        let cuts = cuts_prefix(accum.text());
-                        if cuts.len() > seen_cuts {
-                            seen_cuts = cuts.len();
-                            obs.on_cuts(&cuts);
-                        }
+                    && let Some(obs) = &self.observer
+                {
+                    let cuts = cuts_prefix(accum.text());
+                    if cuts.len() > seen_cuts {
+                        seen_cuts = cuts.len();
+                        obs.on_cuts(&cuts);
                     }
+                }
             }
 
             let output = child

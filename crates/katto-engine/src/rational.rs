@@ -6,8 +6,12 @@ use serde::{Deserialize, Serialize};
 /// An exact `num/den` ratio (e.g. a `30000/1001` frame rate or a timestamp in
 /// a media timebase). Floats appear only at UI and model boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Rational {
     /// Numerator (signed: timestamps can be negative in some containers).
+    /// Exported to TS as `number`: real values are tick counts well inside the
+    /// safe-integer range.
+    #[cfg_attr(feature = "specta", specta(type = f64))]
     pub num: i64,
     /// Denominator; never zero.
     pub den: u32,

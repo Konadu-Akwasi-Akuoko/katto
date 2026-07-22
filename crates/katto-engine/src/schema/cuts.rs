@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Why a span is a hard cut.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[allow(missing_docs)]
 pub enum CutReason {
@@ -19,6 +20,7 @@ pub enum CutReason {
 
 /// Why a span is a discretionary (human-decided) cut candidate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[allow(missing_docs)]
 pub enum DiscretionaryReason {
@@ -33,6 +35,7 @@ pub enum DiscretionaryReason {
 
 /// Why a span is flagged for review (flags are never cut).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[allow(missing_docs)]
 pub enum FlagReason {
@@ -42,6 +45,7 @@ pub enum FlagReason {
 /// The model's confidence in a discretionary suggestion — the locked enum;
 /// never rendered as a number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 #[allow(missing_docs)]
 pub enum Confidence {
@@ -52,6 +56,7 @@ pub enum Confidence {
 
 /// One hard cut span with its reason and transcript excerpt.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Cut {
     /// Start time in seconds.
     pub start: f64,
@@ -65,6 +70,7 @@ pub struct Cut {
 
 /// A discretionary cut candidate the human decides on.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Discretionary {
     /// Start time in seconds.
     pub start: f64,
@@ -82,6 +88,7 @@ pub struct Discretionary {
 
 /// A span flagged for review with its raw recognition logprob.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Flag {
     /// Start time in seconds.
     pub start: f64,
@@ -96,20 +103,48 @@ pub struct Flag {
 }
 
 /// The `cuts.json` document: the planner's proposed cut list.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+///
+/// Deserialize goes through a shadow struct so absent `discretionary`/`flags`
+/// keys default to empty while the specta export (and serialize) keep the
+/// fields required — specta's TS mapper would otherwise emit an unguarded
+/// access on an optional field.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Cuts {
     /// Source duration in seconds as the planner saw it.
     pub source_duration_secs: f64,
     /// Hard cuts, sorted by start.
     pub cuts: Vec<Cut>,
     /// Discretionary candidates (absent key defaults to empty).
-    #[serde(default)]
     pub discretionary: Vec<Discretionary>,
     /// Review flags (absent key defaults to empty).
-    #[serde(default)]
     pub flags: Vec<Flag>,
     /// Stated sum of cut durations; validated against the computed sum.
     pub total_cut_secs: f64,
+}
+
+#[derive(Deserialize)]
+struct CutsWire {
+    source_duration_secs: f64,
+    cuts: Vec<Cut>,
+    #[serde(default)]
+    discretionary: Vec<Discretionary>,
+    #[serde(default)]
+    flags: Vec<Flag>,
+    total_cut_secs: f64,
+}
+
+impl<'de> Deserialize<'de> for Cuts {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = CutsWire::deserialize(deserializer)?;
+        Ok(Cuts {
+            source_duration_secs: wire.source_duration_secs,
+            cuts: wire.cuts,
+            discretionary: wire.discretionary,
+            flags: wire.flags,
+            total_cut_secs: wire.total_cut_secs,
+        })
+    }
 }
 
 #[cfg(test)]

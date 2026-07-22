@@ -48,6 +48,16 @@ pub fn store_key(service: KeyService, value: &str) -> Result<()> {
     Ok(())
 }
 
+/// Read a stored key; `Ok(None)` when absent. The value stays in the backend
+/// (engine clients take it as an argument) — never log it, never cross IPC.
+pub fn read_key(service: KeyService) -> Result<Option<String>> {
+    match entry(service)?.get_password() {
+        Ok(value) => Ok(Some(value)),
+        Err(keyring_core::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
 /// Whether a credential exists for `service`, without exposing its value.
 pub fn key_present(service: KeyService) -> Result<bool> {
     match entry(service)?.get_password() {

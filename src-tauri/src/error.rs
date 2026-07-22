@@ -63,6 +63,12 @@ pub enum Error {
 
     #[error("{0}")]
     IngestInvalid(String),
+
+    #[error("{0}")]
+    MissingKey(String),
+
+    #[error("{0}")]
+    NoPlanner(String),
 }
 
 impl Error {

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// A parsed Scribe v2 transcription response.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Transcript {
     /// Source audio duration in seconds as reported by Scribe.
     pub audio_duration_secs: Option<f64>,
@@ -20,6 +21,7 @@ pub struct Transcript {
 
 /// One transcript token, discriminated by Scribe's `type` field.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WordEntry {
     /// A spoken word with its timing and confidence.
