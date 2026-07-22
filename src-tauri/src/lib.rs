@@ -218,6 +218,7 @@ pub fn run() {
 
             let handle = app.handle();
             tray::create(handle)?;
+            notify::init(handle);
             tray::refresh_planner_lines(handle);
             window::setup(handle)?;
             capture::setup(handle);
