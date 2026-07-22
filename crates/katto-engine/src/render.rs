@@ -172,10 +172,13 @@ pub async fn render_mp4(
         }
     }
 
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| Error::Render(format!("ffmpeg wait failed: {e}")))?;
+    let status = match child.wait().await {
+        Ok(status) => status,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&out_tmp).await;
+            return Err(Error::Render(format!("ffmpeg wait failed: {e}")));
+        }
+    };
     let stderr = match stderr_task {
         Some(task) => task.await.unwrap_or_default(),
         None => String::new(),

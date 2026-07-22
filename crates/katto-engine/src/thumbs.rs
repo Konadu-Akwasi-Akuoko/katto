@@ -27,15 +27,21 @@ pub fn thumbs_argv(src: &Path, out_dir: &Path) -> Vec<String> {
     ]
 }
 
-/// Regenerate `<bundle_root>/thumbs/` atomically (render into `thumbs.tmp/`,
-/// swap dirs). Returns the frame count. Idempotent.
+/// Regenerate `<bundle_root>/thumbs/` atomically (render into a per-run
+/// `thumbs.tmp-*/` dir, swap dirs — concurrent runs never share a scratch
+/// dir). Returns the frame count. Idempotent.
 ///
 /// # Errors
 /// [`Error::Render`] with the ffmpeg stderr tail on extraction failure (the
-/// `.tmp` dir is removed); [`Error::Io`] on filesystem failures.
+/// scratch dir is removed); [`Error::Io`] on filesystem failures.
 pub async fn generate_thumbs(bundle_root: &Path, src: &Path) -> Result<u32> {
+    static RUN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let run = RUN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let final_dir = bundle_root.join(THUMBS_DIR);
-    let tmp_dir = bundle_root.join(format!("{THUMBS_DIR}.tmp"));
+    let tmp_dir = bundle_root.join(format!(
+        "{THUMBS_DIR}.tmp-{pid}-{run}",
+        pid = std::process::id()
+    ));
     if tmp_dir.exists() {
         tokio::fs::remove_dir_all(&tmp_dir).await?;
     }
@@ -109,6 +115,10 @@ mod tests {
         let count = generate_thumbs(dir.path(), Path::new(&clip)).await.unwrap();
         assert!(count > 0);
         assert!(dir.path().join(THUMBS_DIR).join("00001.jpg").exists());
-        assert!(!dir.path().join("thumbs.tmp").exists());
+        let leftover_scratch = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .any(|e| e.file_name().to_string_lossy().starts_with("thumbs.tmp"));
+        assert!(!leftover_scratch);
     }
 }
