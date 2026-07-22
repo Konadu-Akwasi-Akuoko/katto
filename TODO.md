@@ -42,13 +42,31 @@ M4 → Phase 5 · M5 → Phases 4–5 · M6 → Phase 5 · M7 → Phases 1 + 4 +
 
 - [ ] **Quick-capture hotkey doesn't surface the window over a fullscreen Space.** `⌥⌘K` fires
       and the window is built with `visible_on_all_workspaces(true)`
-      (`NSWindowCollectionBehaviorCanJoinAllSpaces`), which fixes ordinary Spaces — but on a
-      *fullscreen* Space the window still opens out of sight. Restarted app, still reproduces.
-      Suspected fix: also set `NSWindowCollectionBehaviorFullScreenAuxiliary` on the capture
-      `NSWindow` via `objc2` after build (the app already links `objc2`/`objc2-foundation`),
-      and/or `MoveToActiveSpace`. See [tauri#11488](https://github.com/tauri-apps/tauri/issues/11488).
-      Owner runs multiple fullscreen katto Spaces, so this is the common case for them.
-      File: `src-tauri/src/capture.rs` `open_capture_window`.
+      (`NSWindowCollectionBehaviorCanJoinAllSpaces`), which fixes ordinary Spaces — but with
+      another app fullscreen the window still opens on the Space where katto lives, out of
+      sight. Restarted app, still reproduces. See
+      [tauri#11488](https://github.com/tauri-apps/tauri/issues/11488). Owner runs multiple
+      fullscreen katto Spaces, so this is the common case for them.
+      File: `src-tauri/src/capture.rs` `open_capture_window` / `allow_fullscreen_spaces`.
+      **Tried and NOT sufficient (2026-07-22):** OR-ing
+      `NSWindowCollectionBehaviorFullScreenAuxiliary` (alongside `CanJoinAllSpaces`) into the
+      capture `NSWindow`'s `collectionBehavior` via `objc2-app-kit` on the main thread after
+      build — behavior unchanged; kept in the code as a likely prerequisite of the real fix.
+      Remaining leads for a thorough pass:
+      - The window is a regular activating `NSWindow` and the builder sets `.focused(true)` /
+        `set_focus()`; activating a regular-policy app is what yanks focus to the app's own
+        Space. Spotlight-style panels are non-activating `NSPanel`s
+        (`NSWindowStyleMaskNonactivatingPanel`) — try converting the capture window (e.g. the
+        `tauri-nspanel` community plugin, or `setStyleMask` natively) so it can take keyboard
+        input without activating katto.
+      - Window level: panels that float over fullscreen typically sit at
+        `NSStatusWindowLevel`/`kCGMainMenuWindowLevel + 1`, above `always_on_top`'s
+        `NSFloatingWindowLevel` — try `setLevel` after build.
+      - `NSWindowCollectionBehaviorMoveToActiveSpace` instead of `CanJoinAllSpaces` (they are
+        mutually exclusive semantics; MoveToActiveSpace may interact differently with
+        fullscreen Spaces).
+      - Verify the behavior/level survives the first `orderFront`/`show()` — apply after show,
+        not only after build, if AppKit resets it.
 
 ## Cross-cutting checklist (apply throughout)
 

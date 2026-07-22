@@ -35,7 +35,7 @@ Living checklist — the durable record of what's landed vs. outstanding on `fea
 - [x] Palette commands — new idea, promote idea, new project, go to project, open studio root
 - [x] Capture window opens on the active Space (`visible_on_all_workspaces`) with a soft `--r-lg` frame; tray gained a "Quick capture" item
 - [x] Settings rebind for `capture_shortcut` — `set_capture_shortcut` validates and re-registers before persisting; Settings → General has the recorder row with a reset-to-default affordance
-- [ ] Capture window over a **fullscreen** Space — `visible_on_all_workspaces` alone may not float above one ([tauri#11488](https://github.com/tauri-apps/tauri/issues/11488)); needs `NSWindowCollectionBehaviorFullScreenAuxiliary` via `objc2` if the manual pass shows it hidden
+- [ ] Capture window over a **fullscreen** Space — still broken ([tauri#11488](https://github.com/tauri-apps/tauri/issues/11488)): OR-ing `CanJoinAllSpaces | FullScreenAuxiliary` into `collectionBehavior` via `objc2-app-kit` landed but the manual pass still shows the window opening on katto's own Space, not the fullscreen one. Needs a thorough investigation — parked in `TODO.md` (leads: non-activating `NSPanel`, activation policy, window level)
 - [ ] Exit criteria: owner's manual pass (hotkey → promote → folder + Board card; Calendar shoot date; tray shoot line; Finder-delete → rescan; SSD unplug/replug)
 
 ## User stories

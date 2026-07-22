@@ -114,10 +114,14 @@ pub fn rebind_capture_hotkey(
 /// borderless, always-on-top, centered ~420×160 window that loads the SPA (which
 /// renders only the capture form for the `capture` label).
 ///
-/// `visible_on_all_workspaces` is what makes capture-from-anywhere true: without
-/// it the `NSWindow` belongs to the Space it was born on, so a hotkey pressed on
-/// another Space opens the window out of sight (and drags the app's Space forward
-/// instead). It maps to `NSWindowCollectionBehaviorCanJoinAllSpaces`.
+/// `visible_on_all_workspaces` (`CanJoinAllSpaces`) makes the window follow the
+/// active desktop Space instead of belonging to the Space it was born on;
+/// `FullScreenAuxiliary` is OR-ed in natively below (tauri has no builder
+/// option) as the documented requirement for overlaying another app's
+/// fullscreen Space. KNOWN GAP: in practice the window still opens on katto's
+/// own Space when another app is fullscreen — the pair is necessary but not
+/// sufficient. Parked in TODO.md ("Parked issues") with the remaining leads
+/// (non-activating NSPanel, activation policy, window level).
 ///
 /// The frame is transparent because the form paints its own rounded surface;
 /// a decorationless `NSWindow` is otherwise a hard-cornered rectangle. This is
@@ -128,7 +132,7 @@ pub fn open_capture_window(app: &AppHandle) -> tauri::Result<()> {
         let _ = window.set_focus();
         return Ok(());
     }
-    WebviewWindowBuilder::new(app, CAPTURE, WebviewUrl::default())
+    let window = WebviewWindowBuilder::new(app, CAPTURE, WebviewUrl::default())
         .title("katto — capture")
         .inner_size(420.0, 160.0)
         .always_on_top(true)
@@ -140,7 +144,38 @@ pub fn open_capture_window(app: &AppHandle) -> tauri::Result<()> {
         .center()
         .focused(true)
         .build()?;
+    #[cfg(target_os = "macos")]
+    allow_fullscreen_spaces(&window);
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
     Ok(())
+}
+
+/// OR `FullScreenAuxiliary` into the capture window's `collectionBehavior` —
+/// the documented prerequisite for a panel joining another app's fullscreen
+/// Space (tauri#11488), though the manual pass shows it is not sufficient on
+/// its own (see TODO.md). `collectionBehavior` is NSWindow instance state, so
+/// applying it once after build covers the show/focus reuse path too. `NSWindow`
+/// is main-thread-only, so the mutation hops via `run_on_main_thread` and the
+/// raw pointer is obtained inside the closure (it is not `Send`). Best-effort:
+/// a failed hop only means the pre-existing desktop-Spaces-only behavior.
+#[cfg(target_os = "macos")]
+fn allow_fullscreen_spaces(window: &tauri::WebviewWindow) {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+
+    let handle = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        if let Ok(ptr) = handle.ns_window() {
+            // SAFETY: ns_window returns a live NSWindow* for this window, and we
+            // are on the main thread (NSWindow is MainThreadOnly).
+            let ns_window = unsafe { &*ptr.cast::<NSWindow>() };
+            ns_window.setCollectionBehavior(
+                ns_window.collectionBehavior()
+                    | NSWindowCollectionBehavior::CanJoinAllSpaces
+                    | NSWindowCollectionBehavior::FullScreenAuxiliary,
+            );
+        }
+    });
 }
 
 #[cfg(test)]
