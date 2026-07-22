@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlanSteps } from "@/features/projects/detail/plan-steps";
 import { importFiles } from "@/lib/ipc/ingest";
 import { jobsKeys } from "@/lib/ipc/jobs";
-import { listFootage, pipelineKeys } from "@/lib/ipc/pipeline";
+import { listBundles, listFootage, pipelineKeys } from "@/lib/ipc/pipeline";
 import { usePipelineStore } from "@/stores/pipeline";
 import { useUiStore } from "@/stores/ui";
 
@@ -86,6 +86,7 @@ export function FootageCard({ slug }: { slug: string }) {
 						Drop iPhone footage here to import it into this project
 					</span>
 				</div>
+				<CutPlansList slug={slug} />
 			</CardContent>
 		</Card>
 	);
@@ -96,6 +97,53 @@ export function FootageCard({ slug }: { slug: string }) {
  * rough cut" action that swaps to the three-step indicator while its pipeline
  * job runs, then offers "Review cut plan".
  */
+/**
+ * Existing `.kruproj` cut plans for this project: bundle name plus artifact
+ * presence dots; clicking a row opens the read-only review surface.
+ */
+function CutPlansList({ slug }: { slug: string }) {
+	const openCutEditor = useUiStore((s) => s.openCutEditor);
+	const { data: bundles = [] } = useQuery({
+		queryKey: pipelineKeys.bundles(slug),
+		queryFn: () => listBundles(slug),
+	});
+
+	if (bundles.length === 0) return null;
+
+	return (
+		<div className="flex flex-col gap-1 border-t border-hairline pt-2">
+			<span className="text-sm text-fg-muted">Cut plans</span>
+			<ul className="flex flex-col">
+				{bundles.map((bundle) => (
+					<li key={bundle.path}>
+						<button
+							type="button"
+							className="flex h-[30px] w-full cursor-default items-center gap-3 text-left"
+							onClick={() => openCutEditor(bundle.path)}
+						>
+							<span className="flex-1 truncate font-mono text-xs tabular-nums">
+								{bundle.name}
+							</span>
+							<span className="flex items-center gap-1 text-xs text-fg-muted">
+								<span
+									className={`size-1.5 rounded-full ${bundle.has_transcript ? "bg-done" : "bg-fg-faint"}`}
+								/>
+								transcript
+							</span>
+							<span className="flex items-center gap-1 text-xs text-fg-muted">
+								<span
+									className={`size-1.5 rounded-full ${bundle.has_cuts ? "bg-done" : "bg-fg-faint"}`}
+								/>
+								cuts
+							</span>
+						</button>
+					</li>
+				))}
+			</ul>
+		</div>
+	);
+}
+
 function FootageClipList({ slug }: { slug: string }) {
 	const openCutEditor = useUiStore((s) => s.openCutEditor);
 	const runs = usePipelineStore((s) => s.runs);

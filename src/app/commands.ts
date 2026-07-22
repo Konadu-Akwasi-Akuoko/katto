@@ -94,6 +94,13 @@ export function registerAppCommands(queryClient: QueryClient): void {
 		run: () => useUiStore.getState().openPaletteDialog("go-to-project"),
 	});
 	registerCommand({
+		id: "editor.close",
+		title: "Close cut review",
+		keywords: ["editor", "transcript", "back", "review"],
+		group: "Project",
+		run: () => useUiStore.getState().closeCutEditor(),
+	});
+	registerCommand({
 		id: "app.open-studio-root",
 		title: "Open studio root",
 		keywords: ["finder", "folder", "reveal", "studio", "root"],
