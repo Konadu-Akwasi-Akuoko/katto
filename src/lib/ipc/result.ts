@@ -4,15 +4,29 @@ export type { IpcErrorPayload };
 
 /**
  * A rejected command, carrying the tagged Rust error so callers (and the
- * TanStack Query error handlers) can switch on `kind`.
+ * TanStack Query error handlers) can switch on `kind`. `source_missing` is
+ * the one kind whose wire `message` is structured; its fields surface on
+ * {@link IpcError.sourceMissing} and `message` is re-derived for display.
  */
 export class IpcError extends Error {
 	readonly kind: IpcErrorPayload["kind"];
+	readonly sourceMissing?: {
+		expected_path: string;
+		filename: string;
+		duration_secs: number;
+	};
 
 	constructor(payload: IpcErrorPayload) {
-		super(payload.message);
+		super(
+			payload.kind === "source_missing"
+				? `source missing: expected ${payload.message.expected_path}`
+				: payload.message,
+		);
 		this.name = "IpcError";
 		this.kind = payload.kind;
+		if (payload.kind === "source_missing") {
+			this.sourceMissing = payload.message;
+		}
 	}
 }
 

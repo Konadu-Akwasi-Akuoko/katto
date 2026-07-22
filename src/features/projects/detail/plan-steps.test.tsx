@@ -50,10 +50,35 @@ describe("PlanSteps", () => {
 		let run = midRun();
 		run = reduceEvent(run, {
 			type: "failed",
-			error: "elevenlabs auth: bad key",
+			error: "ffmpeg exited with 1",
+			kind: "other",
 		});
 		render(<PlanSteps run={run} />);
-		expect(screen.getByText(/elevenlabs auth: bad key/)).toBeInTheDocument();
+		expect(screen.getByText(/ffmpeg exited with 1/)).toBeInTheDocument();
+	});
+
+	it("auth failure names the key fix", () => {
+		let run = midRun();
+		run = reduceEvent(run, {
+			type: "failed",
+			error: "elevenlabs auth: rejected",
+			kind: "auth",
+		});
+		render(<PlanSteps run={run} />);
+		expect(
+			screen.getByText(/key was rejected — re-enter it in Settings/),
+		).toBeInTheDocument();
+	});
+
+	it("quota failure says retry later", () => {
+		let run = midRun();
+		run = reduceEvent(run, {
+			type: "failed",
+			error: "elevenlabs quota: slow down",
+			kind: "quota",
+		});
+		render(<PlanSteps run={run} />);
+		expect(screen.getByText(/try again in a few minutes/)).toBeInTheDocument();
 	});
 
 	it("subprocess failure offers API-key mode copy", () => {
@@ -61,11 +86,24 @@ describe("PlanSteps", () => {
 		run = reduceEvent(run, {
 			type: "failed",
 			error: "claude subprocess: claude exited with signal 9",
+			kind: "other",
 		});
 		render(<PlanSteps run={run} />);
 		expect(
 			screen.getByText(/open Settings to add an Anthropic API key/),
 		).toBeInTheDocument();
+	});
+
+	it("mid-run transcript arrival offers early review", () => {
+		const onReview = vi.fn();
+		let run = midRun();
+		run = reduceEvent(run, {
+			type: "transcript_ready",
+			bundle_path: "/p/audio/clip.kruproj",
+		});
+		render(<PlanSteps run={run} onReview={onReview} />);
+		fireEvent.click(screen.getByRole("button", { name: "Review transcript" }));
+		expect(onReview).toHaveBeenCalledWith("/p/audio/clip.kruproj");
 	});
 
 	it("finished run offers the review button with the bundle path", () => {

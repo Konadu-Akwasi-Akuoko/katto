@@ -1,6 +1,13 @@
 import { create } from "zustand";
-import type { Cut, PipelineEvent, StageName } from "@/lib/ipc/pipeline";
-import { planRoughCut } from "@/lib/ipc/pipeline";
+import { jobsKeys } from "@/lib/ipc/jobs";
+import type {
+	Cut,
+	FailureKind,
+	PipelineEvent,
+	StageName,
+} from "@/lib/ipc/pipeline";
+import { pipelineKeys, planRoughCut } from "@/lib/ipc/pipeline";
+import { queryClient } from "@/lib/query-client";
 
 export type StepState = "pending" | "active" | "done" | "failed";
 
@@ -14,6 +21,8 @@ export type PipelineRun = {
 	stageProgress: number;
 	cutsSoFar: Cut[];
 	error: string | null;
+	/** Which owner action fixes the failure (auth vs quota vs invalid). */
+	errorKind: FailureKind | null;
 	finished: boolean;
 	/** Epoch ms when the run started (drives the elapsed readout). */
 	startedAt: number;
@@ -43,6 +52,7 @@ export function initialRun(
 		stageProgress: 0,
 		cutsSoFar: [],
 		error: null,
+		errorKind: null,
 		finished: false,
 		startedAt: Date.now(),
 	};
@@ -80,8 +90,38 @@ export function reduceEvent(run: PipelineRun, e: PipelineEvent): PipelineRun {
 			for (const stage of STAGE_ORDER) {
 				if (steps[stage] === "active") steps[stage] = "failed";
 			}
-			return { ...run, steps, error: e.error, finished: true };
+			return {
+				...run,
+				steps,
+				error: e.error,
+				errorKind: e.kind,
+				finished: true,
+			};
 		}
+	}
+}
+
+/**
+ * Which query keys an event stales — pure, exported for tests. DB/disk-backed
+ * lists must refresh the moment their artifact lands, not on remount.
+ */
+export function invalidationsFor(
+	e: PipelineEvent,
+	projectSlug: string,
+): readonly (readonly string[])[] {
+	switch (e.type) {
+		case "transcript_ready":
+			return [pipelineKeys.bundles(projectSlug)];
+		case "done":
+			return [
+				pipelineKeys.bundles(projectSlug),
+				pipelineKeys.bundle(e.bundle_path),
+				jobsKeys.all,
+			];
+		case "failed":
+			return [jobsKeys.all];
+		default:
+			return [];
 	}
 }
 
@@ -105,12 +145,16 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 		set((s) => ({
 			runs: { ...s.runs, [footagePath]: initialRun(projectSlug, footagePath) },
 		}));
-		const apply = (e: PipelineEvent) =>
+		const apply = (e: PipelineEvent) => {
 			set((s) => {
 				const run = s.runs[footagePath];
 				if (!run) return s;
 				return { runs: { ...s.runs, [footagePath]: reduceEvent(run, e) } };
 			});
+			for (const queryKey of invalidationsFor(e, projectSlug)) {
+				void queryClient.invalidateQueries({ queryKey });
+			}
+		};
 		try {
 			const job = await planRoughCut(projectSlug, footagePath, apply);
 			set((s) => {
@@ -124,6 +168,7 @@ export const usePipelineStore = create<PipelineState>((set, get) => ({
 			apply({
 				type: "failed",
 				error: err instanceof Error ? err.message : String(err),
+				kind: "other",
 			});
 		}
 	},

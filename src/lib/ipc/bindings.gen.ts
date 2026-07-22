@@ -431,7 +431,19 @@ export type Edits = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "source_missing"; message: string };
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | 
+/**
+ *  The one structured variant: the relocation surface needs the fields
+ *  (name a file, show its duration), not a flattened string. On the wire
+ *  `message` becomes an object for this kind only; the IPC wrapper
+ *  re-derives a display string from it.
+ */
+{ kind: "source_missing"; message: {
+	expected_path: string,
+	filename: string,
+	/**  Display projection (`to_secs_f64`) of the manifest duration. */
+	duration_secs: number,
+} };
 
 /**  A row in the append-only activity log. */
 export type Event = {
@@ -444,6 +456,17 @@ export type Event = {
 
 /**  Broadcast after any `events` row is written; the dashboard refetches its feed. */
 export type EventsAppended = null;
+
+/**  Why a pipeline run failed, as UI copy needs to distinguish it. */
+export type FailureKind = 
+/**  A backend rejected credentials — the fix is re-entering a key. */
+"auth" | 
+/**  Quota/rate limit — the fix is waiting and retrying. */
+"quota" | 
+/**  Planner output never validated, even after the correction turn. */
+"invalid_output" | 
+/**  Everything else (transport, filesystem, ffmpeg). */
+"other";
 
 /**  A span flagged for review with its raw recognition logprob. */
 export type Flag = {
@@ -596,8 +619,11 @@ export type PipelineEvent =
 { type: "cuts_partial"; cuts_so_far: Cut[] } | 
 /**  The run finished; cuts.json is on disk. */
 { type: "done"; bundle_path: string } | 
-/**  The run failed; the jobs framework records the terminal state. */
-{ type: "failed"; error: string };
+/**
+ *  The run failed; the jobs framework records the terminal state. `kind`
+ *  tells the UI which owner action applies (re-enter key vs retry later).
+ */
+{ type: "failed"; error: string; kind: FailureKind };
 
 /**
  *  The per-project priority axis. Columns encode *status*; cards encode

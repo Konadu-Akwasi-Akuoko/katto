@@ -1,20 +1,21 @@
 import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { TranscriptPane } from "@/features/editor/transcript-pane";
 import type { VideoPaneHandle } from "@/features/editor/video-pane";
 import { VideoPane } from "@/features/editor/video-pane";
+import type { Cut, Cuts } from "@/lib/ipc/pipeline";
 import { openBundle, pipelineKeys } from "@/lib/ipc/pipeline";
 import { IpcError } from "@/lib/ipc/result";
+import { usePipelineStore } from "@/stores/pipeline";
 import { useUiStore } from "@/stores/ui";
 
 /** Plain-language copy for the typed open failures. */
 function openErrorCopy(error: unknown): string {
-	if (error instanceof IpcError && error.kind === "source_missing") {
-		const path = error.message.replace("source missing: expected ", "");
-		return `Source video not found at ${path}. Relocation arrives with the editor phase.`;
+	if (error instanceof IpcError && error.sourceMissing) {
+		return `Source video not found at ${error.sourceMissing.expected_path}. Relocation arrives with the editor phase.`;
 	}
 	return error instanceof Error ? error.message : String(error);
 }
@@ -33,6 +34,29 @@ export function EditorView({ bundlePath }: { bundlePath: string }) {
 		queryFn: () => openBundle(bundlePath),
 		retry: false,
 	});
+
+	// Opened mid-run (transcript ready, planner still streaming): cuts.json is
+	// absent, so hydrate incremental cuts live from this bundle's pipeline run.
+	// The `done` event invalidates the bundle query and cuts.json takes over.
+	const liveCutsSoFar = usePipelineStore(
+		(s) =>
+			Object.values(s.runs).find((r) => r.bundlePath === bundlePath)
+				?.cutsSoFar ?? null,
+	);
+	const duration = bundle.data?.duration_secs;
+	const liveCuts = useMemo<Cuts | null>(() => {
+		if (!liveCutsSoFar || liveCutsSoFar.length === 0) return null;
+		return {
+			source_duration_secs: duration ?? 0,
+			cuts: liveCutsSoFar,
+			discretionary: [],
+			flags: [],
+			total_cut_secs: liveCutsSoFar.reduce(
+				(sum: number, c: Cut) => sum + (c.end - c.start),
+				0,
+			),
+		};
+	}, [liveCutsSoFar, duration]);
 
 	const name =
 		bundlePath
@@ -72,7 +96,7 @@ export function EditorView({ bundlePath }: { bundlePath: string }) {
 					<div className="min-h-0 overflow-y-auto pr-2">
 						<TranscriptPane
 							transcript={bundle.data.transcript}
-							cuts={bundle.data.cuts}
+							cuts={bundle.data.cuts ?? liveCuts}
 							onSeek={(seconds) => videoRef.current?.seek(seconds)}
 						/>
 					</div>

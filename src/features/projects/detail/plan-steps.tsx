@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { StageName } from "@/lib/ipc/pipeline";
+import type { FailureKind, StageName } from "@/lib/ipc/pipeline";
 import { cn } from "@/lib/utils";
 import type { PipelineRun, StepState } from "@/stores/pipeline";
 
@@ -18,8 +18,17 @@ function elapsedLabel(startedAt: number, now: number): string {
 	return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** Plain-language failure copy: subprocess deaths get the API-key offer. */
-function failureCopy(error: string): string {
+/** Plain-language failure copy: the kind names the fix, not just the fault. */
+function failureCopy(error: string, kind: FailureKind | null): string {
+	if (kind === "auth") {
+		return "The API key was rejected — re-enter it in Settings.";
+	}
+	if (kind === "quota") {
+		return "Rate limited — try again in a few minutes.";
+	}
+	if (kind === "invalid_output") {
+		return "The planner never produced a valid cut plan — retry, or switch planner in Settings.";
+	}
 	if (error.includes("claude subprocess")) {
 		return "claude exited with an error — open Settings to add an Anthropic API key instead.";
 	}
@@ -117,9 +126,11 @@ export function PlanSteps({
 				})}
 			</ul>
 			{run.error !== null && (
-				<p className="mt-1 text-sm text-failed">{failureCopy(run.error)}</p>
+				<p className="mt-1 text-sm text-failed">
+					{failureCopy(run.error, run.errorKind)}
+				</p>
 			)}
-			{run.finished && run.error === null && run.bundlePath !== null && (
+			{run.error === null && run.bundlePath !== null && (
 				<div className="mt-1">
 					<Button
 						variant="secondary"
@@ -127,7 +138,7 @@ export function PlanSteps({
 						className="cursor-default"
 						onClick={() => run.bundlePath && onReview?.(run.bundlePath)}
 					>
-						Review cut plan
+						{run.finished ? "Review cut plan" : "Review transcript"}
 					</Button>
 				</div>
 			)}
