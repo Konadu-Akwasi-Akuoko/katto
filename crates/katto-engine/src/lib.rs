@@ -2,6 +2,7 @@
 //! Pure media-pipeline library: rational time, cut schemas, ffprobe parsing,
 //! and SD-ingest logic. Never depends on tauri or any UI concern.
 
+pub mod bundle;
 pub mod error;
 pub mod ffprobe;
 pub mod ingest;

@@ -4,10 +4,12 @@
 
 pub mod cuts;
 pub mod edits;
+pub mod manifest;
 pub mod transcript;
 
 pub use cuts::{
     Confidence, Cut, CutReason, Cuts, Discretionary, DiscretionaryReason, Flag, FlagReason,
 };
 pub use edits::{BoundaryAdjustment, CutEdge, Edits, ManualCut};
+pub use manifest::ProjectManifest;
 pub use transcript::{Transcript, WordEntry};

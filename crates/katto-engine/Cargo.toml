@@ -14,3 +14,4 @@ thiserror.workspace = true
 insta = { version = "1", features = ["json"] }
 proptest = "1"
 rstest = "0.26.1"
+tempfile = "3"
