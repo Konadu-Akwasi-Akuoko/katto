@@ -6,6 +6,10 @@ describe("resolveDeepLink", () => {
 		expect(resolveDeepLink("ideas")).toEqual({ kind: "planner" });
 	});
 
+	it("maps the ingest route to the import sheet", () => {
+		expect(resolveDeepLink("ingest")).toEqual({ kind: "ingest" });
+	});
+
 	it("maps a project route to that project's detail", () => {
 		expect(resolveDeepLink("project/nvme-deep-dive-2026-07-09")).toEqual({
 			kind: "project",

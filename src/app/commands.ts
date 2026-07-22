@@ -4,6 +4,7 @@ import { registerCommand } from "@/features/palette/registry";
 import { detectClaude } from "@/lib/ipc/onboarding";
 import { getSettings, settingsKeys } from "@/lib/ipc/settings";
 import { quitApp, sleepToTray } from "@/lib/ipc/shell";
+import { useIngestSheetStore } from "@/stores/ingest-sheet";
 import { useUiStore } from "@/stores/ui";
 
 /** Register the Phase-1 palette commands. Idempotent — the registry replaces by id. */
@@ -77,6 +78,13 @@ export function registerAppCommands(queryClient: QueryClient): void {
 		keywords: ["create", "folder", "project"],
 		group: "Project",
 		run: () => useUiStore.getState().openPaletteDialog("new-project"),
+	});
+	registerCommand({
+		id: "ingest.import-card",
+		title: "Import from camera card…",
+		keywords: ["sd", "card", "ingest", "footage", "clips"],
+		group: "Project",
+		run: () => useIngestSheetStore.getState().setOpen(true),
 	});
 	registerCommand({
 		id: "project.goto",

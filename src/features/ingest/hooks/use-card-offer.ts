@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 
-import { useIngestSheetStore } from "@/features/ingest/store/ingest-sheet";
+import { useIngestSheetStore } from "@/stores/ingest-sheet";
 import { onCardDetected, onCardRemoved } from "@/lib/ipc/broadcast";
 import { cardOffer, ingestKeys } from "@/lib/ipc/ingest";
 

@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ImportSheet } from "@/features/ingest/components/import-sheet";
-import { useIngestSheetStore } from "@/features/ingest/store/ingest-sheet";
+import { useIngestSheetStore } from "@/stores/ingest-sheet";
 import type { DriveStatus } from "@/lib/ipc/drive";
 import type { CardOffer } from "@/lib/ipc/ingest";
 import type { Project } from "@/lib/ipc/projects";

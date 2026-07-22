@@ -8,6 +8,7 @@ import { Titlebar } from "@/components/layout/titlebar";
 import { Toaster } from "@/components/ui/sonner";
 import { CaptureForm } from "@/features/capture/capture-form";
 import { Dashboard } from "@/features/dashboard/dashboard";
+import { ImportSheet } from "@/features/ingest/components/import-sheet";
 import { OnboardingGate } from "@/features/onboarding/gate";
 import { Palette } from "@/features/palette/palette";
 import { PaletteDialogs } from "@/features/palette/palette-dialogs";
@@ -81,6 +82,7 @@ function MainApp() {
 				<Palette />
 				<PaletteDialogs />
 				<ProjectPeek />
+				<ImportSheet />
 			</OnboardingGate>
 			<Toaster theme={dark ? "dark" : "light"} position="bottom-right" />
 		</Providers>

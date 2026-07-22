@@ -28,7 +28,7 @@ import {
 	hasEnoughFreeSpace,
 	selectionTotals,
 } from "@/features/ingest/model/select";
-import { useIngestSheetStore } from "@/features/ingest/store/ingest-sheet";
+import { useIngestSheetStore } from "@/stores/ingest-sheet";
 import { useDriveStatus } from "@/hooks/use-drive-status";
 import { startIngest } from "@/lib/ipc/ingest";
 import { jobsKeys } from "@/lib/ipc/jobs";
