@@ -4,6 +4,7 @@
 
 pub mod bundle;
 pub mod detect;
+pub mod emit;
 pub mod error;
 pub mod ffprobe;
 pub mod import;
