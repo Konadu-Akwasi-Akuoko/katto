@@ -5,9 +5,10 @@ use std::path::PathBuf;
 
 use crate::ingest::Rename;
 
-/// The next 3-digit sequence for `date`, continuing from the highest existing
-/// `YYYY-MM-DD_NNN.*` name in `existing`. Names for other dates are ignored.
-/// Returns `1` when none exist for the date.
+/// The next sequence for `date`, continuing from the highest existing
+/// `YYYY-MM-DD_NNN.*` name in `existing` (3 or more digits, so a >999-clip day
+/// keeps counting). Names for other dates are ignored. Returns `1` when none
+/// exist for the date.
 pub fn next_sequence(date: &str, existing: &[String]) -> u32 {
     let prefix = format!("{date}_");
     existing
@@ -15,7 +16,7 @@ pub fn next_sequence(date: &str, existing: &[String]) -> u32 {
         .filter_map(|name| {
             let rest = name.strip_prefix(&prefix)?;
             let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
-            if digits.len() == 3 {
+            if digits.len() >= 3 {
                 digits.parse::<u32>().ok()
             } else {
                 None
@@ -64,6 +65,14 @@ mod tests {
             "2026-07-21_009.mp4".to_string(), // other date — ignored
         ];
         assert_eq!(next_sequence("2026-07-22", &existing), 5);
+    }
+
+    #[test]
+    fn sequence_continues_past_three_digits() {
+        let existing = vec!["2026-07-22_999.mp4".to_string()];
+        assert_eq!(next_sequence("2026-07-22", &existing), 1000);
+        let wide = vec!["2026-07-22_1000.mp4".to_string()];
+        assert_eq!(next_sequence("2026-07-22", &wide), 1001);
     }
 
     #[test]
