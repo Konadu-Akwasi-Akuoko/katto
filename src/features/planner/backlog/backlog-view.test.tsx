@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { BacklogView } from "@/features/planner/backlog/backlog-view";
 import type { Idea } from "@/lib/ipc/ideas";
+import { useUiStore } from "@/stores/ui";
 import { backlogFixture, curatedFixture } from "@/test/fixtures/ideas";
 
 function renderBacklog(initial: Idea[] = backlogFixture) {
@@ -85,6 +86,24 @@ describe("BacklogView", () => {
 		await waitFor(() =>
 			expect(screen.queryByText("Why RAID is dead")).not.toBeInTheDocument(),
 		);
+	});
+
+	it("promoting flags the new project for its arrival animation", async () => {
+		useUiStore.setState({ justPromotedSlug: null });
+		const user = userEvent.setup();
+		renderBacklog();
+		await screen.findByText("Why RAID is dead");
+
+		await user.click(
+			within(rowFor("Why RAID is dead")).getByRole("button", {
+				name: /promote/i,
+			}),
+		);
+
+		await waitFor(() =>
+			expect(useUiStore.getState().justPromotedSlug).toBe("idea-2-2026-07-09"),
+		);
+		useUiStore.setState({ justPromotedSlug: null });
 	});
 
 	it("shows an empty state when the backlog is clear", async () => {
