@@ -68,6 +68,12 @@
 
 	--radius: 0.375rem; /* 6px — controls */
 
+	/* Motion — the only speeds katto moves at. No bounce, no spring. */
+	--ease: cubic-bezier(0.2, 0, 0, 1);
+	--dur-fast: 120ms;
+	--dur: 180ms;
+	--dur-slow: 260ms;
+
 	/* fine procedural grain (feTurbulence tile, blended into surfaces) */
 	--grain: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='160'%20height='160'%3E%3Cfilter%20id='g'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.8'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR%20type='linear'%20slope='0.28'%20intercept='0.36'/%3E%3CfeFuncG%20type='linear'%20slope='0.28'%20intercept='0.36'/%3E%3CfeFuncB%20type='linear'%20slope='0.28'%20intercept='0.36'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23g)'/%3E%3C/svg%3E");
 
@@ -203,6 +209,22 @@
 	background-blend-mode: overlay;
 }
 
+/* A just-promoted idea's project card announces itself once: an ember
+   hairline that fades. One-shot (forwards); reduced-motion collapses it
+   via the base-layer backstop. */
+@keyframes promote-arrival {
+	from {
+		box-shadow: 0 0 0 2px var(--ember);
+	}
+	to {
+		box-shadow: 0 0 0 2px transparent;
+	}
+}
+
+@utility animate-promote-arrival {
+	animation: promote-arrival var(--dur-slow) var(--ease) forwards;
+}
+
 @layer base {
 	* {
 		border-color: var(--border);
@@ -254,5 +276,22 @@
 	/* tabular figures wherever data lines up */
 	.tabular {
 		font-variant-numeric: tabular-nums;
+	}
+
+
+	/* Reduced-motion backstop: every animation/transition collapses to a
+	   frame. Component-level motion-reduce gates stay — they also stop the
+	   layout consequences of motion, which this can't. */
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			/* biome-ignore lint/complexity/noImportantStyles: an accessibility backstop must beat every utility and inline duration */
+			animation-duration: 0.01ms !important;
+			/* biome-ignore lint/complexity/noImportantStyles: see above */
+			animation-iteration-count: 1 !important;
+			/* biome-ignore lint/complexity/noImportantStyles: see above */
+			transition-duration: 0.01ms !important;
+		}
 	}
 }

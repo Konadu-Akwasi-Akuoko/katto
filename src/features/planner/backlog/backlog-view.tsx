@@ -22,6 +22,7 @@ import {
 import { projectsKeys } from "@/lib/ipc/projects";
 import { openExternalUrl } from "@/lib/ipc/shell";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/stores/ui";
 import { type Lean, parseLean, sourceDomain } from "./model/lean";
 
 const KINDS = [
@@ -57,7 +58,8 @@ export function BacklogView() {
 	});
 	const promote = useMutation({
 		mutationFn: (id: string) => promoteIdea(id),
-		onSuccess: () => {
+		onSuccess: (result) => {
+			useUiStore.getState().setJustPromoted(result.slug);
 			void invalidateIdeas();
 			void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
 		},
@@ -155,7 +157,7 @@ function IdeaRow({
 	return (
 		<li
 			className={cn(
-				"grain flex items-center gap-3 rounded-lg border bg-surface px-3 py-2 transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none",
+				"grain flex items-center gap-3 rounded-lg border bg-surface px-3 py-2 transition-[opacity,transform] duration-(--dur) ease-(--ease) motion-reduce:transition-none",
 				leaving === "promote" && "-translate-y-2 opacity-0",
 				leaving === "discard" && "translate-x-2 opacity-0",
 			)}

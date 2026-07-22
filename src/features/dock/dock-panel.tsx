@@ -70,7 +70,7 @@ export function DockPanel() {
 	return (
 		<section
 			aria-label="Claude dock"
-			className="motion-reduce:animate-none animate-in slide-in-from-right absolute inset-y-0 right-0 z-20 flex w-[600px] max-w-[80vw] flex-col border-l border-hairline bg-surface shadow-(--shadow) duration-200 grain"
+			className="motion-reduce:animate-none animate-in slide-in-from-right absolute inset-y-0 right-0 z-20 flex w-[600px] max-w-[80vw] flex-col border-l border-hairline bg-surface shadow-(--shadow) duration-(--dur-slow) ease-(--ease) grain"
 		>
 			<header className="flex h-12 shrink-0 items-center gap-2 px-3">
 				<span className="font-serif text-base text-fg">Claude</span>

@@ -45,7 +45,8 @@ function PromoteIdeaPicker({ onClose }: { onClose: () => void }) {
 	});
 	const promote = useMutation({
 		mutationFn: (id: string) => promoteIdea(id),
-		onSuccess: () => {
+		onSuccess: (result) => {
+			useUiStore.getState().setJustPromoted(result.slug);
 			void queryClient.invalidateQueries({ queryKey: ideasKeys.all });
 			void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
 			onClose();

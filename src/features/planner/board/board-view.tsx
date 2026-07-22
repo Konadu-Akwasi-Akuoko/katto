@@ -298,6 +298,8 @@ function Card({
 	const { attributes, listeners, setNodeRef, transform, isDragging } =
 		useDraggable({ id: project.slug });
 	const openPeek = useUiStore((s) => s.openPeek);
+	const justPromoted = useUiStore((s) => s.justPromotedSlug) === project.slug;
+	const clearJustPromoted = useUiStore((s) => s.setJustPromoted);
 	const priority = priorityAppearance(project.priority);
 
 	const setPriority = useMutation({
@@ -318,11 +320,17 @@ function Card({
 					{...listeners}
 					{...attributes}
 					onClick={() => openPeek(project.slug)}
+					onAnimationEnd={(event) => {
+						if (event.animationName === "promote-arrival") {
+							clearJustPromoted(null);
+						}
+					}}
 					style={{ transform: CSS.Translate.toString(transform) }}
 					className={cn(
 						"grain flex cursor-default touch-none flex-col overflow-hidden rounded-lg border bg-surface",
 						"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember",
 						isDragging && "opacity-50",
+						justPromoted && "animate-promote-arrival",
 					)}
 				>
 					{priority ? (

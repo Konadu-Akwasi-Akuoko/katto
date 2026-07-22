@@ -5,10 +5,13 @@ import { formatDate } from "@/features/projects/model/format";
 import type { Project } from "@/lib/ipc/projects";
 import { listProjects, projectsKeys } from "@/lib/ipc/projects";
 import { listLatestThumbnails, thumbKeys } from "@/lib/ipc/thumbnails";
+import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
 
 export function ProjectsList() {
 	const openDetail = useUiStore((s) => s.setSelectedProjectSlug);
+	const justPromotedSlug = useUiStore((s) => s.justPromotedSlug);
+	const clearJustPromoted = useUiStore((s) => s.setJustPromoted);
 	const { data: projects } = useQuery({
 		queryKey: projectsKeys.all,
 		queryFn: listProjects,
@@ -36,7 +39,16 @@ export function ProjectsList() {
 							<button
 								type="button"
 								onClick={() => openDetail(project.slug)}
-								className="grain flex w-full items-center gap-3 rounded-lg border bg-surface px-3 py-2 text-left transition-colors hover:bg-surface-2"
+								onAnimationEnd={(event) => {
+									if (event.animationName === "promote-arrival") {
+										clearJustPromoted(null);
+									}
+								}}
+								className={cn(
+									"grain flex w-full items-center gap-3 rounded-lg border bg-surface px-3 py-2 text-left transition-colors hover:bg-surface-2",
+									justPromotedSlug === project.slug &&
+										"animate-promote-arrival",
+								)}
 							>
 								{thumbBySlug.has(project.slug) && (
 									<img
