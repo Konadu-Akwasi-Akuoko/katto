@@ -318,7 +318,7 @@ fn trash_project_lookup(conn: &Connection, slug: &str) -> Result<Project> {
 /// Resolve the configured studio root, failing with `StudioRootUnmounted` when it
 /// is unset or unreachable. Every folder-touching command guards through here
 /// before walking the filesystem.
-fn require_mounted(conn: &Connection) -> Result<String> {
+pub(crate) fn require_mounted(conn: &Connection) -> Result<String> {
     let root = db::settings::get(conn, "studio_root")?
         .ok_or_else(|| Error::StudioRootUnmounted("no studio root configured".to_string()))?;
     if !paths::root_mounted(Path::new(&root)) {

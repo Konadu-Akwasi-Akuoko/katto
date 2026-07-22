@@ -1,6 +1,7 @@
 pub mod drive;
 pub mod events;
 pub mod ideas;
+pub mod ingest;
 pub mod jobs;
 pub mod onboarding;
 pub mod projects;
