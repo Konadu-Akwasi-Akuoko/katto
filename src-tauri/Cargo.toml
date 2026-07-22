@@ -22,6 +22,8 @@ tauri = { version = "2", features = [
   "tray-icon",
   "image-png",
   "specta",
+  # review-surface video playback via convertFileSrc (assetProtocol in tauri.conf.json)
+  "protocol-asset",
   # transparent capture window; pairs with `app.macOSPrivateApi` in tauri.conf.json
   "macos-private-api",
 ] }
@@ -33,7 +35,7 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-deep-link = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
-katto-engine = {path ="../crates/katto-engine"}
+katto-engine = { path = "../crates/katto-engine", features = ["specta"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 rusqlite_migration = "2.6"
 thiserror = { workspace = true }
@@ -53,6 +55,7 @@ time = { version = "0.3", features = ["formatting"] }
 # transitively (via serde_with), this makes it a direct dep. No `clock` feature —
 # the date is passed in, never read from the wall clock.
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+notify = "8.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1.0", features = ["keychain"] }

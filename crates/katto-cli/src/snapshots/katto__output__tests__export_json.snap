@@ -1,0 +1,5 @@
+---
+source: crates/katto-cli/src/output.rs
+expression: "render_export(&p, true)"
+---
+{"fcpxml":"/p/timelines/demo-v3.fcpxml","srt":"/p/timelines/demo-v3.srt","version":3,"vtt":"/p/timelines/demo-v3.vtt"}

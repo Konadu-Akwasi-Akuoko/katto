@@ -1,91 +1,15 @@
-use crate::rational::Rational;
-use serde::{Deserialize, Serialize};
+//! Serde schemas for the cut-pipeline artifact files. Wire shapes (`cuts.json`,
+//! `transcript.json`) are decimal seconds at the model boundary; engine-domain
+//! Rational projections live in `merge.rs`.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CutReason {
-    Filler,
-    Stutter,
-    FalseStart,
-    SelfCorrection,
-    LongSilence,
-    AudioEvent,
-}
+pub mod cuts;
+pub mod edits;
+pub mod manifest;
+pub mod transcript;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DiscretionaryReason {
-    Filler,
-    Stutter,
-    FalseStart,
-    SelfCorrection,
-    LongSilence,
-    AudioEvent,
-    Other,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Confidence {
-    Low,
-    Medium,
-    High,
-}
-
-// projects.json
-#[derive(Deserialize, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Project {
-    source_video_absolute_path: String,
-    frame_rate: Rational,
-    total_duration: Rational,
-    schema_version: String,
-}
-
-// cuts.json
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Cuts {
-    source_duration_secs: Rational,
-    cuts: Vec<Cut>,
-    discretionary: Vec<Discretionary>,
-    flags: Vec<Flag>,
-    total_cut_secs: Rational,
-}
-
-// edits.json
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Edits {
-    #[serde(flatten)]
-    cuts_obj: Cuts,
-    toggles: Vec<String>,
-    manual_cuts: Vec<Cut>,
-    boundary_adjustments: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Cut {
-    start: Rational,
-    end: Rational,
-    reason: String,
-    excerpt: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Discretionary {
-    #[serde(flatten)]
-    cut: Cut,
-    note: String,
-    confidence: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Flag {
-    #[serde(flatten)]
-    cut: Cut,
-    logprob: f64,
-}
+pub use cuts::{
+    Confidence, Cut, CutReason, Cuts, Discretionary, DiscretionaryReason, Flag, FlagReason,
+};
+pub use edits::{BoundaryAdjustment, CutEdge, Edits, ManualCut};
+pub use manifest::ProjectManifest;
+pub use transcript::{Transcript, WordEntry};

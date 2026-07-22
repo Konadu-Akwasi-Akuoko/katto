@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"sess-1"}
+{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}},"parent_tool_use_id":null,"session_id":"sess-1"}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"AAAA"}},"parent_tool_use_id":null,"session_id":"sess-1"}
+{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\"source_duration_secs\": 8.0, \"cuts\": [{\"start\": 1.0, \"end\": 1.2, \"reason\": \"filler\", \"excerpt\": \"um\"},"}},"parent_tool_use_id":null,"session_id":"sess-1"}
+{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"{\"start\": 4.0, \"end\": 4.5, \"reason\": \"audio_event\", \"excerpt\": \"[cough]\"}],"}},"parent_tool_use_id":null,"session_id":"sess-1"}
+{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" \"discretionary\": [], \"flags\": [], \"total_cut_secs\": 0.7}"}},"parent_tool_use_id":null,"session_id":"sess-1"}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"source_duration_secs\": 8.0, \"cuts\": [{\"start\": 1.0, \"end\": 1.2, \"reason\": \"filler\", \"excerpt\": \"um\"},{\"start\": 4.0, \"end\": 4.5, \"reason\": \"audio_event\", \"excerpt\": \"[cough]\"}], \"discretionary\": [], \"flags\": [], \"total_cut_secs\": 0.7}","session_id":"sess-1","total_cost_usd":0.01}

@@ -31,10 +31,12 @@ pub async fn subscribe_job_progress(
     }
     .ok_or_else(|| Error::Db(format!("no such job: {job_id}")))?;
 
+    // Replay the terminal error for failed jobs so a late subscriber (the
+    // ingest progress panel after a reopen) still sees what broke.
     let _ = on_progress.send(JobProgress {
         job_id: job.id.clone(),
         progress: job.progress,
-        message: None,
+        message: job.error.clone(),
     });
     if job.status == "queued" || job.status == "running" {
         state

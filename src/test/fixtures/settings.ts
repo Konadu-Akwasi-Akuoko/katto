@@ -8,5 +8,6 @@ export const settingsFixture: Settings = {
 	onboarding_complete: false,
 	claude_path: null,
 	capture_shortcut: "alt+cmd+k",
+	planner_model: "claude-sonnet-4-6",
 	keys_present: { elevenlabs: false, anthropic: false },
 };

@@ -1,0 +1,27 @@
+---
+source: crates/katto-engine/src/emit/fcpxml.rs
+expression: xml
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE fcpxml>
+<fcpxml version="1.11">
+  <resources>
+    <format id="r1" frameDuration="1/25s" colorSpace="1-1-1 (Rec. 709)"/>
+    <asset id="r2" name="clip.mp4" start="0s" duration="10s" hasVideo="1" hasAudio="1" format="r1" audioSources="1" audioChannels="2" audioRate="48000">
+      <media-rep kind="original-media" src="file:///media/clip.mp4"/>
+    </asset>
+  </resources>
+  <event name="katto">
+    <project name="demo-v1">
+      <sequence format="r1" duration="8s" tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">
+        <spine>
+          <asset-clip ref="r2" offset="0s" name="keep 1" start="1s" duration="4s" audioRole="dialogue">
+            <asset-clip ref="r2" lane="-1" offset="0s" name="removed 1" start="0s" duration="1s" enabled="0" audioRole="dialogue"/>
+            <asset-clip ref="r2" lane="-2" offset="5s" name="removed 2" start="5s" duration="1s" enabled="0" audioRole="dialogue"/>
+          </asset-clip>
+          <asset-clip ref="r2" offset="4s" name="keep 2" start="6s" duration="4s" audioRole="dialogue"/>
+        </spine>
+      </sequence>
+    </project>
+  </event>
+</fcpxml>

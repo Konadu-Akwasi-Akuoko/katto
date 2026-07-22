@@ -1,0 +1,6 @@
+---
+source: crates/katto-cli/src/output.rs
+assertion_line: 113
+expression: "render_auth_status(&s, true)"
+---
+{"anthropic":"env","claude_path":null,"elevenlabs":"env"}

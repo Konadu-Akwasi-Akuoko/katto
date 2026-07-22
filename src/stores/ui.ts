@@ -14,6 +14,10 @@ type UiState = {
 	peekSlug: string | null;
 	paletteOpen: boolean;
 	paletteDialog: PaletteDialog | null;
+	/** Bundle the read-only cut editor is showing (null = project detail). */
+	editorBundlePath: string | null;
+	openCutEditor: (bundlePath: string) => void;
+	closeCutEditor: () => void;
 	setSurface: (surface: Surface) => void;
 	openProject: (slug: string) => void;
 	setSelectedProjectSlug: (slug: string | null) => void;
@@ -40,10 +44,19 @@ export const useUiStore = create<UiState>((set) => ({
 	peekSlug: null,
 	paletteOpen: false,
 	paletteDialog: null,
-	setSurface: (surface) => set({ surface, selectedProjectSlug: null }),
+	editorBundlePath: null,
+	openCutEditor: (bundlePath) => set({ editorBundlePath: bundlePath }),
+	closeCutEditor: () => set({ editorBundlePath: null }),
+	setSurface: (surface) =>
+		set({ surface, selectedProjectSlug: null, editorBundlePath: null }),
 	openProject: (slug) =>
-		set({ surface: "projects", selectedProjectSlug: slug }),
-	setSelectedProjectSlug: (slug) => set({ selectedProjectSlug: slug }),
+		set({
+			surface: "projects",
+			selectedProjectSlug: slug,
+			editorBundlePath: null,
+		}),
+	setSelectedProjectSlug: (slug) =>
+		set({ selectedProjectSlug: slug, editorBundlePath: null }),
 	openPeek: (slug) => set({ peekSlug: slug }),
 	closePeek: () => set({ peekSlug: null }),
 	setPaletteOpen: (open) => set({ paletteOpen: open }),

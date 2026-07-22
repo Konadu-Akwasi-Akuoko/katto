@@ -1,4 +1,5 @@
 pub mod hub;
+pub mod pipeline;
 
 use std::sync::Arc;
 
@@ -29,6 +30,12 @@ pub struct JobContext {
 }
 
 impl JobContext {
+    /// The id of the job this context reports for (e.g. to correlate a
+    /// terminal events row with the job row).
+    pub fn job_id(&self) -> &str {
+        &self.job_id
+    }
+
     /// Persist and fan out a progress tick (`value` in `0.0..=1.0`) and mirror
     /// it to the tray. Best-effort: a lost tick never fails the job.
     pub async fn progress(&self, value: f64, message: Option<String>) {

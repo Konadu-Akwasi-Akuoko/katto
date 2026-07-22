@@ -1,0 +1,5 @@
+---
+source: crates/katto-cli/src/output.rs
+expression: "render_render(Path::new(\"/p/exports/demo-render-v1.mp4\"), false)"
+---
+rendered /p/exports/demo-render-v1.mp4

@@ -1,9 +1,12 @@
+mod assets;
 pub mod broadcast;
 pub mod capture;
 pub mod commands;
 pub mod db;
 pub mod drive;
 pub mod error;
+pub mod ffprobe;
+pub mod ingest;
 pub mod jobs;
 pub mod keychain;
 pub mod notify;
@@ -11,6 +14,7 @@ pub mod paths;
 pub mod projects;
 mod state;
 mod tray;
+mod volumes;
 mod window;
 
 use tauri::Manager;
@@ -29,6 +33,19 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::jobs::list_jobs,
             commands::jobs::subscribe_job_progress,
             commands::jobs::dev_run_smoke_job,
+            commands::pipeline::plan_rough_cut,
+            commands::pipeline::open_bundle,
+            commands::pipeline::list_bundles,
+            commands::pipeline::list_footage,
+            commands::editor::save_edits,
+            commands::editor::preview_export,
+            commands::editor::export_timeline,
+            commands::editor::render_mp4,
+            commands::editor::generate_thumbs,
+            commands::editor::relocate_source,
+            commands::editor::pick_relocation_file,
+            commands::editor::open_in_fcp,
+            commands::editor::reveal_timeline,
             commands::onboarding::pick_studio_root,
             commands::onboarding::store_key,
             commands::onboarding::key_present,
@@ -43,6 +60,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::projects::set_project_dates,
             commands::projects::reveal_project_folder,
             commands::projects::trash_project,
+            commands::ingest::card_offer,
+            commands::ingest::start_ingest,
+            commands::ingest::eject_card,
+            commands::ingest::import_files,
             commands::ideas::list_ideas,
             commands::ideas::create_idea,
             commands::ideas::update_idea,
@@ -65,6 +86,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::IdeasChanged,
             broadcast::ScheduleChanged,
             broadcast::DeepLinkOpened,
+            broadcast::CardDetected,
+            broadcast::CardRemoved,
         ])
 }
 
@@ -79,7 +102,32 @@ fn bootstrap_state(app: &tauri::App) -> Result<state::AppState, Box<dyn std::err
         db.call(|conn| db::events::record(conn, "app_started", None, None)),
     )?;
     let jobs = jobs::JobRuntime::new(app.handle().clone(), db.clone());
-    Ok(state::AppState { db, jobs })
+    Ok(state::AppState {
+        db,
+        jobs,
+        active_exports: std::sync::Arc::default(),
+    })
+}
+
+/// Fail over jobs rows stranded queued/running by a crash — otherwise the
+/// per-bundle busy guards would refuse work forever. Each interrupted job is
+/// marked failed and gets an events row; a DB failure here is logged, never
+/// fatal to startup.
+fn fail_interrupted_jobs(app: &tauri::App) {
+    let db = app.state::<state::AppState>().db.clone();
+    let result = tauri::async_runtime::block_on(db.call(|conn| {
+        let interrupted = db::jobs::fail_interrupted(conn)?;
+        for job in &interrupted {
+            let payload = serde_json::json!({ "id": job.id, "kind": job.kind }).to_string();
+            db::events::record(conn, "job_interrupted", Some(&job.label), Some(&payload))?;
+        }
+        Ok(interrupted.len())
+    }));
+    match result {
+        Ok(0) => {}
+        Ok(n) => eprintln!("failed over {n} interrupted job(s) from the previous run"),
+        Err(err) => eprintln!("interrupted-jobs failover failed: {err}"),
+    }
 }
 
 /// Reconcile the projects index against the studio-root folders at launch —
@@ -148,6 +196,9 @@ pub fn run() {
             builder.mount_events(app);
             keychain::init()?;
             app.manage(bootstrap_state(app)?);
+            app.manage(state::IngestState::default());
+            assets::grant_at_launch(app);
+            fail_interrupted_jobs(app);
             launch_reconcile(app);
 
             let handle = app.handle();
@@ -157,6 +208,7 @@ pub fn run() {
             capture::setup(handle);
             setup_deep_links(handle);
             tauri::async_runtime::spawn(drive::watch(handle.clone()));
+            volumes::start_watcher(handle.clone());
             Ok(())
         })
         .on_window_event(|window, event| {

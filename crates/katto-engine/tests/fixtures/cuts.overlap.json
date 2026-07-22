@@ -1,0 +1,9 @@
+{
+  "source_duration_secs": 8.0,
+  "cuts": [
+    { "start": 1.0, "end": 3.0, "reason": "filler", "excerpt": "um and uh" },
+    { "start": 2.5, "end": 4.0, "reason": "false_start", "excerpt": "so basically" }
+  ],
+  "flags": [],
+  "total_cut_secs": 3.5
+}

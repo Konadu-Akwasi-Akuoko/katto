@@ -1,0 +1,47 @@
+{
+    "streams": [
+        {
+            "index": 0,
+            "codec_name": "hevc",
+            "codec_long_name": "H.265 / HEVC (High Efficiency Video Coding)",
+            "profile": "Main 10",
+            "codec_type": "video",
+            "width": 3840,
+            "height": 2160,
+            "pix_fmt": "yuv420p10le",
+            "r_frame_rate": "60000/1001",
+            "avg_frame_rate": "60000/1001",
+            "time_base": "1/60000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 7687680,
+            "duration": "128.128000",
+            "bit_rate": "150000000",
+            "nb_frames": "7680"
+        },
+        {
+            "index": 1,
+            "codec_name": "pcm_s16be",
+            "codec_type": "audio",
+            "sample_rate": "48000",
+            "channels": 2,
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 6151200,
+            "duration": "128.150000",
+            "bit_rate": "1536000"
+        }
+    ],
+    "format": {
+        "filename": "C0001.MP4",
+        "nb_streams": 2,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "format_long_name": "QuickTime / MOV",
+        "start_time": "0.000000",
+        "duration": "128.150000",
+        "size": "2402287616",
+        "bit_rate": "149968640",
+        "probe_score": 100
+    }
+}

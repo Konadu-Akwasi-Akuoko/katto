@@ -34,6 +34,14 @@ export const onDriveStatusChanged = (
 ): Promise<Unlisten> =>
 	events.driveStatusChanged.listen((event) => callback(event.payload));
 
+/** A camera card was detected and enumerated — refetch the offer query. */
+export const onCardDetected = (callback: () => void): Promise<Unlisten> =>
+	events.cardDetected.listen(() => callback());
+
+/** The detected card's volume was unmounted — drop the stale offer. */
+export const onCardRemoved = (callback: () => void): Promise<Unlisten> =>
+	events.cardRemoved.listen(() => callback());
+
 /** A `katto://` deep link was opened — navigate to its route. */
 export const onDeepLinkOpened = (
 	callback: (payload: DeepLinkOpened) => void,

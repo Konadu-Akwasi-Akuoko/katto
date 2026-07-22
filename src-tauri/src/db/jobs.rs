@@ -94,6 +94,20 @@ pub fn list(conn: &Connection, active_only: bool) -> Result<Vec<Job>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+/// Whether an active (queued/running) job of `kind` references `needle` in
+/// its payload. DB-backed on purpose: this guards one-run-per-bundle, and an
+/// in-memory guard would die with a webview reload.
+pub fn active_with_payload(conn: &Connection, kind: &str, needle: &str) -> Result<bool> {
+    let exists: i64 = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM jobs
+          WHERE kind = ?1 AND status IN ('queued','running')
+            AND instr(payload_json, ?2) > 0)",
+        params![kind, needle],
+        |row| row.get(0),
+    )?;
+    Ok(exists != 0)
+}
+
 /// `queued -> running`. Stamps `started_at`.
 pub fn start(conn: &Connection, id: &str) -> Result<Job> {
     transition(conn, id, "running")?;
@@ -139,6 +153,26 @@ pub fn fail(conn: &Connection, id: &str, error: &str) -> Result<Job> {
     fetch(conn, id)
 }
 
+/// Launch-time failover: every job still `queued`/`running` was interrupted
+/// by a crash or force-quit — no runtime future survives a restart, so left
+/// alone they would wedge the per-bundle busy guards forever. Marks each one
+/// failed ("interrupted at launch") and returns them so the caller can write
+/// their events rows.
+pub fn fail_interrupted(conn: &Connection) -> Result<Vec<Job>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, kind, label, status, progress, payload_json, error, started_at, finished_at
+         FROM jobs WHERE status IN ('queued','running')",
+    )?;
+    let stranded: Vec<Job> = stmt
+        .query_map([], from_row)?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut out = Vec::with_capacity(stranded.len());
+    for job in stranded {
+        out.push(fail(conn, &job.id, "interrupted at launch")?);
+    }
+    Ok(out)
+}
+
 /// Enforce the legal state machine, then write the new status. Legal moves:
 /// `queued -> running`, `running -> done`, `running -> failed`, and
 /// `queued -> failed` (a job that could not start has failed).
@@ -165,6 +199,50 @@ mod tests {
 
     fn seed(conn: &Connection) -> Job {
         create(conn, "j1", "transcribe", "Transcribe clip", None).unwrap()
+    }
+
+    #[test]
+    fn active_with_payload_guards_only_live_jobs_of_the_kind() {
+        let conn = test_db();
+        create(
+            &conn,
+            "j1",
+            "cut_pipeline",
+            "Rough cut",
+            Some("{\"bundle_path\":\"/studio/p/audio/c.kruproj\"}"),
+        )
+        .unwrap();
+        assert!(active_with_payload(&conn, "cut_pipeline", "/studio/p/audio/c.kruproj").unwrap());
+        assert!(
+            !active_with_payload(&conn, "cut_pipeline", "/studio/p/audio/other.kruproj").unwrap()
+        );
+        assert!(!active_with_payload(&conn, "ingest", "/studio/p/audio/c.kruproj").unwrap());
+        start(&conn, "j1").unwrap();
+        assert!(active_with_payload(&conn, "cut_pipeline", "/studio/p/audio/c.kruproj").unwrap());
+        fail(&conn, "j1", "boom").unwrap();
+        assert!(!active_with_payload(&conn, "cut_pipeline", "/studio/p/audio/c.kruproj").unwrap());
+    }
+
+    #[test]
+    fn fail_interrupted_sweeps_only_non_terminal_jobs() {
+        let conn = test_db();
+        create(&conn, "q", "render_mp4", "Render A", None).unwrap();
+        create(&conn, "r", "render_mp4", "Render B", None).unwrap();
+        start(&conn, "r").unwrap();
+        create(&conn, "d", "render_mp4", "Render C", None).unwrap();
+        start(&conn, "d").unwrap();
+        finish(&conn, "d").unwrap();
+
+        let swept = fail_interrupted(&conn).unwrap();
+        let mut ids: Vec<&str> = swept.iter().map(|j| j.id.as_str()).collect();
+        ids.sort_unstable();
+        assert_eq!(ids, ["q", "r"]);
+        assert!(swept.iter().all(|j| j.status == "failed"
+            && j.error.as_deref() == Some("interrupted at launch")
+            && j.finished_at.is_some()));
+        assert_eq!(get(&conn, "d").unwrap().unwrap().status, "done");
+        // The busy guard is unwedged.
+        assert!(fail_interrupted(&conn).unwrap().is_empty());
     }
 
     #[test]

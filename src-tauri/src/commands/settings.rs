@@ -13,6 +13,9 @@ use crate::state::AppState;
 /// the setting is unset.
 const DEFAULT_IDLE_REAP_MINUTES: u32 = 10;
 
+/// PRD-locked default model for the HTTP cut planner (single source: engine).
+const DEFAULT_PLANNER_MODEL: &str = katto_engine::planner::http::DEFAULT_MODEL;
+
 /// Which credentials exist in the keychain — presence only, never values.
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct KeysPresent {
@@ -32,6 +35,7 @@ pub struct Settings {
     pub onboarding_complete: bool,
     pub claude_path: Option<String>,
     pub capture_shortcut: String,
+    pub planner_model: String,
     pub keys_present: KeysPresent,
 }
 
@@ -43,6 +47,7 @@ pub struct SettingsPatch {
     pub idle_reap_minutes: Option<u32>,
     pub onboarding_complete: Option<bool>,
     pub claude_path: Option<String>,
+    pub planner_model: Option<String>,
 }
 
 fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Settings> {
@@ -56,6 +61,8 @@ fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Setting
         claude_path: repo::get(conn, "claude_path")?,
         capture_shortcut: repo::get(conn, "capture_shortcut")?
             .unwrap_or_else(|| crate::capture::DEFAULT_CAPTURE_SHORTCUT.to_string()),
+        planner_model: repo::get(conn, "planner_model")?
+            .unwrap_or_else(|| DEFAULT_PLANNER_MODEL.to_string()),
         keys_present,
     })
 }
@@ -79,6 +86,9 @@ fn apply_patch(conn: &Connection, patch: &SettingsPatch) -> Result<()> {
     }
     if let Some(v) = &patch.claude_path {
         repo::set(conn, "claude_path", v)?;
+    }
+    if let Some(v) = &patch.planner_model {
+        repo::set(conn, "planner_model", v)?;
     }
     Ok(())
 }
@@ -106,15 +116,26 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn set_settings(state: State<'_, AppState>, patch: SettingsPatch) -> Result<Settings> {
+pub async fn set_settings(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    patch: SettingsPatch,
+) -> Result<Settings> {
     let keys = read_keys_present().await?;
-    state
+    let new_root = patch.studio_root.clone();
+    let settings = state
         .db
         .call(move |conn| {
             apply_patch(conn, &patch)?;
             read_settings(conn, keys)
         })
-        .await
+        .await?;
+    // A new studio root must be reachable over the asset protocol immediately
+    // (footage playback in the review surface), not only after a relaunch.
+    if let Some(root) = new_root {
+        crate::assets::allow_studio_root(&app, &root);
+    }
+    Ok(settings)
 }
 
 /// Rebind the quick-capture hotkey: validate, swap the OS registration, then
@@ -188,6 +209,7 @@ mod tests {
             idle_reap_minutes: None,
             onboarding_complete: None,
             claude_path: None,
+            planner_model: None,
         }
     }
 
@@ -235,6 +257,27 @@ mod tests {
 
         repo::set(&conn, "onboarding_complete", "false").unwrap();
         assert!(!read_settings(&conn, no_keys()).unwrap().onboarding_complete);
+    }
+
+    #[test]
+    fn planner_model_defaults_and_reads_stored_value() {
+        let conn = test_db();
+        assert_eq!(
+            read_settings(&conn, no_keys()).unwrap().planner_model,
+            DEFAULT_PLANNER_MODEL
+        );
+        apply_patch(
+            &conn,
+            &SettingsPatch {
+                planner_model: Some("claude-opus-4-8".to_string()),
+                ..empty_patch()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            read_settings(&conn, no_keys()).unwrap().planner_model,
+            "claude-opus-4-8"
+        );
     }
 
     #[test]

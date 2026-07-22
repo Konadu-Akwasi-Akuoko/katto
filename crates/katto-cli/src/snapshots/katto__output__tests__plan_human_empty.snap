@@ -1,0 +1,6 @@
+---
+source: crates/katto-cli/src/output.rs
+assertion_line: 125
+expression: "render_plan(Path::new(\"/p/clip.kruproj\"), &cuts, false)"
+---
+planned /p/clip.kruproj: 0 cuts, 0 discretionary, 0 flags (0.000s cut)

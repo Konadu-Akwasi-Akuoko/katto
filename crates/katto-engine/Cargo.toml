@@ -5,7 +5,26 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+# Derives specta::Type on the wire types that cross the app's IPC boundary.
+# Off by default: specta is a serialization-schema crate, not a UI dependency,
+# and only src-tauri turns this on.
+specta = ["dep:specta"]
+
 [dependencies]
+quick-xml = "0.41"
 serde.workspace = true
 serde_json.workspace = true
+url = "2.5"
+specta = { version = "=2.0.0-rc.25", features = ["derive"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "multipart", "json", "stream"] }
 thiserror.workspace = true
+tokio = { workspace = true, features = ["process", "io-util", "time", "fs", "macros"] }
+
+[dev-dependencies]
+insta = { version = "1", features = ["json"] }
+proptest = "1"
+rstest = "0.26.1"
+tempfile = "3"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+wiremock = "0.6"

@@ -25,6 +25,7 @@ const EMPTY_PATCH: SettingsPatch = {
 	idle_reap_minutes: null,
 	onboarding_complete: null,
 	claude_path: null,
+	planner_model: null,
 };
 
 /** Patch only the named fields (null in the wire patch means "leave as is"). */

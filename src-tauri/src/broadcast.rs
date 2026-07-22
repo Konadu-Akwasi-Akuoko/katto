@@ -40,6 +40,16 @@ pub struct DeepLinkOpened {
     pub route: String,
 }
 
+/// Broadcast when a camera card is detected and enumerated. Carries no payload:
+/// the frontend refetches the `card_offer` query, so the offer crosses IPC once
+/// (and the generated event bindings stay free of nested semantic mappers).
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct CardDetected;
+
+/// Broadcast when the detected card's volume is unmounted.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct CardRemoved;
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -68,6 +78,16 @@ pub fn ideas_changed(app: &AppHandle) {
 pub fn schedule_changed(app: &AppHandle) {
     let _ = ScheduleChanged.emit(app);
     crate::tray::refresh_planner_lines(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn card_detected(app: &AppHandle) {
+    let _ = CardDetected.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn card_removed(app: &AppHandle) {
+    let _ = CardRemoved.emit(app);
 }
 
 /// Best-effort, same contract as [`events_appended`]. Carries the parsed

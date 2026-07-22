@@ -48,6 +48,45 @@ pub enum Error {
 
     #[error("{0}")]
     ShortcutUnavailable(String),
+
+    #[error("{0}")]
+    Engine(String),
+
+    #[error("{0}")]
+    NoSuchProject(String),
+
+    #[error("{0}")]
+    InsufficientSpace(String),
+
+    #[error("{0}")]
+    EjectFailed(String),
+
+    #[error("{0}")]
+    IngestInvalid(String),
+
+    #[error("{0}")]
+    MissingKey(String),
+
+    #[error("{0}")]
+    NoPlanner(String),
+
+    #[error("{0}")]
+    PipelineBusy(String),
+
+    #[error("{0}")]
+    Relocate(String),
+
+    /// The one structured variant: the relocation surface needs the fields
+    /// (name a file, show its duration), not a flattened string. On the wire
+    /// `message` becomes an object for this kind only; the IPC wrapper
+    /// re-derives a display string from it.
+    #[error("source missing: expected {expected_path}")]
+    SourceMissing {
+        expected_path: String,
+        filename: String,
+        /// Display projection (`to_secs_f64`) of the manifest duration.
+        duration_secs: f64,
+    },
 }
 
 impl Error {
@@ -94,6 +133,26 @@ impl From<std::io::Error> for Error {
 impl From<keyring_core::Error> for Error {
     fn from(err: keyring_core::Error) -> Self {
         Error::Keychain(err.to_string())
+    }
+}
+
+impl From<katto_engine::Error> for Error {
+    fn from(err: katto_engine::Error) -> Self {
+        match err {
+            // Its own wire kind: the editor renders relocation copy for it.
+            katto_engine::Error::SourceMissing {
+                expected_path,
+                filename,
+                duration,
+            } => Error::SourceMissing {
+                expected_path: expected_path.to_string_lossy().into_owned(),
+                filename,
+                duration_secs: duration.to_secs_f64(),
+            },
+            // Keeps its wire kind: the relocate dialog renders it inline.
+            katto_engine::Error::Relocate(msg) => Error::Relocate(msg),
+            other => Error::Engine(other.to_string()),
+        }
     }
 }
 

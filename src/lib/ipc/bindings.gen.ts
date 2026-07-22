@@ -38,6 +38,24 @@ export const commands = {
 	 *  halfway to exercise the failure path.
 	 */
 	devRunSmokeJob: (fail: boolean) => typedError<Job, Error>(__TAURI_INVOKE("dev_run_smoke_job", { fail })),
+	planRoughCut: (projectSlug: string, footagePath: string, onEvent: Channel<PipelineEvent>) => typedError<Job, Error>(__TAURI_INVOKE("plan_rough_cut", { projectSlug, footagePath, onEvent })),
+	openBundle: (path: string) => typedError<BundleData_Serialize, Error>(__TAURI_INVOKE("open_bundle", { path })).then((v) => ((v.status === "ok" ? { ...v, data: ({...v.data,transcript:({...v.data.transcript,audio_duration_secs:v.data.transcript.audio_duration_secs==null?v.data.transcript.audio_duration_secs:v.data.transcript.audio_duration_secs,words:v.data.transcript.words.map(i=>i)}),cuts:v.data.cuts==null?v.data.cuts:({...v.data.cuts,cuts:v.data.cuts.cuts.map(i=>i),discretionary:v.data.cuts.discretionary.map(i=>i),flags:v.data.cuts.flags.map(i=>i)})}) } : v) as typeof v)),
+	listBundles: (projectSlug: string) => typedError<BundleSummary[], Error>(__TAURI_INVOKE("list_bundles", { projectSlug })),
+	listFootage: (projectSlug: string) => typedError<FootageClip[], Error>(__TAURI_INVOKE("list_footage", { projectSlug })),
+	saveEdits: (bundlePath: string, edits: Edits_Deserialize) => typedError<null, Error>(__TAURI_INVOKE("save_edits", { bundlePath, edits })),
+	previewExport: (bundlePath: string) => typedError<ExportPreview, Error>(__TAURI_INVOKE("preview_export", { bundlePath })),
+	exportTimeline: (bundlePath: string, nleTarget: NleTarget, openAfter: boolean) => typedError<ExportResult, Error>(__TAURI_INVOKE("export_timeline", { bundlePath, nleTarget, openAfter })),
+	renderMp4: (bundlePath: string, onProgress: Channel<JobProgress>) => typedError<Job, Error>(__TAURI_INVOKE("render_mp4", { bundlePath, onProgress })),
+	generateThumbs: (bundlePath: string, onProgress: Channel<JobProgress>) => typedError<Job, Error>(__TAURI_INVOKE("generate_thumbs", { bundlePath, onProgress })),
+	relocateSource: (bundlePath: string, newPath: string) => typedError<null, Error>(__TAURI_INVOKE("relocate_source", { bundlePath, newPath })),
+	/**
+	 *  Native open-file picker for relocation, filtered to the missing file's
+	 *  extension. `None` when the user cancels (same pattern as
+	 *  `pick_studio_root`).
+	 */
+	pickRelocationFile: (filename: string) => typedError<string | null, Error>(__TAURI_INVOKE("pick_relocation_file", { filename })),
+	openInFcp: (path: string) => typedError<boolean, Error>(__TAURI_INVOKE("open_in_fcp", { path })),
+	revealTimeline: (path: string) => typedError<null, Error>(__TAURI_INVOKE("reveal_timeline", { path })),
 	/**
 	 *  Open the native folder picker and inspect the chosen directory. `None` when
 	 *  the user cancels. Nothing is persisted here — the wizard saves the path via
@@ -136,6 +154,33 @@ export const commands = {
 	 *  restoring them from that payload is a manual step for now.
 	 */
 	trashProject: (slug: string) => typedError<null, Error>(__TAURI_INVOKE("trash_project", { slug })),
+	/**  The current detected card offer, if any. */
+	cardOffer: () => typedError<{
+	/**  Absolute mount path (`/Volumes/<NAME>`), also the eject target. */
+	volume: string,
+	/**  Recognized card kind, as a stable slug (`"sony"`/`"generic_dcim"`/`"iphone_dcim"`). */
+	kind: string,
+	/**  Total bytes of all video clips (for the free-space check). */
+	total_bytes: number,
+	/**  Grouped clips. */
+	groups: ClipGroupDto[],
+} | null, Error>(__TAURI_INVOKE("card_offer")).then((v) => ((v.status === "ok" ? { ...v, data: v.data==null?v.data:({...v.data,groups:v.data.groups.map(i=>({...i,clips:i.clips.map(i=>({...i,duration_s:i.duration_s==null?i.duration_s:i.duration_s}))}))}) } : v) as typeof v)),
+	/**
+	 *  Validate the request against the live card offer (volume must match, every
+	 *  source must be an offered clip path resolving under the mount), then plan
+	 *  and spawn the copy job.
+	 */
+	startIngest: (volume: string, projectSlug: string, selectedPaths: string[]) => typedError<Job, Error>(__TAURI_INVOKE("start_ingest", { volume, projectSlug, selectedPaths })),
+	/**
+	 *  Eject the offered card. Refuses any volume other than the current offer's
+	 *  mount, so this can never eject the studio drive or an arbitrary path.
+	 */
+	ejectCard: (volume: string) => typedError<null, Error>(__TAURI_INVOKE("eject_card", { volume })),
+	/**
+	 *  Manual drag-in path (iPhone footage): same rename+verify pipeline, absolute
+	 *  video-file sources, no watcher/card involvement.
+	 */
+	importFiles: (projectSlug: string, paths: string[]) => typedError<Job, Error>(__TAURI_INVOKE("import_files", { projectSlug, paths })),
 	/**  Ideas with the given status, newest-first. */
 	listIdeas: (status: string) => typedError<Idea[], Error>(__TAURI_INVOKE("list_ideas", { status })),
 	/**  Capture a new idea into the backlog and broadcast. */
@@ -193,6 +238,8 @@ export const commands = {
 
 /** Events */
 export const events = {
+	cardDetected: makeEvent<CardDetected>("card-detected"),
+	cardRemoved: makeEvent<CardRemoved>("card-removed"),
 	deepLinkOpened: makeEvent<DeepLinkOpened>("deep-link-opened"),
 	driveStatusChanged: makeEvent<DriveStatusChanged>("drive-status-changed"),
 	eventsAppended: makeEvent<EventsAppended>("events-appended"),
@@ -203,6 +250,155 @@ export const events = {
 };
 
 /* Types */
+/**  A human nudge to one edge of a base cut (index into cuts.json `cuts[]`). */
+export type BoundaryAdjustment = {
+	/**  Index of the base cut being adjusted (original cuts.json position). */
+	cut_index: number,
+	/**  Which edge moves. */
+	edge: CutEdge,
+	/**  The new edge time (any timebase; rescaled to the plan's on merge). */
+	new_time: Rational,
+};
+
+/**
+ *  The full bundle payload for the editor — one `open_bundle` call, JSON only
+ *  (media plays via the asset protocol).
+ */
+export type BundleData = BundleData_Serialize | BundleData_Deserialize;
+
+/**
+ *  The full bundle payload for the editor — one `open_bundle` call, JSON only
+ *  (media plays via the asset protocol).
+ */
+export type BundleData_Deserialize = {
+	root: string,
+	source_path: string,
+	frame_rate: Rational,
+	/**  UI projection (`to_secs_f64`) — display only, never cut math. */
+	duration_secs: number,
+	transcript: Transcript,
+	cuts: Cuts | null,
+	edits: Edits_Deserialize | null,
+};
+
+/**
+ *  The full bundle payload for the editor — one `open_bundle` call, JSON only
+ *  (media plays via the asset protocol).
+ */
+export type BundleData_Serialize = {
+	root: string,
+	source_path: string,
+	frame_rate: Rational,
+	/**  UI projection (`to_secs_f64`) — display only, never cut math. */
+	duration_secs: number,
+	transcript: Transcript,
+	cuts: Cuts | null,
+	edits: Edits_Serialize | null,
+};
+
+/**  One `.kruproj` row in the project's bundle list. */
+export type BundleSummary = {
+	path: string,
+	name: string,
+	has_transcript: boolean,
+	has_cuts: boolean,
+};
+
+/**
+ *  Broadcast when a camera card is detected and enumerated. Carries no payload:
+ *  the frontend refetches the `card_offer` query, so the offer crosses IPC once
+ *  (and the generated event bindings stay free of nested semantic mappers).
+ */
+export type CardDetected = null;
+
+/**  The current detected card, offered to the import sheet. */
+export type CardOffer = {
+	/**  Absolute mount path (`/Volumes/<NAME>`), also the eject target. */
+	volume: string,
+	/**  Recognized card kind, as a stable slug (`"sony"`/`"generic_dcim"`/`"iphone_dcim"`). */
+	kind: string,
+	/**  Total bytes of all video clips (for the free-space check). */
+	total_bytes: number,
+	/**  Grouped clips. */
+	groups: ClipGroupDto[],
+};
+
+/**  Broadcast when the detected card's volume is unmounted. */
+export type CardRemoved = null;
+
+/**  One clip in a card offer, as sent to the frontend. */
+export type ClipDto = {
+	/**  Source path relative to the volume root. */
+	path: string,
+	/**  File name. */
+	name: string,
+	/**  Byte size. Exported as `number`: real clip sizes never approach 2^53. */
+	size: number,
+	/**  Whether it is a video (importable) vs a sidecar. */
+	is_video: boolean,
+	/**  Default selection state. */
+	selected: boolean,
+	/**  Duration in seconds, if ffprobe succeeded. */
+	duration_s: number | null,
+};
+
+/**  A group of clips sharing card substructure. */
+export type ClipGroupDto = {
+	/**  Group label (substructure dir name). */
+	label: string,
+	/**  Clips in the group. */
+	clips: ClipDto[],
+};
+
+/**
+ *  The model's confidence in a discretionary suggestion — the locked enum;
+ *  never rendered as a number.
+ */
+export type Confidence = "low" | "medium" | "high";
+
+/**  One hard cut span with its reason and transcript excerpt. */
+export type Cut = {
+	/**  Start time in seconds. */
+	start: number,
+	/**  End time in seconds. */
+	end: number,
+	/**  Why this span is cut. */
+	reason: CutReason,
+	/**  The transcript text the span covers. */
+	excerpt: string,
+};
+
+/**  Which edge of a cut a boundary adjustment moves. */
+export type CutEdge = 
+/**  The cut's start edge. */
+"start" | 
+/**  The cut's end edge. */
+"end";
+
+/**  Why a span is a hard cut. */
+export type CutReason = "filler" | "stutter" | "false_start" | "self_correction" | "long_silence" | "audio_event";
+
+/**
+ *  The `cuts.json` document: the planner's proposed cut list.
+ * 
+ *  Deserialize goes through a shadow struct so absent `discretionary`/`flags`
+ *  keys default to empty while the specta export (and serialize) keep the
+ *  fields required — specta's TS mapper would otherwise emit an unguarded
+ *  access on an optional field.
+ */
+export type Cuts = {
+	/**  Source duration in seconds as the planner saw it. */
+	source_duration_secs: number,
+	/**  Hard cuts, sorted by start. */
+	cuts: Cut[],
+	/**  Discretionary candidates (absent key defaults to empty). */
+	discretionary: Discretionary[],
+	/**  Review flags (absent key defaults to empty). */
+	flags: Flag[],
+	/**  Stated sum of cut durations; validated against the computed sum. */
+	total_cut_secs: number,
+};
+
 /**
  *  Broadcast when a `katto://` deep link is opened (notification click or OS
  *  LaunchServices open); the frontend router navigates to `route` (`"ideas"` or
@@ -211,6 +407,25 @@ export const events = {
 export type DeepLinkOpened = {
 	route: string,
 };
+
+/**  A discretionary cut candidate the human decides on. */
+export type Discretionary = {
+	/**  Start time in seconds. */
+	start: number,
+	/**  End time in seconds. */
+	end: number,
+	/**  Why this span is a candidate. */
+	reason: DiscretionaryReason,
+	/**  The transcript text the span covers. */
+	excerpt: string,
+	/**  The model's rationale, shown to the human. */
+	note: string,
+	/**  The model's confidence (enum, never a number). */
+	confidence: Confidence,
+};
+
+/**  Why a span is a discretionary (human-decided) cut candidate. */
+export type DiscretionaryReason = "filler" | "stutter" | "false_start" | "self_correction" | "long_silence" | "audio_event" | "other";
 
 /**
  *  Snapshot of the studio root's reachability. `path: None` means no root is
@@ -228,6 +443,67 @@ export type DriveStatusChanged = {
 	path: string,
 };
 
+/**  Undo/redo stacks persisted across sessions (bounded to 100 by the frontend). */
+export type EditHistory = {
+	/**  Undo stack, oldest first. */
+	past?: EditSnapshot[],
+	/**  Redo stack. */
+	future?: EditSnapshot[],
+};
+
+/**  One undo/redo step: the document-state fields of [`Edits`] at a point in time. */
+export type EditSnapshot = {
+	/**  Indices into cuts.json `cuts[]` the human switched off. */
+	toggled_off?: number[],
+	/**  Indices into `discretionary[]` the human applied. */
+	applied_discretionary?: number[],
+	/**  Human-added cuts. */
+	manual_cuts?: ManualCut[],
+	/**  Human nudges to base-cut edges. */
+	boundary_adjustments?: BoundaryAdjustment[],
+};
+
+/**  The `edits.json` document: human review state layered over cuts.json. */
+export type Edits = Edits_Serialize | Edits_Deserialize;
+
+/**  The `edits.json` document: human review state layered over cuts.json. */
+export type Edits_Deserialize = {
+	/**  Wire format version (currently 1). */
+	schema_version: number,
+	/**  Indices into cuts.json `cuts[]` the human switched off. */
+	toggled_off?: number[],
+	/**  Indices into `discretionary[]` the human applied. */
+	applied_discretionary?: number[],
+	/**  Human-added cuts. */
+	manual_cuts?: ManualCut[],
+	/**  Human nudges to base-cut edges. */
+	boundary_adjustments?: BoundaryAdjustment[],
+	/**
+	 *  Undo/redo history persisted across sessions (absent in phase-4 files;
+	 *  the merge ignores it).
+	 */
+	history?: EditHistory | null,
+};
+
+/**  The `edits.json` document: human review state layered over cuts.json. */
+export type Edits_Serialize = {
+	/**  Wire format version (currently 1). */
+	schema_version: number,
+	/**  Indices into cuts.json `cuts[]` the human switched off. */
+	toggled_off: number[],
+	/**  Indices into `discretionary[]` the human applied. */
+	applied_discretionary: number[],
+	/**  Human-added cuts. */
+	manual_cuts: ManualCut[],
+	/**  Human nudges to base-cut edges. */
+	boundary_adjustments: BoundaryAdjustment[],
+	/**
+	 *  Undo/redo history persisted across sessions (absent in phase-4 files;
+	 *  the merge ignores it).
+	 */
+	history?: EditHistory | null,
+};
+
 /**
  *  The application error type crossing every command boundary.
  * 
@@ -237,7 +513,19 @@ export type DriveStatusChanged = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string };
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | 
+/**
+ *  The one structured variant: the relocation surface needs the fields
+ *  (name a file, show its duration), not a flattened string. On the wire
+ *  `message` becomes an object for this kind only; the IPC wrapper
+ *  re-derives a display string from it.
+ */
+{ kind: "source_missing"; message: {
+	expected_path: string,
+	filename: string,
+	/**  Display projection (`to_secs_f64`) of the manifest duration. */
+	duration_secs: number,
+} };
 
 /**  A row in the append-only activity log. */
 export type Event = {
@@ -251,6 +539,51 @@ export type Event = {
 /**  Broadcast after any `events` row is written; the dashboard refetches its feed. */
 export type EventsAppended = null;
 
+/**  What the export dialog shows before exporting. */
+export type ExportPreview = {
+	slug: string,
+	version: number,
+	default_nle: NleTarget | null,
+};
+
+/**  The written artifacts of one export plus what happened after. */
+export type ExportResult = {
+	fcpxml_path: string,
+	srt_path: string,
+	vtt_path: string,
+	version: number,
+	opened_in_nle: boolean,
+	revealed: boolean,
+};
+
+/**  Why a pipeline run failed, as UI copy needs to distinguish it. */
+export type FailureKind = 
+/**  A backend rejected credentials — the fix is re-entering a key. */
+"auth" | 
+/**  Quota/rate limit — the fix is waiting and retrying. */
+"quota" | 
+/**  Planner output never validated, even after the correction turn. */
+"invalid_output" | 
+/**  Everything else (transport, filesystem, ffmpeg). */
+"other";
+
+/**  A span flagged for review with its raw recognition logprob. */
+export type Flag = {
+	/**  Start time in seconds. */
+	start: number,
+	/**  End time in seconds. */
+	end: number,
+	/**  Why this span is flagged. */
+	reason: FlagReason,
+	/**  The transcript text the span covers. */
+	excerpt: string,
+	/**  Raw log probability that triggered the flag. */
+	logprob: number,
+};
+
+/**  Why a span is flagged for review (flags are never cut). */
+export type FlagReason = "low_confidence";
+
 /**
  *  Per-subfolder freshness for a project's D6 anatomy: how many files a subfolder
  *  holds (non-recursive) and the newest file mtime. `latest_mtime` is `None` for
@@ -261,6 +594,12 @@ export type FolderFreshness = {
 	subfolder: string,
 	file_count: number,
 	latest_mtime: string | null,
+};
+
+/**  One video file in the project's footage folder. */
+export type FootageClip = {
+	path: string,
+	name: string,
 };
 
 /**
@@ -359,6 +698,39 @@ export type KeysPresent = {
 	anthropic: boolean,
 };
 
+/**  A human-added cut span. */
+export type ManualCut = {
+	/**  Start time. */
+	start: Rational,
+	/**  End time. */
+	end: Rational,
+	/**  Optional human note. */
+	note: string | null,
+};
+
+/**
+ *  Which NLE the export opens in. Stored in settings as its snake_case
+ *  string; only Final Cut has an open action this phase — Resolve/Premiere
+ *  export identically and fall back to reveal.
+ */
+export type NleTarget = "final_cut" | "resolve" | "premiere";
+
+/**  Streamed pipeline progress for the footage-card step indicator. */
+export type PipelineEvent = 
+/**  A stage began (progress is 0..1 within the whole run). */
+{ type: "stage"; name: StageName; progress: number } | 
+/**  transcript.json landed — the review surface can open early. */
+{ type: "transcript_ready"; bundle_path: string } | 
+/**  Cuts parsed so far while the subprocess planner streams. */
+{ type: "cuts_partial"; cuts_so_far: Cut[] } | 
+/**  The run finished; cuts.json is on disk. */
+{ type: "done"; bundle_path: string } | 
+/**
+ *  The run failed; the jobs framework records the terminal state. `kind`
+ *  tells the UI which owner action applies (re-enter key vs retry later).
+ */
+{ type: "failed"; error: string; kind: FailureKind };
+
 /**
  *  The per-project priority axis. Columns encode *status*; cards encode
  *  *priority* — the two axes never share a colour, so a card in a same-hued
@@ -411,6 +783,21 @@ export type ProjectsChanged = null;
 /**  The slug of the project an idea was promoted into. */
 export type PromoteResult = {
 	slug: string,
+};
+
+/**
+ *  An exact `num/den` ratio (e.g. a `30000/1001` frame rate or a timestamp in
+ *  a media timebase). Floats appear only at UI and model boundaries.
+ */
+export type Rational = {
+	/**
+	 *  Numerator (signed: timestamps can be negative in some containers).
+	 *  Exported to TS as `number`: real values are tick counts well inside the
+	 *  safe-integer range.
+	 */
+	num: number,
+	/**  Denominator; never zero. */
+	den: number,
 };
 
 /**
@@ -478,6 +865,7 @@ export type Settings = {
 	onboarding_complete: boolean,
 	claude_path: string | null,
 	capture_shortcut: string,
+	planner_model: string,
 	keys_present: KeysPresent,
 };
 
@@ -488,7 +876,56 @@ export type SettingsPatch = {
 	idle_reap_minutes: number | null,
 	onboarding_complete: boolean | null,
 	claude_path: string | null,
+	planner_model: string | null,
 };
+
+/**  One pipeline step, as the step indicator renders it. */
+export type StageName = "extracting_audio" | "transcribing" | "detecting_cuts";
+
+/**  A parsed Scribe v2 transcription response. */
+export type Transcript = {
+	/**  Source audio duration in seconds as reported by Scribe. */
+	audio_duration_secs: number | null,
+	/**  Detected language code (e.g. `"en"`). */
+	language_code: string,
+	/**  Scribe's confidence in the language detection. */
+	language_probability: number,
+	/**  The full transcription text. */
+	text: string,
+	/**  Word-level tokens: words, spacing, and audio events. */
+	words: WordEntry[],
+};
+
+/**  One transcript token, discriminated by Scribe's `type` field. */
+export type WordEntry = 
+/**  A spoken word with its timing and confidence. */
+{ type: "word"; 
+/**  The word text. */
+text: string; 
+/**  Start time in seconds. */
+start: number; 
+/**  End time in seconds. */
+end: number; 
+/**  Log probability of the recognition (absent in some responses). */
+logprob: number | null; 
+/**  Diarized speaker id (e.g. `"speaker_0"`). */
+speaker_id: string | null } | 
+/**  Inter-word spacing. */
+{ type: "spacing"; 
+/**  The spacing text (usually `" "`). */
+text: string; 
+/**  Start time in seconds. */
+start: number; 
+/**  End time in seconds. */
+end: number } | 
+/**  A non-speech audio event such as `[breath]` or `[laughter]`. */
+{ type: "audio_event"; 
+/**  The bracketed event label. */
+text: string; 
+/**  Start time in seconds. */
+start: number; 
+/**  End time in seconds. */
+end: number };
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

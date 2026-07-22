@@ -1,0 +1,34 @@
+{
+    "streams": [
+        {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "width": 1920,
+            "height": 1080,
+            "pix_fmt": "yuv420p",
+            "r_frame_rate": "30000/1001",
+            "avg_frame_rate": "30000/1001",
+            "time_base": "1/30000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 3843840,
+            "duration": "128.128000",
+            "bit_rate": "16000000",
+            "nb_frames": "3840"
+        }
+    ],
+    "format": {
+        "filename": "C0002.MP4",
+        "nb_streams": 1,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "format_long_name": "QuickTime / MOV",
+        "start_time": "0.000000",
+        "duration": "128.128000",
+        "size": "256256000",
+        "bit_rate": "16000000",
+        "probe_score": 100
+    }
+}

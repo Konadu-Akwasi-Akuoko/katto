@@ -1,0 +1,118 @@
+import type { CardOffer, ClipDto, ClipGroupDto } from "@/lib/ipc/ingest";
+
+/** Human-readable byte size: GB with one decimal at/above 1 GiB, else whole MB. */
+export function formatBytes(n: number): string {
+	const gib = 1024 ** 3;
+	if (n >= gib) return `${(n / gib).toFixed(1)} GB`;
+	return `${Math.round(n / 1024 ** 2)} MB`;
+}
+
+/** Duration as `m:ss`, or an em dash when unknown. */
+export function formatDuration(s: number | null): string {
+	if (s === null) return "—";
+	const total = Math.round(s);
+	const mins = Math.floor(total / 60);
+	const secs = total % 60;
+	return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+/** Every video clip path in a group (used for the per-group select-all). */
+export function allPathsIn(group: ClipGroupDto): string[] {
+	return group.clips.filter((c) => c.is_video).map((c) => c.path);
+}
+
+/** The selected clips across all groups. */
+export function selectedClips(
+	offer: CardOffer,
+	selected: ReadonlySet<string>,
+): ClipDto[] {
+	return offer.groups.flatMap((g) =>
+		g.clips.filter((c) => selected.has(c.path)),
+	);
+}
+
+/** Count and total bytes of the current selection. */
+export function selectionTotals(
+	offer: CardOffer,
+	selected: ReadonlySet<string>,
+): { count: number; bytes: number } {
+	const clips = selectedClips(offer, selected);
+	return {
+		count: clips.length,
+		bytes: clips.reduce((sum, c) => sum + c.size, 0),
+	};
+}
+
+/** True when free space covers the selection. */
+export function hasEnoughFreeSpace(bytes: number, freeBytes: number): boolean {
+	return freeBytes >= bytes;
+}
+
+/** `"1 clip"` / `"N clips"` — shared by the sheet title and progress copy. */
+export function clipCountLabel(count: number): string {
+	return count === 1 ? `${count} clip` : `${count} clips`;
+}
+
+interface EventLike {
+	kind: string;
+	payload_json: string | null;
+}
+
+/**
+ * The un-imported source paths a failed ingest job left behind, from the
+ * job's `ingest_failed` events row (most-recent-first list). Null when the
+ * job has no such row or the payload does not parse.
+ */
+export function remainingClips(
+	events: readonly EventLike[],
+	jobId: string,
+): string[] | null {
+	for (const event of events) {
+		if (event.kind !== "ingest_failed" || event.payload_json === null) continue;
+		let payload: unknown;
+		try {
+			payload = JSON.parse(event.payload_json);
+		} catch {
+			continue;
+		}
+		if (typeof payload !== "object" || payload === null) continue;
+		const record = payload as Record<string, unknown>;
+		if (record.job_id !== jobId) continue;
+		const remaining = record.remaining;
+		if (
+			Array.isArray(remaining) &&
+			remaining.every((p): p is string => typeof p === "string")
+		) {
+			return remaining;
+		}
+	}
+	return null;
+}
+
+interface ProjectLike {
+	slug: string;
+	shoot_date: string | null;
+}
+
+/** The project whose `shoot_date` is nearest `today` (ISO `YYYY-MM-DD`), or null. */
+export function defaultProjectSlug(
+	projects: readonly ProjectLike[],
+	today: string,
+): string | null {
+	const dated = projects.filter(
+		(p): p is ProjectLike & { shoot_date: string } => !!p.shoot_date,
+	);
+	const [first, ...rest] = dated;
+	if (first === undefined) return projects[0]?.slug ?? null;
+	const todayMs = Date.parse(today);
+	let best = first;
+	let bestDelta = Math.abs(Date.parse(best.shoot_date) - todayMs);
+	for (const p of rest) {
+		const delta = Math.abs(Date.parse(p.shoot_date) - todayMs);
+		if (delta < bestDelta) {
+			best = p;
+			bestDelta = delta;
+		}
+	}
+	return best.slug;
+}

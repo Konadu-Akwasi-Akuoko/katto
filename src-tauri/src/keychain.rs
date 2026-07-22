@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::Result;
 
 /// The keychain service name every katto credential lives under.
-const SERVICE: &str = "katto";
+const SERVICE: &str = katto_engine::detect::KEYCHAIN_SERVICE;
 
 /// The credentials katto stores. Wire values are the snake_case names the
 /// frontend sends.
@@ -18,8 +18,8 @@ impl KeyService {
     /// The keychain account name for this credential.
     pub fn account(self) -> &'static str {
         match self {
-            KeyService::Elevenlabs => "elevenlabs",
-            KeyService::Anthropic => "anthropic",
+            KeyService::Elevenlabs => katto_engine::detect::ELEVENLABS_ACCOUNT,
+            KeyService::Anthropic => katto_engine::detect::ANTHROPIC_ACCOUNT,
         }
     }
 }
@@ -46,6 +46,16 @@ fn entry(service: KeyService) -> Result<keyring_core::Entry> {
 pub fn store_key(service: KeyService, value: &str) -> Result<()> {
     entry(service)?.set_password(value)?;
     Ok(())
+}
+
+/// Read a stored key; `Ok(None)` when absent. The value stays in the backend
+/// (engine clients take it as an argument) — never log it, never cross IPC.
+pub fn read_key(service: KeyService) -> Result<Option<String>> {
+    match entry(service)?.get_password() {
+        Ok(value) => Ok(Some(value)),
+        Err(keyring_core::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// Whether a credential exists for `service`, without exposing its value.

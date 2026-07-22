@@ -21,6 +21,8 @@ use crate::error::Result;
 pub enum Route {
     /// `katto://ideas` — the planner's backlog tab.
     Ideas,
+    /// `katto://ingest` — the SD-card import sheet.
+    Ingest,
     /// `katto://project/<slug>` — a project's detail view.
     Project(String),
 }
@@ -31,6 +33,7 @@ impl Route {
     pub fn as_wire(&self) -> String {
         match self {
             Route::Ideas => "ideas".to_string(),
+            Route::Ingest => "ingest".to_string(),
             Route::Project(slug) => format!("project/{slug}"),
         }
     }
@@ -43,6 +46,9 @@ pub fn parse_deep_link(url: &str) -> Option<Route> {
     let rest = url.strip_prefix("katto://")?.trim_end_matches('/');
     if rest == "ideas" {
         return Some(Route::Ideas);
+    }
+    if rest == "ingest" {
+        return Some(Route::Ingest);
     }
     if let Some(slug) = rest.strip_prefix("project/")
         && !slug.is_empty()
@@ -60,6 +66,12 @@ mod tests {
     #[test]
     fn ideas_route_parses() {
         assert_eq!(parse_deep_link("katto://ideas"), Some(Route::Ideas));
+    }
+
+    #[test]
+    fn parses_ingest_route() {
+        assert_eq!(parse_deep_link("katto://ingest"), Some(Route::Ingest));
+        assert_eq!(Route::Ingest.as_wire(), "ingest");
     }
 
     #[test]
