@@ -13,6 +13,7 @@ pub mod paths;
 pub mod projects;
 mod state;
 mod tray;
+mod volumes;
 mod window;
 
 use tauri::Manager;
@@ -45,6 +46,10 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::projects::set_project_dates,
             commands::projects::reveal_project_folder,
             commands::projects::trash_project,
+            commands::ingest::card_offer,
+            commands::ingest::start_ingest,
+            commands::ingest::eject_card,
+            commands::ingest::import_files,
             commands::ideas::list_ideas,
             commands::ideas::create_idea,
             commands::ideas::update_idea,
@@ -67,6 +72,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::IdeasChanged,
             broadcast::ScheduleChanged,
             broadcast::DeepLinkOpened,
+            broadcast::CardDetected,
+            broadcast::CardRemoved,
         ])
 }
 
@@ -150,6 +157,7 @@ pub fn run() {
             builder.mount_events(app);
             keychain::init()?;
             app.manage(bootstrap_state(app)?);
+            app.manage(state::IngestState::default());
             launch_reconcile(app);
 
             let handle = app.handle();
@@ -159,6 +167,7 @@ pub fn run() {
             capture::setup(handle);
             setup_deep_links(handle);
             tauri::async_runtime::spawn(drive::watch(handle.clone()));
+            volumes::start_watcher(handle.clone());
             Ok(())
         })
         .on_window_event(|window, event| {

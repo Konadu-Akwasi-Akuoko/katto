@@ -136,6 +136,26 @@ export const commands = {
 	 *  restoring them from that payload is a manual step for now.
 	 */
 	trashProject: (slug: string) => typedError<null, Error>(__TAURI_INVOKE("trash_project", { slug })),
+	/**  The current detected card offer, if any. */
+	cardOffer: () => typedError<{
+	/**  Absolute mount path (`/Volumes/<NAME>`), also the eject target. */
+	volume: string,
+	/**  Recognized card kind, as a stable slug (`"sony"`/`"generic_dcim"`/`"iphone_dcim"`). */
+	kind: string,
+	/**  Total bytes of all video clips (for the free-space check). */
+	total_bytes: number,
+	/**  Grouped clips. */
+	groups: ClipGroupDto[],
+} | null, Error>(__TAURI_INVOKE("card_offer")).then((v) => ((v.status === "ok" ? { ...v, data: v.data==null?v.data:({...v.data,groups:v.data.groups.map(i=>({...i,clips:i.clips.map(i=>({...i,duration_s:i.duration_s==null?i.duration_s:i.duration_s}))}))}) } : v) as typeof v)),
+	/**  Validate the card mount, project, and free space, then spawn the copy job. */
+	startIngest: (volume: string, projectSlug: string, selectedPaths: string[]) => typedError<Job, Error>(__TAURI_INVOKE("start_ingest", { volume, projectSlug, selectedPaths })),
+	/**  Eject the card by its mount path. `diskutil eject` accepts a mount point. */
+	ejectCard: (volume: string) => typedError<null, Error>(__TAURI_INVOKE("eject_card", { volume })),
+	/**
+	 *  Manual drag-in path (iPhone footage): same rename+verify pipeline, absolute
+	 *  source paths, no watcher/card involvement.
+	 */
+	importFiles: (projectSlug: string, paths: string[]) => typedError<Job, Error>(__TAURI_INVOKE("import_files", { projectSlug, paths })),
 	/**  Ideas with the given status, newest-first. */
 	listIdeas: (status: string) => typedError<Idea[], Error>(__TAURI_INVOKE("list_ideas", { status })),
 	/**  Capture a new idea into the backlog and broadcast. */
@@ -193,6 +213,8 @@ export const commands = {
 
 /** Events */
 export const events = {
+	cardDetected: makeEvent<CardDetected>("card-detected", (v) => ({...v,offer:({...v.offer,groups:v.offer.groups.map(i=>({...i,clips:i.clips.map(i=>({...i,duration_s:i.duration_s==null?i.duration_s:i.duration_s}))}))})}), (v) => ({...v,offer:({...v.offer,groups:v.offer.groups.map(i=>({...i,clips:i.clips.map(i=>({...i,duration_s:i.duration_s==null?i.duration_s:i.duration_s}))}))})})),
+	cardRemoved: makeEvent<CardRemoved>("card-removed"),
 	deepLinkOpened: makeEvent<DeepLinkOpened>("deep-link-opened"),
 	driveStatusChanged: makeEvent<DriveStatusChanged>("drive-status-changed"),
 	eventsAppended: makeEvent<EventsAppended>("events-appended"),
@@ -203,6 +225,50 @@ export const events = {
 };
 
 /* Types */
+/**  Broadcast when a camera card is detected and enumerated. */
+export type CardDetected = {
+	offer: CardOffer,
+};
+
+/**  The current detected card, offered to the import sheet. */
+export type CardOffer = {
+	/**  Absolute mount path (`/Volumes/<NAME>`), also the eject target. */
+	volume: string,
+	/**  Recognized card kind, as a stable slug (`"sony"`/`"generic_dcim"`/`"iphone_dcim"`). */
+	kind: string,
+	/**  Total bytes of all video clips (for the free-space check). */
+	total_bytes: number,
+	/**  Grouped clips. */
+	groups: ClipGroupDto[],
+};
+
+/**  Broadcast when the detected card's volume is unmounted. */
+export type CardRemoved = null;
+
+/**  One clip in a card offer, as sent to the frontend. */
+export type ClipDto = {
+	/**  Source path relative to the volume root. */
+	path: string,
+	/**  File name. */
+	name: string,
+	/**  Byte size. Exported as `number`: real clip sizes never approach 2^53. */
+	size: number,
+	/**  Whether it is a video (importable) vs a sidecar. */
+	is_video: boolean,
+	/**  Default selection state. */
+	selected: boolean,
+	/**  Duration in seconds, if ffprobe succeeded. */
+	duration_s: number | null,
+};
+
+/**  A group of clips sharing card substructure. */
+export type ClipGroupDto = {
+	/**  Group label (substructure dir name). */
+	label: string,
+	/**  Clips in the group. */
+	clips: ClipDto[],
+};
+
 /**
  *  Broadcast when a `katto://` deep link is opened (notification click or OS
  *  LaunchServices open); the frontend router navigates to `route` (`"ideas"` or
@@ -237,7 +303,7 @@ export type DriveStatusChanged = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string };
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string };
 
 /**  A row in the append-only activity log. */
 export type Event = {
