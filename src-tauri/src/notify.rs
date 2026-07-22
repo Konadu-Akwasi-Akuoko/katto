@@ -25,6 +25,8 @@ pub enum Route {
     Ingest,
     /// `katto://project/<slug>` — a project's detail view.
     Project(String),
+    /// `katto://dock` — the Claude session dock panel.
+    Dock,
 }
 
 impl Route {
@@ -35,6 +37,7 @@ impl Route {
             Route::Ideas => "ideas".to_string(),
             Route::Ingest => "ingest".to_string(),
             Route::Project(slug) => format!("project/{slug}"),
+            Route::Dock => "dock".to_string(),
         }
     }
 }
@@ -49,6 +52,9 @@ pub fn parse_deep_link(url: &str) -> Option<Route> {
     }
     if rest == "ingest" {
         return Some(Route::Ingest);
+    }
+    if rest == "dock" {
+        return Some(Route::Dock);
     }
     if let Some(slug) = rest.strip_prefix("project/")
         && !slug.is_empty()
@@ -80,6 +86,12 @@ mod tests {
             parse_deep_link("katto://project/foo-2026-07-09"),
             Some(Route::Project("foo-2026-07-09".to_string()))
         );
+    }
+
+    #[test]
+    fn dock_route_round_trips() {
+        assert_eq!(parse_deep_link("katto://dock"), Some(Route::Dock));
+        assert_eq!(Route::Dock.as_wire(), "dock");
     }
 
     #[test]

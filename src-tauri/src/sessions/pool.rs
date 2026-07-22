@@ -612,7 +612,15 @@ impl SessionPool {
     /// Attach an output sink: the scrollback snapshot is replayed as the first
     /// send, then live batches follow. One sink per session — latest wins
     /// (there is one dock panel).
-    #[cfg_attr(not(test), allow(dead_code))] // public `attach` wraps this from Task 8 on
+    /// The channel-facing attach used by the `attach_session` command.
+    pub fn attach(&self, id: &str, channel: tauri::ipc::Channel<Vec<u8>>) -> Result<()> {
+        self.attach_sink(
+            id,
+            Box::new(move |bytes| channel.send(bytes.to_vec()).is_ok()),
+        );
+        Ok(())
+    }
+
     pub(crate) fn attach_sink(&self, id: &str, sink: Sink) {
         let mut sessions = self.sessions();
         let Some(entry) = sessions.get_mut(id) else {
@@ -689,7 +697,9 @@ impl SessionPool {
                 state: entry.state.clone(),
                 cwd: entry.cwd.to_string_lossy().into_owned(),
                 started_at: entry.started_at.clone(),
-                idle_since_secs: entry.idle_since.map(|at| at.elapsed().as_secs()),
+                idle_since_secs: entry
+                    .idle_since
+                    .map(|at| u32::try_from(at.elapsed().as_secs()).unwrap_or(u32::MAX)),
             })
             .collect();
         infos.sort_by(|a, b| a.started_at.cmp(&b.started_at).then(a.id.cmp(&b.id)));
@@ -734,12 +744,19 @@ impl SessionPool {
         }
     }
 
-    /// Broadcast stub — wired to tauri-specta events with the command layer
-    /// (Task 8); headless pools stay silent.
-    fn emit_state_changed(&self, _id: &str, _state: &SessionState) {}
+    /// Best-effort broadcast; headless pools (tests) stay silent.
+    fn emit_state_changed(&self, id: &str, state: &SessionState) {
+        if let Some(app) = self.inner.app.get() {
+            crate::broadcast::session_state_changed(app, id, state);
+        }
+    }
 
-    /// Broadcast stub — see [`Self::emit_state_changed`].
-    fn emit_sessions_changed(&self) {}
+    /// Best-effort broadcast; headless pools (tests) stay silent.
+    fn emit_sessions_changed(&self) {
+        if let Some(app) = self.inner.app.get() {
+            crate::broadcast::sessions_changed(app);
+        }
+    }
 
     fn notify_needs_input(&self, id: &str, label: &str) {
         let Some(app) = self.inner.app.get() else {

@@ -71,6 +71,13 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::ideas::discard_idea,
             commands::ideas::promote_idea,
             commands::ideas::capture_submit,
+            commands::sessions::spawn_session,
+            commands::sessions::attach_session,
+            commands::sessions::write_session,
+            commands::sessions::resize_session,
+            commands::sessions::close_session,
+            commands::sessions::list_sessions,
+            commands::sessions::set_dock_focus,
             commands::schedule::list_schedule,
             commands::schedule::upsert_schedule_entry,
             commands::schedule::delete_schedule_entry,
@@ -89,6 +96,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::DeepLinkOpened,
             broadcast::CardDetected,
             broadcast::CardRemoved,
+            broadcast::SessionsChanged,
+            broadcast::SessionStateChanged,
         ])
 }
 

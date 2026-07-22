@@ -50,6 +50,19 @@ pub struct CardDetected;
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
 pub struct CardRemoved;
 
+/// Broadcast when the session set changes (spawn/close/reap); the dock
+/// refetches its session list.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct SessionsChanged;
+
+/// Broadcast on every session state transition; drives tab dots, the sidebar
+/// icon states, and the transient done-check.
+#[derive(Debug, Clone, Serialize, specta::Type, Event)]
+pub struct SessionStateChanged {
+    pub id: String,
+    pub state: crate::sessions::state::SessionState,
+}
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -88,6 +101,24 @@ pub fn card_detected(app: &AppHandle) {
 /// Best-effort, same contract as [`events_appended`].
 pub fn card_removed(app: &AppHandle) {
     let _ = CardRemoved.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn sessions_changed(app: &AppHandle) {
+    let _ = SessionsChanged.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn session_state_changed(
+    app: &AppHandle,
+    id: &str,
+    state: &crate::sessions::state::SessionState,
+) {
+    let _ = SessionStateChanged {
+        id: id.to_string(),
+        state: state.clone(),
+    }
+    .emit(app);
 }
 
 /// Best-effort, same contract as [`events_appended`]. Carries the parsed

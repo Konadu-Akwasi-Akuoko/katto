@@ -207,6 +207,26 @@ export const commands = {
 	 *  the frontend once this resolves.
 	 */
 	captureSubmit: (title: string, note: string | null, kind: string | null) => typedError<null, Error>(__TAURI_INVOKE("capture_submit", { title, note, kind })),
+	/**  Spawn a new claude dock session; returns its session id. */
+	spawnSession: (task: NewSession) => typedError<string, Error>(__TAURI_INVOKE("spawn_session", { task })),
+	/**
+	 *  Attach the dock terminal to a session's output: scrollback replays first,
+	 *  then live 16 ms / 16 KB batches stream over the channel.
+	 */
+	attachSession: (id: string, onData: Channel<number[]>) => typedError<null, Error>(__TAURI_INVOKE("attach_session", { id, onData })),
+	/**  Forward xterm keystrokes (already encoded by xterm's onData) to the PTY. */
+	writeSession: (id: string, data: string) => typedError<null, Error>(__TAURI_INVOKE("write_session", { id, data })),
+	/**  Propagate an xterm resize to the PTY. */
+	resizeSession: (id: string, cols: number, rows: number) => typedError<null, Error>(__TAURI_INVOKE("resize_session", { id, cols, rows })),
+	/**  Close a session at the owner's request. */
+	closeSession: (id: string) => typedError<null, Error>(__TAURI_INVOKE("close_session", { id })),
+	/**  Every session the pool knows about, oldest-first. */
+	listSessions: () => typedError<SessionInfo[], Error>(__TAURI_INVOKE("list_sessions")),
+	/**
+	 *  The frontend reports dock visibility/focus: drives reap exemption and
+	 *  needs-input notification suppression.
+	 */
+	setDockFocus: (open: boolean, focusedSession: string | null) => typedError<null, Error>(__TAURI_INVOKE("set_dock_focus", { open, focusedSession })),
 	/**
 	 *  Schedule entries whose date falls within `[from, to]` (inclusive ISO bounds),
 	 *  ordered by date. Drives the calendar's month/week views.
@@ -247,6 +267,8 @@ export const events = {
 	jobsChanged: makeEvent<JobsChanged>("jobs-changed"),
 	projectsChanged: makeEvent<ProjectsChanged>("projects-changed"),
 	scheduleChanged: makeEvent<ScheduleChanged>("schedule-changed"),
+	sessionStateChanged: makeEvent<SessionStateChanged>("session-state-changed"),
+	sessionsChanged: makeEvent<SessionsChanged>("sessions-changed"),
 };
 
 /* Types */
@@ -349,6 +371,9 @@ export type ClipGroupDto = {
 	/**  Clips in the group. */
 	clips: ClipDto[],
 };
+
+/**  Why a session ended. `IdleReaped` drives the "closed after idle" tab note. */
+export type CloseReason = "exited" | "idle_reaped" | "user_closed";
 
 /**
  *  The model's confidence in a discretionary suggestion — the locked enum;
@@ -513,7 +538,7 @@ export type Edits_Serialize = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | 
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | 
 /**
  *  The one structured variant: the relocation surface needs the fields
  *  (name a file, show its duration), not a flattened string. On the wire
@@ -709,6 +734,17 @@ export type ManualCut = {
 };
 
 /**
+ *  The IPC face of [`SessionTask`]: permission fields are not exposed —
+ *  UI-spawned sessions always run with default permissions; only internal
+ *  callers (curation, cut planning) set them.
+ */
+export type NewSession = {
+	label: string,
+	cwd: string,
+	initial_prompt: string | null,
+};
+
+/**
  *  Which NLE the export opens in. Stored in settings as its snake_case
  *  string; only Final Cut has an open action this phase — Resolve/Premiere
  *  export identically and fall back to reveal.
@@ -851,6 +887,37 @@ export type ScheduleEntry = {
 	date: string,
 	note: string | null,
 };
+
+/**  One session as the frontend sees it (tab strip + dock icon states). */
+export type SessionInfo = {
+	id: string,
+	label: string,
+	state: SessionState,
+	cwd: string,
+	started_at: string,
+	idle_since_secs: number | null,
+};
+
+/**
+ *  Observable session lifecycle. `Failed`/`Closed` are terminal — a session is
+ *  never resurrected; its tab and scrollback stay visible (D18).
+ */
+export type SessionState = { kind: "running" } | { kind: "needs_input" } | { kind: "idle" } | { kind: "failed"; error: string } | { kind: "closed"; reason: CloseReason };
+
+/**
+ *  Broadcast on every session state transition; drives tab dots, the sidebar
+ *  icon states, and the transient done-check.
+ */
+export type SessionStateChanged = {
+	id: string,
+	state: SessionState,
+};
+
+/**
+ *  Broadcast when the session set changes (spawn/close/reap); the dock
+ *  refetches its session list.
+ */
+export type SessionsChanged = null;
 
 /**
  *  The app's settings as the frontend sees them, assembled from the key/value

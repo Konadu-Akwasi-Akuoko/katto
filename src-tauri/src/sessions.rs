@@ -45,5 +45,5 @@ pub struct SessionInfo {
     pub state: SessionState,
     pub cwd: String,
     pub started_at: String,
-    pub idle_since_secs: Option<u64>,
+    pub idle_since_secs: Option<u32>,
 }
