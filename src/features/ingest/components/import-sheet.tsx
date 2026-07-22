@@ -28,11 +28,11 @@ import {
 	hasEnoughFreeSpace,
 	selectionTotals,
 } from "@/features/ingest/model/select";
-import { useIngestSheetStore } from "@/stores/ingest-sheet";
 import { useDriveStatus } from "@/hooks/use-drive-status";
 import { startIngest } from "@/lib/ipc/ingest";
 import { jobsKeys } from "@/lib/ipc/jobs";
 import { createProject, listProjects, projectsKeys } from "@/lib/ipc/projects";
+import { useIngestSheetStore } from "@/stores/ingest-sheet";
 
 const GIB = 1024 ** 3;
 

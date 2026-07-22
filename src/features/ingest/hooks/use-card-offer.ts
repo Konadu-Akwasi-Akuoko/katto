@@ -1,10 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect } from "react";
-
-import { useIngestSheetStore } from "@/stores/ingest-sheet";
 import { onCardDetected, onCardRemoved } from "@/lib/ipc/broadcast";
 import { cardOffer, ingestKeys } from "@/lib/ipc/ingest";
+import { useIngestSheetStore } from "@/stores/ingest-sheet";
 
 /**
  * The current card offer, kept live by the card broadcasts: detection refetches

@@ -86,9 +86,8 @@ describe("defaultProjectSlug", () => {
 
 describe("allPathsIn", () => {
 	it("returns only video clip paths for select-all", () => {
-		expect(allPathsIn(offer.groups[0]!)).toEqual([
-			"CLIP/C0001.MP4",
-			"CLIP/C0002.MP4",
-		]);
+		const group = offer.groups[0];
+		if (group === undefined) throw new Error("fixture has no group");
+		expect(allPathsIn(group)).toEqual(["CLIP/C0001.MP4", "CLIP/C0002.MP4"]);
 	});
 });

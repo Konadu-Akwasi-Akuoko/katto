@@ -61,11 +61,12 @@ export function defaultProjectSlug(
 	const dated = projects.filter(
 		(p): p is ProjectLike & { shoot_date: string } => !!p.shoot_date,
 	);
-	if (dated.length === 0) return projects[0]?.slug ?? null;
+	const [first, ...rest] = dated;
+	if (first === undefined) return projects[0]?.slug ?? null;
 	const todayMs = Date.parse(today);
-	let best = dated[0]!;
+	let best = first;
 	let bestDelta = Math.abs(Date.parse(best.shoot_date) - todayMs);
-	for (const p of dated.slice(1)) {
+	for (const p of rest) {
 		const delta = Math.abs(Date.parse(p.shoot_date) - todayMs);
 		if (delta < bestDelta) {
 			best = p;
