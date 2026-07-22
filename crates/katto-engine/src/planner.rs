@@ -1,6 +1,7 @@
 //! Cut-planner foundation: the committed cut-decider prompt, the single-shot
 //! [`CutPlanner`] trait (D14: no agent loop), and tolerant reply parsers.
 
+pub mod http;
 pub mod partial;
 pub mod subprocess;
 
