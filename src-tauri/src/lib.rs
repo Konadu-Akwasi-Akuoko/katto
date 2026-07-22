@@ -12,6 +12,7 @@ pub mod keychain;
 pub mod notify;
 pub mod paths;
 pub mod projects;
+pub mod sessions;
 mod state;
 mod tray;
 mod volumes;
