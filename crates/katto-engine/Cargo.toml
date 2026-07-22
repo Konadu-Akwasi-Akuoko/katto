@@ -12,8 +12,10 @@ license.workspace = true
 specta = ["dep:specta"]
 
 [dependencies]
+quick-xml = "0.41"
 serde.workspace = true
 serde_json.workspace = true
+url = "2.5"
 specta = { version = "=2.0.0-rc.25", features = ["derive"], optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "multipart", "json", "stream"] }
 thiserror.workspace = true
