@@ -5,6 +5,7 @@
 pub mod bundle;
 pub mod error;
 pub mod ffprobe;
+pub mod import;
 pub mod ingest;
 pub mod merge;
 pub mod rational;
