@@ -89,9 +89,7 @@ describe("BacklogView", () => {
 
 	it("shows an empty state when the backlog is clear", async () => {
 		renderBacklog([]);
-		expect(
-			await screen.findByText(/nothing in the backlog/i),
-		).toBeInTheDocument();
+		expect(await screen.findByText(/no ideas banked/i)).toBeInTheDocument();
 	});
 
 	it("shows curation provenance: rationale, suggested kind, lean, source", async () => {

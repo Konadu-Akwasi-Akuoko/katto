@@ -33,7 +33,7 @@ export function TemplatePicker({
 					<button
 						type="button"
 						onClick={() => onPick("landscape")}
-						className="flex flex-col items-center gap-2 rounded-md p-3 hover:bg-surface-2"
+						className="flex flex-col items-center gap-2 rounded-md p-3 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 					>
 						<span className="h-[45px] w-20 rounded-sm border-2 border-fg-muted" />
 						<span className="text-xs text-fg">YouTube</span>
@@ -44,7 +44,7 @@ export function TemplatePicker({
 					<button
 						type="button"
 						onClick={() => onPick("portrait")}
-						className="flex flex-col items-center gap-2 rounded-md p-3 hover:bg-surface-2"
+						className="flex flex-col items-center gap-2 rounded-md p-3 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 					>
 						<span className="h-20 w-[45px] rounded-sm border-2 border-fg-muted" />
 						<span className="text-xs text-fg">Vertical</span>

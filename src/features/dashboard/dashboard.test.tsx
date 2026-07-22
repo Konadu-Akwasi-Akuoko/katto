@@ -63,10 +63,14 @@ describe("Dashboard", () => {
 		});
 		expect(
 			await screen.findByText(
-				"Quiet so far. Everything katto does lands here.",
+				"Quiet so far. Everything katto does lands here — ingests, cuts, exports, downloads.",
 			),
 		).toBeInTheDocument();
-		expect(screen.getByText("Nothing running.")).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"Nothing running. Background work shows up here the moment it starts.",
+			),
+		).toBeInTheDocument();
 		expect(screen.getByText("No studio root configured.")).toBeInTheDocument();
 	});
 });

@@ -77,8 +77,8 @@ export function BacklogView() {
 
 			{ideas === undefined ? null : ideas.length === 0 ? (
 				<p className="text-sm text-fg-muted">
-					Nothing in the backlog. Capture an idea above, and it lands here to
-					triage.
+					No ideas banked. Capture one from anywhere — the hotkey works in any
+					app.
 				</p>
 			) : (
 				<ul className="flex flex-col gap-2">

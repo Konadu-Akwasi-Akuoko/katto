@@ -66,7 +66,9 @@ export function ActiveJobs() {
 			</CardHeader>
 			<CardContent className="flex flex-col gap-4">
 				{jobs === undefined || jobs.length === 0 ? (
-					<p className="text-fg-muted text-sm">Nothing running.</p>
+					<p className="text-fg-muted text-sm">
+						Nothing running. Background work shows up here the moment it starts.
+					</p>
 				) : (
 					jobs.map((job) => <JobRow key={job.id} job={job} />)
 				)}

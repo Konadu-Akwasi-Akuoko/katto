@@ -23,6 +23,9 @@ function renderDetail(detail: ProjectDetailPayload = validDetail) {
 		if (cmd === "get_project") return detail;
 		if (cmd === "reveal_project_folder") return null;
 		if (cmd === "set_project_dates") return null;
+		if (cmd === "latest_thumbnail") return null;
+		if (cmd === "watch_thumbnails") return null;
+		if (cmd === "unwatch_thumbnails") return null;
 		throw new Error(`unexpected command: ${cmd}`);
 	});
 	const client = new QueryClient({

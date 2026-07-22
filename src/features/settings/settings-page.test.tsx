@@ -54,6 +54,7 @@ function mockSettingsIpc(
 				return { ...settingsFixture, capture_shortcut: captureShortcut };
 			}
 			default:
+				if (cmd.startsWith("plugin:event|")) return 1;
 				throw new Error(`unexpected command ${cmd}`);
 		}
 	});

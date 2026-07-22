@@ -47,7 +47,7 @@ export function Toolbar({
 				aria-label="Back"
 				disabled={!activeTab?.can_go_back}
 				onClick={() => onGo(-1)}
-				className="flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-45"
+				className="flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 			>
 				<ArrowLeftIcon className="size-4" />
 			</button>
@@ -56,7 +56,7 @@ export function Toolbar({
 				aria-label="Forward"
 				disabled={!activeTab?.can_go_forward}
 				onClick={() => onGo(1)}
-				className="flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-45"
+				className="flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 			>
 				<ArrowRightIcon className="size-4" />
 			</button>

@@ -60,7 +60,7 @@ function DownloadRowItem({ row }: { row: DownloadRow }) {
 				<button
 					type="button"
 					onClick={() => reveal.mutate()}
-					className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-fg-muted hover:bg-surface hover:text-fg"
+					className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-fg-muted hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 				>
 					Reveal
 				</button>
@@ -70,7 +70,7 @@ function DownloadRowItem({ row }: { row: DownloadRow }) {
 					type="button"
 					aria-label={`Dismiss ${row.filename}`}
 					onClick={() => dismiss(row.id)}
-					className="shrink-0 rounded-sm p-0.5 text-fg-faint hover:text-fg"
+					className="shrink-0 rounded-sm p-0.5 text-fg-faint hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 				>
 					<XIcon className="size-3" />
 				</button>
@@ -105,7 +105,7 @@ export function DownloadsPopover() {
 		<Popover>
 			<PopoverTrigger
 				aria-label="Downloads"
-				className="relative flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+				className="relative flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 			>
 				<DownloadSimpleIcon className="size-4" />
 				{rows.some((r) => r.status === "filing") && (

@@ -80,7 +80,7 @@ export function ThumbnailsCard({ slug }: { slug: string }) {
 									void revealInProject(slug, `thumbnails/${filename}`);
 								}
 							}}
-							className="overflow-hidden rounded-md border"
+							className="overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 						>
 							<img
 								src={convertFileSrc(path)}

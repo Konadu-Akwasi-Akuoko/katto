@@ -44,6 +44,8 @@ function Badge({
 		<Comp
 			data-slot="badge"
 			data-variant={variant}
+			// translucent chip fills opt out of surface grain (design-system rule)
+			style={{ backgroundImage: "none" }}
 			className={cn(badgeVariants({ variant }), className)}
 			{...props}
 		/>

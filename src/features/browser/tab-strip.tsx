@@ -43,7 +43,7 @@ export function TabStrip({
 							role="tab"
 							aria-selected={active}
 							onClick={() => onSelect(tab.id)}
-							className="min-w-0 flex-1 truncate text-left text-xs"
+							className="min-w-0 flex-1 truncate text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 							title={tab.url}
 						>
 							{tab.title}
@@ -53,7 +53,7 @@ export function TabStrip({
 							aria-label={`Close ${tab.title}`}
 							onClick={() => onClose(tab.id)}
 							className={cn(
-								"rounded-sm p-0.5 text-fg-faint hover:bg-surface hover:text-fg",
+								"rounded-sm p-0.5 text-fg-faint hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2",
 								active ? "" : "opacity-0 group-hover:opacity-100",
 							)}
 						>
@@ -66,7 +66,7 @@ export function TabStrip({
 				type="button"
 				aria-label="New tab"
 				onClick={onNew}
-				className="flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+				className="flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 			>
 				<PlusIcon className="size-4" />
 			</button>

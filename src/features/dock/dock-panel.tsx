@@ -97,7 +97,8 @@ export function DockPanel() {
 			<div className="min-h-0 flex-1 px-3 pb-3">
 				{active === null ? (
 					<p className="pt-6 text-center text-sm text-fg-muted">
-						No sessions. New session starts Claude here.
+						No sessions. AI tasks open a visible session here — you can type
+						into any of them.
 					</p>
 				) : (
 					<Terminal key={active.id} sessionId={active.id} />

@@ -29,8 +29,8 @@ export function ProjectsList() {
 			<h1 className="font-serif text-2xl">Projects</h1>
 			{projects === undefined ? null : projects.length === 0 ? (
 				<p className="text-sm text-fg-muted">
-					No projects yet. Promote an idea from the Planner backlog and its
-					folder lands here.
+					No projects yet. Promote an idea — the folder, card, and schedule
+					arrive together.
 				</p>
 			) : (
 				<ul className="flex flex-col gap-2">
