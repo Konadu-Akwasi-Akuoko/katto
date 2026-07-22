@@ -144,13 +144,8 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn set_settings(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    patch: SettingsPatch,
-) -> Result<Settings> {
+pub async fn set_settings(state: State<'_, AppState>, patch: SettingsPatch) -> Result<Settings> {
     let keys = read_keys_present().await?;
-    let new_root = patch.studio_root.clone();
     let settings = state
         .db
         .call(move |conn| {
@@ -158,11 +153,6 @@ pub async fn set_settings(
             read_settings(conn, keys)
         })
         .await?;
-    // A new studio root must be reachable over the asset protocol immediately
-    // (footage playback in the review surface), not only after a relaunch.
-    if let Some(root) = new_root {
-        crate::assets::allow_studio_root(&app, &root);
-    }
     Ok(settings)
 }
 

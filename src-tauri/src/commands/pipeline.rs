@@ -342,20 +342,17 @@ pub async fn open_bundle(
                 .ok_or_else(|| Error::Onboarding("no studio root configured".to_string()))
         })
         .await?;
-    let (bundle, outside_source) = tauri::async_runtime::spawn_blocking(move || {
+    let bundle = tauri::async_runtime::spawn_blocking(move || {
         let canonical = validate_bundle_path(&studio_root, Path::new(&path))?;
-        let bundle = katto_engine::bundle::open(&canonical).map_err(Error::from)?;
-        // A relocated source may live outside the studio root, which the
-        // launch-time asset grant does not cover.
-        let source = &bundle.manifest.source_video_absolute_path;
-        let outside = !source.starts_with(&studio_root);
-        Ok::<_, Error>((bundle, outside))
+        katto_engine::bundle::open(&canonical).map_err(Error::from)
     })
     .await
     .map_err(|e| Error::Io(e.to_string()))??;
-    if outside_source {
-        crate::assets::allow_source_file(&app, &bundle.manifest.source_video_absolute_path);
-    }
+    // Asset-protocol grants are per-use (no blanket studio-root grant — see
+    // assets.rs): the bundle dir carries thumbs/ and cached_audio.wav, the
+    // source video may live anywhere.
+    crate::assets::allow_media_dir(&app, &bundle.root, true);
+    crate::assets::allow_source_file(&app, &bundle.manifest.source_video_absolute_path);
 
     let transcript = bundle
         .transcript

@@ -266,7 +266,6 @@ pub fn run() {
             keychain::init()?;
             app.manage(bootstrap_state(app)?);
             app.manage(state::IngestState::default());
-            assets::grant_at_launch(app);
             fail_interrupted_jobs(app);
             launch_reconcile(app);
 

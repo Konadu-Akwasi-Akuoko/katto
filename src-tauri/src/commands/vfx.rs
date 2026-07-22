@@ -79,6 +79,7 @@ pub async fn create_vfx_effect(
 #[tauri::command]
 #[specta::specta]
 pub async fn list_vfx_effects(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     project_slug: String,
 ) -> Result<Vec<VfxEffect>> {
@@ -91,7 +92,13 @@ pub async fn list_vfx_effects(
     }
     .ok_or_else(|| Error::NoSuchProject(format!("no project {project_slug}")))?;
     let root = PathBuf::from(project.root_path);
-    tauri::async_runtime::spawn_blocking(move || list_effects(&root))
+    let effects = tauri::async_runtime::spawn_blocking(move || list_effects(&root))
         .await
-        .map_err(|e| Error::Io(e.to_string()))
+        .map_err(|e| Error::Io(e.to_string()))?;
+    // per-use asset grants (no blanket studio-root grant — see assets.rs):
+    // the card plays renders straight out of each effect dir
+    for effect in &effects {
+        crate::assets::allow_media_dir(&app, std::path::Path::new(&effect.path), false);
+    }
+    Ok(effects)
 }
