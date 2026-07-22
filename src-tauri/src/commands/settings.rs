@@ -22,7 +22,8 @@ pub struct KeysPresent {
 
 /// The app's settings as the frontend sees them, assembled from the key/value
 /// `settings` table. `default_nle` stays `None` until the first export seeds it
-/// (Phase 5).
+/// (Phase 5). `capture_shortcut` is read-only here — rebinds go through
+/// `set_capture_shortcut`, which must re-register the hotkey, not just persist.
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct Settings {
     pub studio_root: Option<String>,
@@ -30,6 +31,7 @@ pub struct Settings {
     pub idle_reap_minutes: u32,
     pub onboarding_complete: bool,
     pub claude_path: Option<String>,
+    pub capture_shortcut: String,
     pub keys_present: KeysPresent,
 }
 
@@ -52,6 +54,8 @@ fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Setting
             .unwrap_or(DEFAULT_IDLE_REAP_MINUTES),
         onboarding_complete: repo::get(conn, "onboarding_complete")?.as_deref() == Some("true"),
         claude_path: repo::get(conn, "claude_path")?,
+        capture_shortcut: repo::get(conn, "capture_shortcut")?
+            .unwrap_or_else(|| crate::capture::DEFAULT_CAPTURE_SHORTCUT.to_string()),
         keys_present,
     })
 }
@@ -113,6 +117,65 @@ pub async fn set_settings(state: State<'_, AppState>, patch: SettingsPatch) -> R
         .await
 }
 
+/// Rebind the quick-capture hotkey: validate, swap the OS registration, then
+/// persist — in that order, so a combo another app owns is rejected before
+/// anything is written and the old binding stays live. If the DB write fails
+/// after a successful swap, the registration is rolled back; a rollback that
+/// itself fails leaves the OS on the new combo while settings keep the old one,
+/// and that divergence is recorded as a `capture_hotkey_unavailable` events row
+/// rather than silently.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_capture_shortcut(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    accel: String,
+) -> Result<Settings> {
+    let accel = accel.trim().to_ascii_lowercase();
+    crate::capture::validate_accelerator(&accel)?;
+    let keys = read_keys_present().await?;
+
+    let old = state
+        .db
+        .call(|conn| repo::get(conn, "capture_shortcut"))
+        .await?
+        .unwrap_or_else(|| crate::capture::DEFAULT_CAPTURE_SHORTCUT.to_string());
+
+    if old != accel {
+        crate::capture::rebind_capture_hotkey(&app, &old, &accel).map_err(|err| {
+            Error::ShortcutUnavailable(format!(
+                "'{accel}' is unavailable — another app may own it: {err}"
+            ))
+        })?;
+    }
+
+    let persisted = {
+        let accel = accel.clone();
+        state
+            .db
+            .call(move |conn| {
+                repo::set(conn, "capture_shortcut", &accel)?;
+                read_settings(conn, keys)
+            })
+            .await
+    };
+    if persisted.is_err()
+        && old != accel
+        && crate::capture::rebind_capture_hotkey(&app, &accel, &old).is_err()
+    {
+        let detail = format!(
+            "capture hotkey left on '{accel}' while settings kept '{old}' after a failed save"
+        );
+        let _ = state
+            .db
+            .call(move |conn| {
+                crate::db::events::record(conn, "capture_hotkey_unavailable", None, Some(&detail))
+            })
+            .await;
+    }
+    persisted
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,6 +235,25 @@ mod tests {
 
         repo::set(&conn, "onboarding_complete", "false").unwrap();
         assert!(!read_settings(&conn, no_keys()).unwrap().onboarding_complete);
+    }
+
+    #[test]
+    fn capture_shortcut_falls_back_to_default() {
+        let conn = test_db();
+        assert_eq!(
+            read_settings(&conn, no_keys()).unwrap().capture_shortcut,
+            crate::capture::DEFAULT_CAPTURE_SHORTCUT
+        );
+    }
+
+    #[test]
+    fn capture_shortcut_reads_stored_value() {
+        let conn = test_db();
+        repo::set(&conn, "capture_shortcut", "ctrl+shift+j").unwrap();
+        assert_eq!(
+            read_settings(&conn, no_keys()).unwrap().capture_shortcut,
+            "ctrl+shift+j"
+        );
     }
 
     #[test]

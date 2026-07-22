@@ -1,16 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { settingsFixture } from "@/test/fixtures/settings";
 
-function mockSettingsIpc() {
+function mockSettingsIpc(
+	opts: { captureShortcut?: string; captureShortcutTaken?: boolean } = {},
+) {
 	const calls: [string, unknown][] = [];
 	let autostart = false;
 	let elevenlabsPresent = false;
 	let claudePath: string | null = null;
+	let captureShortcut =
+		opts.captureShortcut ?? settingsFixture.capture_shortcut;
 
 	mockIPC((cmd, args) => {
 		calls.push([cmd, args]);
@@ -21,6 +25,7 @@ function mockSettingsIpc() {
 					studio_root: "/Volumes/Studio",
 					onboarding_complete: true,
 					claude_path: claudePath,
+					capture_shortcut: captureShortcut,
 					keys_present: { elevenlabs: elevenlabsPresent, anthropic: false },
 				};
 			case "get_autostart":
@@ -36,6 +41,18 @@ function mockSettingsIpc() {
 				return claudePath;
 			case "set_settings":
 				return { ...settingsFixture, onboarding_complete: true };
+			case "set_capture_shortcut": {
+				if (opts.captureShortcutTaken) {
+					// A non-Error throw reaches the generated runtime as the tagged
+					// payload, which unwrap() rethrows as IpcError.
+					throw {
+						kind: "shortcut_unavailable",
+						message: "'ctrl+alt+p' is unavailable",
+					};
+				}
+				captureShortcut = (args as { accel: string }).accel;
+				return { ...settingsFixture, capture_shortcut: captureShortcut };
+			}
 			default:
 				throw new Error(`unexpected command ${cmd}`);
 		}
@@ -101,5 +118,80 @@ describe("SettingsPage", () => {
 		expect(
 			await screen.findByText("/opt/homebrew/bin/claude"),
 		).toBeInTheDocument();
+	});
+
+	it("shows the current capture shortcut as glyphs", async () => {
+		mockSettingsIpc();
+		renderPage();
+
+		expect(await screen.findByText("⌥")).toBeInTheDocument();
+		expect(screen.getByText("⌘")).toBeInTheDocument();
+		expect(screen.getByText("K")).toBeInTheDocument();
+	});
+
+	it("rebinds via a recorded combo", async () => {
+		const calls = mockSettingsIpc();
+		const user = userEvent.setup();
+		renderPage();
+
+		await user.click(await screen.findByRole("button", { name: /rebind/i }));
+		expect(screen.getByText(/press shortcut/i)).toBeInTheDocument();
+		fireEvent.keyDown(window, { code: "KeyJ", metaKey: true, altKey: true });
+
+		await waitFor(() =>
+			expect(calls).toContainEqual([
+				"set_capture_shortcut",
+				{ accel: "alt+cmd+j" },
+			]),
+		);
+		expect(await screen.findByText("J")).toBeInTheDocument();
+	});
+
+	it("esc cancels recording without invoking", async () => {
+		const calls = mockSettingsIpc();
+		const user = userEvent.setup();
+		renderPage();
+
+		await user.click(await screen.findByRole("button", { name: /rebind/i }));
+		fireEvent.keyDown(window, { code: "Escape" });
+
+		expect(await screen.findByText("⌥")).toBeInTheDocument();
+		expect(
+			calls.filter(([cmd]) => cmd === "set_capture_shortcut"),
+		).toHaveLength(0);
+	});
+
+	it("keeps the old binding shown when the shortcut is unavailable", async () => {
+		const calls = mockSettingsIpc({ captureShortcutTaken: true });
+		const user = userEvent.setup();
+		renderPage();
+
+		await user.click(await screen.findByRole("button", { name: /rebind/i }));
+		fireEvent.keyDown(window, { code: "KeyP", ctrlKey: true, altKey: true });
+
+		await waitFor(() =>
+			expect(calls).toContainEqual([
+				"set_capture_shortcut",
+				{ accel: "ctrl+alt+p" },
+			]),
+		);
+		expect(await screen.findByText("⌥")).toBeInTheDocument();
+		expect(screen.getByText("K")).toBeInTheDocument();
+		expect(screen.queryByText(/press shortcut/i)).not.toBeInTheDocument();
+	});
+
+	it("reset invokes with the default", async () => {
+		const calls = mockSettingsIpc({ captureShortcut: "ctrl+alt+p" });
+		const user = userEvent.setup();
+		renderPage();
+
+		await user.click(await screen.findByRole("button", { name: /reset/i }));
+
+		await waitFor(() =>
+			expect(calls).toContainEqual([
+				"set_capture_shortcut",
+				{ accel: "alt+cmd+k" },
+			]),
+		);
 	});
 });

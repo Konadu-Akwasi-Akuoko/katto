@@ -8,6 +8,16 @@ export const commands = {
 	getSettings: () => typedError<Settings, Error>(__TAURI_INVOKE("get_settings")),
 	setSettings: (patch: SettingsPatch) => typedError<Settings, Error>(__TAURI_INVOKE("set_settings", { patch })),
 	/**
+	 *  Rebind the quick-capture hotkey: validate, swap the OS registration, then
+	 *  persist — in that order, so a combo another app owns is rejected before
+	 *  anything is written and the old binding stays live. If the DB write fails
+	 *  after a successful swap, the registration is rolled back; a rollback that
+	 *  itself fails leaves the OS on the new combo while settings keep the old one,
+	 *  and that divergence is recorded as a `capture_hotkey_unavailable` events row
+	 *  rather than silently.
+	 */
+	setCaptureShortcut: (accel: string) => typedError<Settings, Error>(__TAURI_INVOKE("set_capture_shortcut", { accel })),
+	/**
 	 *  Current studio-root reachability snapshot; broadcasts keep it fresh after
 	 *  this initial query.
 	 */
@@ -227,7 +237,7 @@ export type DriveStatusChanged = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string };
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string };
 
 /**  A row in the append-only activity log. */
 export type Event = {
@@ -458,7 +468,8 @@ export type ScheduleEntry = {
 /**
  *  The app's settings as the frontend sees them, assembled from the key/value
  *  `settings` table. `default_nle` stays `None` until the first export seeds it
- *  (Phase 5).
+ *  (Phase 5). `capture_shortcut` is read-only here — rebinds go through
+ *  `set_capture_shortcut`, which must re-register the hotkey, not just persist.
  */
 export type Settings = {
 	studio_root: string | null,
@@ -466,6 +477,7 @@ export type Settings = {
 	idle_reap_minutes: number,
 	onboarding_complete: boolean,
 	claude_path: string | null,
+	capture_shortcut: string,
 	keys_present: KeysPresent,
 };
 

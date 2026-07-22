@@ -34,7 +34,7 @@ Living checklist — the durable record of what's landed vs. outstanding on `fea
 - [x] Notifications + `katto://` deep links (dev degrades to tray)
 - [x] Palette commands — new idea, promote idea, new project, go to project, open studio root
 - [x] Capture window opens on the active Space (`visible_on_all_workspaces`) with a soft `--r-lg` frame; tray gained a "Quick capture" item
-- [ ] Settings rebind for `capture_shortcut` — nothing writes the key, so the default is currently the only binding
+- [x] Settings rebind for `capture_shortcut` — `set_capture_shortcut` validates and re-registers before persisting; Settings → General has the recorder row with a reset-to-default affordance
 - [ ] Capture window over a **fullscreen** Space — `visible_on_all_workspaces` alone may not float above one ([tauri#11488](https://github.com/tauri-apps/tauri/issues/11488)); needs `NSWindowCollectionBehaviorFullScreenAuxiliary` via `objc2` if the manual pass shows it hidden
 - [ ] Exit criteria: owner's manual pass (hotkey → promote → folder + Board card; Calendar shoot date; tray shoot line; Finder-delete → rescan; SSD unplug/replug)
 

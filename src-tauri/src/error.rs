@@ -42,6 +42,12 @@ pub enum Error {
 
     #[error("{0}")]
     PromoteFailed(String),
+
+    #[error("{0}")]
+    ShortcutInvalid(String),
+
+    #[error("{0}")]
+    ShortcutUnavailable(String),
 }
 
 impl Error {

@@ -9,6 +9,8 @@ const TITLES: Partial<Record<IpcError["kind"], string>> = {
 	autostart: "Launch-at-login change failed",
 	studio_root_unmounted: "Studio drive isn't mounted",
 	io: "Couldn't reach that folder",
+	shortcut_invalid: "Shortcut not accepted",
+	shortcut_unavailable: "Shortcut already in use",
 };
 
 /**

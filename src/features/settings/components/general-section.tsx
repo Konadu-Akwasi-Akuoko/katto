@@ -9,6 +9,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { CaptureShortcutRow } from "@/features/settings/components/capture-shortcut-row";
 import { useAutostart } from "@/features/settings/hooks/use-autostart";
 import type { Settings } from "@/lib/ipc/settings";
 import { patchSettings, settingsKeys } from "@/lib/ipc/settings";
@@ -69,6 +70,7 @@ export function GeneralSection({ settings }: { settings: Settings }) {
 					</SelectContent>
 				</Select>
 			</div>
+			<CaptureShortcutRow settings={settings} />
 		</section>
 	);
 }
