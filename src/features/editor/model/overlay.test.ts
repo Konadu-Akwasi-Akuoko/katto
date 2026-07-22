@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyTokens, flagSeekTimes } from "@/features/editor/model/overlay";
+import { classifyTokens } from "@/features/editor/model/overlay";
 import { buildTokenSpans } from "@/features/editor/model/tokens";
 import { fixtureCuts, fixtureWords } from "@/test/fixtures/editor";
 
@@ -37,11 +37,5 @@ describe("classifyTokens", () => {
 			],
 		});
 		expect(overlays[0]).toMatchObject({ kind: "cut" });
-	});
-});
-
-describe("flagSeekTimes", () => {
-	it("maps flag entries to their start seconds", () => {
-		expect(flagSeekTimes(fixtureCuts)).toEqual([2.9]);
 	});
 });

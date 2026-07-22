@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
 	buildTokenSpans,
 	groupParagraphs,
-	tokenAtTime,
 } from "@/features/editor/model/tokens";
 import { fixtureWords } from "@/test/fixtures/editor";
 
@@ -45,19 +44,5 @@ describe("groupParagraphs", () => {
 
 	it("empty input yields no paragraphs", () => {
 		expect(groupParagraphs([])).toHaveLength(0);
-	});
-});
-
-describe("tokenAtTime", () => {
-	it("finds containing token and clamps to next", () => {
-		const spans = buildTokenSpans(fixtureWords);
-		expect(tokenAtTime(spans, 0.5)?.text).toBe("today");
-		expect(tokenAtTime(spans, 1.5)?.text).toBe("Next"); // in the gap -> next token
-		expect(tokenAtTime(spans, 99)).toBeNull();
-	});
-
-	it("time before the first token resolves to it", () => {
-		const spans = buildTokenSpans(fixtureWords);
-		expect(tokenAtTime(spans, 0)?.text).toBe("So");
 	});
 });

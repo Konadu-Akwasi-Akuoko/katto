@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 import type { TokenOverlay } from "@/features/editor/model/overlay";
 import { classifyTokens } from "@/features/editor/model/overlay";
 import type { TokenSpan } from "@/features/editor/model/tokens";
@@ -26,6 +27,15 @@ function Token({
 	note: string | null;
 	onSeek: (seconds: number) => void;
 }) {
+	// Spacing tokens are not seek targets: rendering them as buttons would put
+	// thousands of meaningless stops in the tab order of a long transcript.
+	if (span.kind === "spacing") {
+		let decorated: ReactNode = span.text;
+		if (overlay?.kind === "cut") {
+			decorated = <del className="text-fg-faint line-through">{span.text}</del>;
+		}
+		return <span className="whitespace-pre-wrap">{decorated}</span>;
+	}
 	let inner: ReactNode;
 	if (overlay?.kind === "cut") {
 		inner = <del className="text-fg-faint line-through">{span.text}</del>;
@@ -72,11 +82,13 @@ export function TranscriptPane({
 	cuts: Cuts | null;
 	onSeek: (seconds: number) => void;
 }) {
-	const spans = buildTokenSpans(transcript.words);
-	const overlays: TokenOverlay[] = cuts
-		? classifyTokens(spans, cuts)
-		: spans.map(() => null);
-	const paragraphs = groupParagraphs(spans);
+	const { overlays, paragraphs } = useMemo(() => {
+		const spans = buildTokenSpans(transcript.words);
+		const overlays: TokenOverlay[] = cuts
+			? classifyTokens(spans, cuts)
+			: spans.map(() => null);
+		return { overlays, paragraphs: groupParagraphs(spans) };
+	}, [transcript, cuts]);
 	let lastSpeaker: string | null = null;
 
 	return (

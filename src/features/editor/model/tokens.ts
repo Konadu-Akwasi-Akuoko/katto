@@ -53,21 +53,3 @@ export function groupParagraphs(spans: TokenSpan[]): Paragraph[] {
 	if (current.length > 0) paragraphs.push({ tokens: current });
 	return paragraphs;
 }
-
-/**
- * Binary search: the token whose [start, end) contains `t`, else the nearest
- * following token; null past the last token.
- */
-export function tokenAtTime(spans: TokenSpan[], t: number): TokenSpan | null {
-	let lo = 0;
-	let hi = spans.length;
-	while (lo < hi) {
-		const mid = (lo + hi) >> 1;
-		const span = spans[mid];
-		if (span === undefined) return null;
-		if (span.end <= t) lo = mid + 1;
-		else hi = mid;
-	}
-	const candidate = spans[lo];
-	return candidate ?? null;
-}
