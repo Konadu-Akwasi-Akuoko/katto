@@ -41,3 +41,7 @@ bundle:
       export APPLE_SIGNING_IDENTITY="$identity"
     fi
     bun run tauri build --bundles app
+
+# Build the installable dmg (app + dmg bundles, release profile).
+dmg:
+    bun run tauri build --bundles app,dmg
