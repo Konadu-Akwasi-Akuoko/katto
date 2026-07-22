@@ -2,10 +2,16 @@ import type {
 	DeepLinkOpened,
 	DriveStatusChanged,
 	SessionStateChanged,
+	VfxRenderLanded,
 } from "@/lib/ipc/bindings.gen";
 import { events } from "@/lib/ipc/bindings.gen";
 
-export type { DeepLinkOpened, DriveStatusChanged, SessionStateChanged };
+export type {
+	DeepLinkOpened,
+	DriveStatusChanged,
+	SessionStateChanged,
+	VfxRenderLanded,
+};
 
 type Unlisten = () => void;
 
@@ -52,6 +58,12 @@ export const onSessionStateChanged = (
 	callback: (payload: SessionStateChanged) => void,
 ): Promise<Unlisten> =>
 	events.sessionStateChanged.listen((event) => callback(event.payload));
+
+/** A render landed in a project's assets/vfx — refetch its effects. */
+export const onVfxRenderLanded = (
+	callback: (payload: VfxRenderLanded) => void,
+): Promise<Unlisten> =>
+	events.vfxRenderLanded.listen((event) => callback(event.payload));
 
 /** A `katto://` deep link was opened — navigate to its route. */
 export const onDeepLinkOpened = (

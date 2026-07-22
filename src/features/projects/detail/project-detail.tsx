@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusChip } from "@/components/ui/status-chip";
 import { FootageCard } from "@/features/projects/detail/footage-card";
+import { VfxCard } from "@/features/projects/detail/vfx-card";
 import { relativeMtime } from "@/features/projects/model/format";
 import type { FolderFreshness, Project } from "@/lib/ipc/projects";
 import {
@@ -85,6 +86,8 @@ export function ProjectDetail({ slug }: { slug: string }) {
 					/>
 
 					<FootageCard slug={slug} />
+
+					<VfxCard slug={slug} />
 				</>
 			)}
 		</div>

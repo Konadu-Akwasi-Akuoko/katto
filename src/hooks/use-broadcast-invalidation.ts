@@ -10,6 +10,7 @@ import {
 	onScheduleChanged,
 	onSessionStateChanged,
 	onSessionsChanged,
+	onVfxRenderLanded,
 } from "@/lib/ipc/broadcast";
 import { driveKeys } from "@/lib/ipc/drive";
 import { eventsKeys } from "@/lib/ipc/events";
@@ -18,6 +19,7 @@ import { jobsKeys } from "@/lib/ipc/jobs";
 import { projectsKeys } from "@/lib/ipc/projects";
 import { scheduleKeys } from "@/lib/ipc/schedule";
 import { sessionsKeys } from "@/lib/ipc/sessions";
+import { vfxKeys } from "@/lib/ipc/vfx";
 
 /**
  * Bridge backend broadcasts into TanStack Query. Listeners attach per WebView
@@ -54,6 +56,11 @@ export function useBroadcastInvalidation(): void {
 			}),
 			onSessionStateChanged(() => {
 				void queryClient.invalidateQueries({ queryKey: sessionsKeys.all });
+			}),
+			onVfxRenderLanded((payload) => {
+				void queryClient.invalidateQueries({
+					queryKey: vfxKeys.byProject(payload.slug),
+				});
 			}),
 		];
 		return () => {
