@@ -147,13 +147,20 @@ export const commands = {
 	/**  Grouped clips. */
 	groups: ClipGroupDto[],
 } | null, Error>(__TAURI_INVOKE("card_offer")).then((v) => ((v.status === "ok" ? { ...v, data: v.data==null?v.data:({...v.data,groups:v.data.groups.map(i=>({...i,clips:i.clips.map(i=>({...i,duration_s:i.duration_s==null?i.duration_s:i.duration_s}))}))}) } : v) as typeof v)),
-	/**  Validate the card mount, project, and free space, then spawn the copy job. */
+	/**
+	 *  Validate the request against the live card offer (volume must match, every
+	 *  source must be an offered clip path resolving under the mount), then plan
+	 *  and spawn the copy job.
+	 */
 	startIngest: (volume: string, projectSlug: string, selectedPaths: string[]) => typedError<Job, Error>(__TAURI_INVOKE("start_ingest", { volume, projectSlug, selectedPaths })),
-	/**  Eject the card by its mount path. `diskutil eject` accepts a mount point. */
+	/**
+	 *  Eject the offered card. Refuses any volume other than the current offer's
+	 *  mount, so this can never eject the studio drive or an arbitrary path.
+	 */
 	ejectCard: (volume: string) => typedError<null, Error>(__TAURI_INVOKE("eject_card", { volume })),
 	/**
 	 *  Manual drag-in path (iPhone footage): same rename+verify pipeline, absolute
-	 *  source paths, no watcher/card involvement.
+	 *  video-file sources, no watcher/card involvement.
 	 */
 	importFiles: (projectSlug: string, paths: string[]) => typedError<Job, Error>(__TAURI_INVOKE("import_files", { projectSlug, paths })),
 	/**  Ideas with the given status, newest-first. */
@@ -305,7 +312,7 @@ export type DriveStatusChanged = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string };
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string };
 
 /**  A row in the append-only activity log. */
 export type Event = {

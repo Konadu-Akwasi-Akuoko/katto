@@ -51,6 +51,18 @@ pub enum Error {
 
     #[error("{0}")]
     Engine(String),
+
+    #[error("{0}")]
+    NoSuchProject(String),
+
+    #[error("{0}")]
+    InsufficientSpace(String),
+
+    #[error("{0}")]
+    EjectFailed(String),
+
+    #[error("{0}")]
+    IngestInvalid(String),
 }
 
 impl Error {

@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
-use crate::commands::ingest::CardOffer;
 use crate::db::DbHandle;
+use crate::ingest::offer::CardOffer;
 use crate::jobs::JobRuntime;
 
 /// Application-wide managed state, injected into every command via

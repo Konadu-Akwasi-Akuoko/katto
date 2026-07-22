@@ -80,6 +80,23 @@ pub fn test_db() -> Connection {
 mod tests {
     use super::*;
 
+    #[test]
+    fn local_date_today_is_iso_date_shaped() {
+        let conn = test_db();
+        let date = local_date_today(&conn).unwrap();
+        assert_eq!(date.len(), 10, "YYYY-MM-DD, got {date}");
+        let bytes = date.as_bytes();
+        assert!(bytes[4] == b'-' && bytes[7] == b'-', "got {date}");
+        assert!(
+            date.chars().enumerate().all(|(i, c)| if i == 4 || i == 7 {
+                c == '-'
+            } else {
+                c.is_ascii_digit()
+            }),
+            "got {date}"
+        );
+    }
+
     /// Exercises the real file-backed `open()` path (the only place the WAL
     /// branch runs): a fresh file comes back migrated with WAL enabled.
     #[test]
