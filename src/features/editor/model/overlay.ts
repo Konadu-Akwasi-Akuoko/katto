@@ -1,4 +1,6 @@
+import { effectiveCutRanges } from "@/features/editor/model/kept-ranges";
 import type { TokenSpan } from "@/features/editor/model/tokens";
+import type { EditorDocument } from "@/features/editor/model/wire";
 import type { Cuts } from "@/lib/ipc/pipeline";
 
 export type OverlayKind = "cut" | "discretionary" | "flag";
@@ -51,4 +53,48 @@ export function classifyTokens(spans: TokenSpan[], cuts: Cuts): TokenOverlay[] {
 	assign(overlays, spans, sortedEntries(cuts.discretionary), "discretionary");
 	assign(overlays, spans, sortedEntries(cuts.flags), "flag");
 	return overlays;
+}
+
+/** Editing-mode per-token classification against the EFFECTIVE cut state. */
+export type EffectiveOverlay =
+	| { kind: "cut"; key: string }
+	| { kind: "discretionary"; entryIndex: number }
+	| { kind: "flag"; entryIndex: number }
+	| null;
+
+/**
+ * Like {@link classifyTokens} but over `effectiveCutRanges(cuts, doc)`:
+ * struck = any effective cut (base/applied-disc/manual, keyed for click
+ * handling); amber = still-unapplied discretionary; flags unchanged.
+ */
+export function classifyEffective(
+	spans: TokenSpan[],
+	cuts: Cuts,
+	doc: EditorDocument,
+): EffectiveOverlay[] {
+	const ranges = effectiveCutRanges(cuts, doc);
+	const base: TokenOverlay[] = spans.map(() => null);
+	assign(
+		base,
+		spans,
+		ranges.map((r, entryIndex) => ({ start: r.start, end: r.end, entryIndex })),
+		"cut",
+	);
+	const unapplied = cuts.discretionary
+		.map((d, entryIndex) => ({ start: d.start, end: d.end, entryIndex }))
+		.filter((d) => !doc.appliedDiscretionary.includes(d.entryIndex))
+		.sort((a, b) => a.start - b.start);
+	assign(base, spans, unapplied, "discretionary");
+	assign(base, spans, sortedEntries(cuts.flags), "flag");
+	return base.map((o): EffectiveOverlay => {
+		if (o === null) return null;
+		if (o.kind === "cut") {
+			const key = ranges[o.entryIndex]?.key;
+			return key === undefined ? null : { kind: "cut", key };
+		}
+		if (o.kind === "discretionary") {
+			return { kind: "discretionary", entryIndex: o.entryIndex };
+		}
+		return { kind: "flag", entryIndex: o.entryIndex };
+	});
 }

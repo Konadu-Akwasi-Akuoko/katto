@@ -1,13 +1,22 @@
 import type { ReactNode } from "react";
-import { useMemo } from "react";
-import type { TokenOverlay } from "@/features/editor/model/overlay";
-import { classifyTokens } from "@/features/editor/model/overlay";
+import { useEffect, useMemo, useRef } from "react";
+import type { EffectiveOverlay } from "@/features/editor/model/overlay";
+import { classifyEffective } from "@/features/editor/model/overlay";
+import { tokenRangeToTime } from "@/features/editor/model/selection";
 import type { TokenSpan } from "@/features/editor/model/tokens";
 import {
 	buildTokenSpans,
 	groupParagraphs,
 } from "@/features/editor/model/tokens";
+import type { EditorDocument, Range } from "@/features/editor/model/wire";
 import type { Cuts, Transcript } from "@/lib/ipc/pipeline";
+
+const EMPTY_DOCUMENT: EditorDocument = {
+	toggledOff: [],
+	appliedDiscretionary: [],
+	manualCuts: [],
+	boundaryAdjustments: [],
+};
 
 /** m:ss.s paragraph gutter timecode. */
 function timecode(seconds: number): string {
@@ -16,16 +25,53 @@ function timecode(seconds: number): string {
 	return `${m}:${s.toFixed(1).padStart(4, "0")}`;
 }
 
+/** Keyboard shortcuts must not fire while typing in a field. */
+function isEditableTarget(target: EventTarget | null): boolean {
+	if (!(target instanceof HTMLElement)) return false;
+	return (
+		target instanceof HTMLInputElement ||
+		target instanceof HTMLTextAreaElement ||
+		target.isContentEditable
+	);
+}
+
+/** The current DOM selection projected onto token indices -> a time range. */
+function selectionTimeRange(tokens: TokenSpan[]): Range | null {
+	const selection = window.getSelection();
+	if (!selection || selection.isCollapsed) return null;
+	const indexOf = (node: Node | null): number | null => {
+		const el =
+			node instanceof HTMLElement ? node : (node?.parentElement ?? null);
+		const host = el?.closest("[data-token-index]");
+		const raw = host?.getAttribute("data-token-index");
+		if (raw == null) return null;
+		const parsed = Number.parseInt(raw, 10);
+		return Number.isNaN(parsed) ? null : parsed;
+	};
+	const a = indexOf(selection.anchorNode);
+	const b = indexOf(selection.focusNode);
+	if (a === null || b === null) return null;
+	return tokenRangeToTime(tokens, a, b);
+}
+
 function Token({
 	span,
 	overlay,
 	note,
+	active,
+	selected,
 	onSeek,
+	onToggleCut,
+	onApplyDiscretionary,
 }: {
 	span: TokenSpan;
-	overlay: TokenOverlay;
+	overlay: EffectiveOverlay;
 	note: string | null;
+	active: boolean;
+	selected: boolean;
 	onSeek: (seconds: number) => void;
+	onToggleCut?: (cutIndex: number) => void;
+	onApplyDiscretionary?: (index: number) => void;
 }) {
 	// Spacing tokens are not seek targets: rendering them as buttons would put
 	// thousands of meaningless stops in the tab order of a long transcript.
@@ -34,7 +80,11 @@ function Token({
 		if (overlay?.kind === "cut") {
 			decorated = <del className="text-fg-faint line-through">{span.text}</del>;
 		}
-		return <span className="whitespace-pre-wrap">{decorated}</span>;
+		return (
+			<span data-token-index={span.index} className="whitespace-pre-wrap">
+				{decorated}
+			</span>
+		);
 	}
 	let inner: ReactNode;
 	if (overlay?.kind === "cut") {
@@ -56,12 +106,32 @@ function Token({
 	} else {
 		inner = span.text;
 	}
+	const handleClick = () => {
+		// A struck word click only ever disables its cut (base cuts only —
+		// re-enabling happens via undo, so a plain click can't silently re-cut).
+		if (overlay?.kind === "cut" && onToggleCut) {
+			const base = overlay.key.match(/^base-(\d+)$/);
+			if (base?.[1] !== undefined) {
+				onToggleCut(Number.parseInt(base[1], 10));
+				return;
+			}
+		}
+		if (overlay?.kind === "discretionary" && onApplyDiscretionary) {
+			onApplyDiscretionary(overlay.entryIndex);
+			return;
+		}
+		onSeek(span.start);
+	};
 	return (
 		<button
 			type="button"
-			className="inline cursor-default whitespace-pre-wrap text-left"
+			data-token-index={span.index}
+			data-active={active || selected ? "" : undefined}
+			className={`inline cursor-default whitespace-pre-wrap text-left ${
+				active || selected ? "bg-surface-2" : ""
+			}`}
 			title={note ?? undefined}
-			onClick={() => onSeek(span.start)}
+			onClick={handleClick}
 		>
 			{inner}
 		</button>
@@ -69,30 +139,75 @@ function Token({
 }
 
 /**
- * The read-only transcript surface: paragraphs with mono gutter timecodes,
- * cuts gray-struck, discretionary amber-dotted (note on hover), flags
- * highlighted. Every token click seeks the video; nothing edits.
+ * The transcript surface: paragraphs with mono gutter timecodes, effective
+ * cuts gray-struck, unapplied discretionary amber-dotted (note on hover),
+ * flags highlighted (seek-only). With a document + callbacks it edits: struck
+ * word click toggles the cut off, amber click applies, drag-select + X adds a
+ * manual cut. The active token carries the karaoke highlight.
  */
 export function TranscriptPane({
 	transcript,
 	cuts,
+	document: editDocument,
+	activeTime,
 	onSeek,
+	onToggleCut,
+	onApplyDiscretionary,
+	onManualCut,
+	selectedKey,
 }: {
 	transcript: Transcript;
 	cuts: Cuts | null;
+	document?: EditorDocument | null;
+	activeTime?: number;
 	onSeek: (seconds: number) => void;
+	onToggleCut?: (cutIndex: number) => void;
+	onApplyDiscretionary?: (index: number) => void;
+	onManualCut?: (range: Range) => void;
+	selectedKey?: string | null;
 }) {
-	const { overlays, paragraphs } = useMemo(() => {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const { spans, overlays, paragraphs } = useMemo(() => {
 		const spans = buildTokenSpans(transcript.words);
-		const overlays: TokenOverlay[] = cuts
-			? classifyTokens(spans, cuts)
+		const doc = editDocument ?? EMPTY_DOCUMENT;
+		const overlays: EffectiveOverlay[] = cuts
+			? classifyEffective(spans, cuts, doc)
 			: spans.map(() => null);
-		return { overlays, paragraphs: groupParagraphs(spans) };
-	}, [transcript, cuts]);
+		return { spans, overlays, paragraphs: groupParagraphs(spans) };
+	}, [transcript, cuts, editDocument]);
+
+	useEffect(() => {
+		if (!onManualCut) return;
+		const handler = (event: KeyboardEvent) => {
+			if (event.key !== "x" && event.key !== "X" && event.key !== "Delete") {
+				return;
+			}
+			if (isEditableTarget(event.target)) return;
+			const range = selectionTimeRange(spans);
+			if (range === null) return;
+			event.preventDefault();
+			onManualCut(range);
+			window.getSelection()?.removeAllRanges();
+		};
+		document.addEventListener("keydown", handler);
+		return () => document.removeEventListener("keydown", handler);
+	}, [onManualCut, spans]);
+
+	// Scroll the selected region's first token into view when selection moves.
+	useEffect(() => {
+		if (selectedKey == null) return;
+		containerRef.current
+			?.querySelector("[data-active]")
+			?.scrollIntoView?.({ block: "nearest" });
+	}, [selectedKey]);
+
 	let lastSpeaker: string | null = null;
 
 	return (
-		<div className="flex max-w-[65ch] flex-col gap-4 text-[15px] leading-[1.7]">
+		<div
+			ref={containerRef}
+			className="flex max-w-[65ch] flex-col gap-4 text-[15px] leading-[1.7]"
+		>
 			{paragraphs.map((para) => {
 				const first = para.tokens[0];
 				if (first === undefined) return null;
@@ -114,13 +229,26 @@ export function TranscriptPane({
 									overlay?.kind === "discretionary"
 										? (cuts?.discretionary[overlay.entryIndex]?.note ?? null)
 										: null;
+								const active =
+									activeTime !== undefined &&
+									span.kind === "word" &&
+									activeTime >= span.start &&
+									activeTime < span.end;
+								const selected =
+									selectedKey != null &&
+									overlay?.kind === "cut" &&
+									overlay.key === selectedKey;
 								return (
 									<Token
 										key={span.index}
 										span={span}
 										overlay={overlay}
 										note={note}
+										active={active}
+										selected={selected}
 										onSeek={onSeek}
+										onToggleCut={onToggleCut}
+										onApplyDiscretionary={onApplyDiscretionary}
 									/>
 								);
 							})}
