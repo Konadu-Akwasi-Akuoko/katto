@@ -133,7 +133,7 @@ pub async fn set_settings(
     // A new studio root must be reachable over the asset protocol immediately
     // (footage playback in the review surface), not only after a relaunch.
     if let Some(root) = new_root {
-        crate::allow_studio_root_assets(&app, &root);
+        crate::assets::allow_studio_root(&app, &root);
     }
     Ok(settings)
 }

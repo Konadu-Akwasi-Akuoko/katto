@@ -71,7 +71,19 @@ pub enum Error {
     NoPlanner(String),
 
     #[error("{0}")]
-    SourceMissing(String),
+    PipelineBusy(String),
+
+    /// The one structured variant: the relocation surface needs the fields
+    /// (name a file, show its duration), not a flattened string. On the wire
+    /// `message` becomes an object for this kind only; the IPC wrapper
+    /// re-derives a display string from it.
+    #[error("source missing: expected {expected_path}")]
+    SourceMissing {
+        expected_path: String,
+        filename: String,
+        /// Display projection (`to_secs_f64`) of the manifest duration.
+        duration_secs: f64,
+    },
 }
 
 impl Error {
@@ -125,7 +137,15 @@ impl From<katto_engine::Error> for Error {
     fn from(err: katto_engine::Error) -> Self {
         match err {
             // Its own wire kind: the editor renders relocation copy for it.
-            e @ katto_engine::Error::SourceMissing { .. } => Error::SourceMissing(e.to_string()),
+            katto_engine::Error::SourceMissing {
+                expected_path,
+                filename,
+                duration,
+            } => Error::SourceMissing {
+                expected_path: expected_path.to_string_lossy().into_owned(),
+                filename,
+                duration_secs: duration.to_secs_f64(),
+            },
             other => Error::Engine(other.to_string()),
         }
     }
