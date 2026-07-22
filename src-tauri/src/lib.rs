@@ -17,6 +17,7 @@ pub mod scheduler;
 pub mod sessions;
 mod state;
 mod tray;
+pub mod vfx;
 mod volumes;
 mod window;
 
@@ -86,6 +87,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::schedule::list_schedule,
             commands::schedule::upsert_schedule_entry,
             commands::schedule::delete_schedule_entry,
+            commands::vfx::create_vfx_effect,
+            commands::vfx::list_vfx_effects,
             commands::shell::set_autostart,
             commands::shell::get_autostart,
             commands::shell::sleep_to_tray,
@@ -103,6 +106,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::CardRemoved,
             broadcast::SessionsChanged,
             broadcast::SessionStateChanged,
+            broadcast::VfxRenderLanded,
         ])
 }
 
@@ -230,6 +234,7 @@ pub fn run() {
                 .sessions
                 .start(handle.clone())?;
             app.manage(scheduler::runtime::start(handle.clone()));
+            vfx::start_watch(handle.clone());
             Ok(())
         })
         .on_window_event(|window, event| {

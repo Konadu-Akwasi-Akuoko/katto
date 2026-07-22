@@ -63,6 +63,15 @@ pub struct SessionStateChanged {
     pub state: crate::sessions::state::SessionState,
 }
 
+/// Broadcast when a render lands in a project's `assets/vfx/<effect>/`; the
+/// project detail's effects card refetches.
+#[derive(Debug, Clone, Serialize, specta::Type, Event)]
+pub struct VfxRenderLanded {
+    pub slug: String,
+    pub effect: String,
+    pub file: String,
+}
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -117,6 +126,16 @@ pub fn session_state_changed(
     let _ = SessionStateChanged {
         id: id.to_string(),
         state: state.clone(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn vfx_render_landed(app: &AppHandle, slug: &str, effect: &str, file: &str) {
+    let _ = VfxRenderLanded {
+        slug: slug.to_string(),
+        effect: effect.to_string(),
+        file: file.to_string(),
     }
     .emit(app);
 }

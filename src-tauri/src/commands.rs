@@ -12,3 +12,4 @@ pub mod scheduler;
 pub mod sessions;
 pub mod settings;
 pub mod shell;
+pub mod vfx;

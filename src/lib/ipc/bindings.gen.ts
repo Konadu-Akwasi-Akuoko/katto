@@ -250,6 +250,14 @@ export const commands = {
 	/**  Remove a schedule entry by id and broadcast `schedule-changed`. */
 	deleteScheduleEntry: (id: RowId) => typedError<null, Error>(__TAURI_INVOKE("delete_schedule_entry", { id })),
 	/**
+	 *  Scaffold `assets/vfx/<slug>/` for a project and open a dock session in it.
+	 *  Returns the session id so the frontend can focus the dock on it (the
+	 *  folder path is derivable from the slug).
+	 */
+	createVfxEffect: (projectSlug: string, name: string) => typedError<string, Error>(__TAURI_INVOKE("create_vfx_effect", { projectSlug, name })),
+	/**  Every effect folder of a project with its renders (folders are truth). */
+	listVfxEffects: (projectSlug: string) => typedError<VfxEffect[], Error>(__TAURI_INVOKE("list_vfx_effects", { projectSlug })),
+	/**
 	 *  Enable or disable launch-at-login, recording the change in the activity
 	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
 	 */
@@ -278,6 +286,7 @@ export const events = {
 	scheduleChanged: makeEvent<ScheduleChanged>("schedule-changed"),
 	sessionStateChanged: makeEvent<SessionStateChanged>("session-state-changed"),
 	sessionsChanged: makeEvent<SessionsChanged>("sessions-changed"),
+	vfxRenderLanded: makeEvent<VfxRenderLanded>("vfx-render-landed"),
 };
 
 /* Types */
@@ -547,7 +556,7 @@ export type Edits_Serialize = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | 
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | { kind: "invalid_name"; message: string } | 
 /**
  *  The one structured variant: the relocation surface needs the fields
  *  (name a file, show its duration), not a flattened string. On the wire
@@ -992,6 +1001,23 @@ export type Transcript = {
 	text: string,
 	/**  Word-level tokens: words, spacing, and audio events. */
 	words: WordEntry[],
+};
+
+/**  One effect folder and its renders, newest-first by mtime. */
+export type VfxEffect = {
+	effect: string,
+	path: string,
+	renders: string[],
+};
+
+/**
+ *  Broadcast when a render lands in a project's `assets/vfx/<effect>/`; the
+ *  project detail's effects card refetches.
+ */
+export type VfxRenderLanded = {
+	slug: string,
+	effect: string,
+	file: string,
 };
 
 /**  One transcript token, discriminated by Scribe's `type` field. */
