@@ -106,6 +106,13 @@ pub struct DownloadFailed {
     pub filename: String,
 }
 
+/// Broadcast when the studio.db import job finishes, carrying the final
+/// report the wizard renders.
+#[derive(Debug, Clone, Serialize, specta::Type, Event)]
+pub struct StudioImportFinished {
+    pub report: crate::import_studio::ImportReport,
+}
+
 /// Broadcast when a PNG lands in (or changes inside) the watched project's
 /// `thumbnails/` folder; the detail card and project grid refetch.
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
@@ -179,6 +186,11 @@ pub fn vfx_render_landed(app: &AppHandle, slug: &str, effect: &str, file: &str) 
         file: file.to_string(),
     }
     .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn studio_import_finished(app: &AppHandle, report: crate::import_studio::ImportReport) {
+    let _ = StudioImportFinished { report }.emit(app);
 }
 
 /// Best-effort, same contract as [`events_appended`].

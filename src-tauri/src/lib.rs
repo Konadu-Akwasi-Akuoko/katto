@@ -8,6 +8,7 @@ pub mod db;
 pub mod drive;
 pub mod error;
 pub mod ffprobe;
+pub mod import_studio;
 pub mod ingest;
 pub mod jobs;
 pub mod keychain;
@@ -113,6 +114,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::thumbnails::unwatch_thumbnails,
             commands::resolve::resolve_available,
             commands::resolve::open_in_resolve,
+            commands::import::import_studio_db,
             commands::shell::set_autostart,
             commands::shell::get_autostart,
             commands::shell::sleep_to_tray,
@@ -138,6 +140,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::DownloadFallback,
             broadcast::DownloadFailed,
             broadcast::ThumbnailsChanged,
+            broadcast::StudioImportFinished,
         ])
 }
 

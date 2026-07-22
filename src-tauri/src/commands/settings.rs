@@ -44,6 +44,10 @@ pub struct Settings {
     /// Cut planning through a visible dock session (default on; off = the
     /// Phase-4 subprocess planner).
     pub dock_planning: bool,
+    /// ISO timestamp of the last studio.db import apply (None = never run);
+    /// written by the import job, rendered as the wizard's "already
+    /// imported" note.
+    pub studio_import_last_run: Option<String>,
     pub keys_present: KeysPresent,
 }
 
@@ -77,6 +81,7 @@ fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Setting
         discovery_enabled: repo::get(conn, "discovery_enabled")?.as_deref() == Some("true"),
         hyperframes_path: repo::get(conn, "hyperframes_path")?,
         dock_planning: repo::get(conn, "dock_planning")?.as_deref() != Some("false"),
+        studio_import_last_run: repo::get(conn, "studio_import_last_run")?,
         keys_present,
     })
 }

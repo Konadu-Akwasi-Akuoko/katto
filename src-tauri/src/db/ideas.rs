@@ -135,6 +135,54 @@ pub fn set_status(conn: &Connection, id: &str, status: &str) -> Result<()> {
     Ok(())
 }
 
+/// What an import upsert did to the row.
+#[derive(Debug, PartialEq)]
+pub enum UpsertOutcome {
+    Inserted,
+    Updated,
+    Unchanged,
+}
+
+/// Idempotent import upsert by `id`: insert when absent, update every
+/// non-id column when different, report `Unchanged` when identical.
+pub fn upsert_imported(conn: &Connection, idea: &Idea) -> Result<UpsertOutcome> {
+    match get(conn, &idea.id)? {
+        None => {
+            create(conn, idea)?;
+            Ok(UpsertOutcome::Inserted)
+        }
+        Some(existing) if existing == *idea => Ok(UpsertOutcome::Unchanged),
+        Some(_) => {
+            conn.execute(
+                "UPDATE ideas SET type = ?2, kind = ?3, status = ?4, title = ?5,
+                   rationale = ?6, source = ?7, source_url = ?8, source_title = ?9,
+                   evidence_json = ?10, raw_signal_id = ?11, first_seen = ?12,
+                   notes = ?13, promoted_slug = ?14, kind_source = ?15, kind_why = ?16
+                 WHERE id = ?1",
+                params![
+                    idea.id,
+                    idea.r#type,
+                    idea.kind,
+                    idea.status,
+                    idea.title,
+                    idea.rationale,
+                    idea.source,
+                    idea.source_url,
+                    idea.source_title,
+                    idea.evidence_json,
+                    idea.raw_signal_id,
+                    idea.first_seen,
+                    idea.notes,
+                    idea.promoted_slug,
+                    idea.kind_source,
+                    idea.kind_why,
+                ],
+            )?;
+            Ok(UpsertOutcome::Updated)
+        }
+    }
+}
+
 /// Mark an idea promoted: `status='promoted'` and record the resulting project slug.
 pub fn mark_promoted(conn: &Connection, id: &str, slug: &str) -> Result<()> {
     conn.execute(
@@ -252,5 +300,44 @@ mod tests {
             got.promoted_slug.as_deref(),
             Some("nvme-deep-dive-2026-07-09")
         );
+    }
+
+    #[test]
+    fn upsert_imported_inserts_when_absent() {
+        let conn = test_db();
+        let idea = sample("s1", "2026-07-09T00:00:00Z");
+        assert!(matches!(
+            upsert_imported(&conn, &idea).unwrap(),
+            UpsertOutcome::Inserted
+        ));
+        assert!(get(&conn, "s1").unwrap().is_some());
+    }
+
+    #[test]
+    fn upsert_imported_updates_changed_row() {
+        let conn = test_db();
+        let mut idea = sample("s1", "2026-07-09T00:00:00Z");
+        create(&conn, &idea).unwrap();
+        idea.title = "New title".into();
+        idea.status = "promoted".into();
+        idea.promoted_slug = Some("new-title-2026-07-22".into());
+        assert!(matches!(
+            upsert_imported(&conn, &idea).unwrap(),
+            UpsertOutcome::Updated
+        ));
+        let got = get(&conn, "s1").unwrap().unwrap();
+        assert_eq!(got.title, "New title");
+        assert_eq!(got.promoted_slug.as_deref(), Some("new-title-2026-07-22"));
+    }
+
+    #[test]
+    fn upsert_imported_reports_unchanged_when_identical() {
+        let conn = test_db();
+        let idea = sample("s1", "2026-07-09T00:00:00Z");
+        create(&conn, &idea).unwrap();
+        assert!(matches!(
+            upsert_imported(&conn, &idea).unwrap(),
+            UpsertOutcome::Unchanged
+        ));
     }
 }

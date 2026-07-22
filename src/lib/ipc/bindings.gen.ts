@@ -294,6 +294,7 @@ export const commands = {
 	/**  Resolve is installed — gates the "Open in Resolve" button. */
 	resolveAvailable: () => typedError<boolean, Error>(__TAURI_INVOKE("resolve_available")),
 	openInResolve: (slug: string, timelineVersion: number | null) => typedError<null, Error>(__TAURI_INVOKE("open_in_resolve", { slug, timelineVersion })),
+	importStudioDb: (path: string, dryRun: boolean) => typedError<ImportOutcome, Error>(__TAURI_INVOKE("import_studio_db", { path, dryRun })),
 	/**
 	 *  Enable or disable launch-at-login, recording the change in the activity
 	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
@@ -334,6 +335,7 @@ export const events = {
 	scheduleChanged: makeEvent<ScheduleChanged>("schedule-changed"),
 	sessionStateChanged: makeEvent<SessionStateChanged>("session-state-changed"),
 	sessionsChanged: makeEvent<SessionsChanged>("sessions-changed"),
+	studioImportFinished: makeEvent<StudioImportFinished>("studio-import-finished"),
 	thumbnailsChanged: makeEvent<ThumbnailsChanged>("thumbnails-changed"),
 	vfxRenderLanded: makeEvent<VfxRenderLanded>("vfx-render-landed"),
 };
@@ -664,7 +666,7 @@ export type Edits_Serialize = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | { kind: "invalid_name"; message: string } | { kind: "no_such_scheduled_job"; message: string } | { kind: "invalid_schedule"; message: string } | { kind: "unzip_failed"; message: string } | { kind: "browser_unavailable"; message: string } | { kind: "download_missing"; message: string } | { kind: "resolve_not_installed"; message: string } | { kind: "resolve_not_running"; message: string } | { kind: "resolve_scripting_unavailable"; message: string } | { kind: "resolve_failed"; message: string } | 
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | { kind: "invalid_name"; message: string } | { kind: "no_such_scheduled_job"; message: string } | { kind: "invalid_schedule"; message: string } | { kind: "unzip_failed"; message: string } | { kind: "browser_unavailable"; message: string } | { kind: "download_missing"; message: string } | { kind: "resolve_not_installed"; message: string } | { kind: "resolve_not_running"; message: string } | { kind: "resolve_scripting_unavailable"; message: string } | { kind: "resolve_failed"; message: string } | { kind: "import_failed"; message: string } | 
 /**
  *  The one structured variant: the relocation surface needs the fields
  *  (name a file, show its duration), not a flattened string. On the wire
@@ -804,6 +806,17 @@ export type IdeaPatch = {
  *  promote); the backlog surface refetches its list.
  */
 export type IdeasChanged = null;
+
+/**  What the command returned: the dry-run preview, or the spawned job. */
+export type ImportOutcome = { kind: "preview"; report: ImportReport } | { kind: "started"; job_id: string };
+
+/**  The dry-run/apply report the wizard renders. */
+export type ImportReport = {
+	imported: number,
+	updated: number,
+	skipped: number,
+	warnings: string[],
+};
 
 /**
  *  A folder whose `project.json` failed to read or validate. Surfaced in the
@@ -1095,6 +1108,12 @@ export type Settings = {
 	 *  Phase-4 subprocess planner).
 	 */
 	dock_planning: boolean,
+	/**
+	 *  ISO timestamp of the last studio.db import apply (None = never run);
+	 *  written by the import job, rendered as the wizard's "already
+	 *  imported" note.
+	 */
+	studio_import_last_run: string | null,
 	keys_present: KeysPresent,
 };
 
@@ -1113,6 +1132,14 @@ export type SettingsPatch = {
 
 /**  One pipeline step, as the step indicator renders it. */
 export type StageName = "extracting_audio" | "transcribing" | "detecting_cuts";
+
+/**
+ *  Broadcast when the studio.db import job finishes, carrying the final
+ *  report the wizard renders.
+ */
+export type StudioImportFinished = {
+	report: ImportReport,
+};
 
 /**
  *  Wire snapshot of one tab; `title` is URL-derived (the webview API exposes

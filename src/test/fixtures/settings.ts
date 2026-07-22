@@ -12,5 +12,6 @@ export const settingsFixture: Settings = {
 	discovery_enabled: false,
 	hyperframes_path: null,
 	dock_planning: true,
+	studio_import_last_run: null,
 	keys_present: { elevenlabs: false, anthropic: false },
 };
