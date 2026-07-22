@@ -49,6 +49,12 @@ pub enum PlanError {
 /// Single-shot cut planner (D14: no agent loop).
 pub trait CutPlanner {
     /// Plan cuts for `transcript`; implementations run the validate-retry-once loop.
+    ///
+    /// # Errors
+    /// [`PlanError::Auth`] when the backend rejects credentials,
+    /// [`PlanError::InvalidAfterRetry`] when output still fails validation
+    /// after the one correction turn, and the backend's transport variant
+    /// ([`PlanError::Http`] / [`PlanError::Subprocess`]) for everything else.
     fn plan(
         &self,
         transcript: &crate::schema::Transcript,
