@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { onStudioImportFinished } from "@/lib/ipc/broadcast";
+import {
+	onStudioImportFailed,
+	onStudioImportFinished,
+} from "@/lib/ipc/broadcast";
 import type { ImportReport } from "@/lib/ipc/import-studio";
 import { importStudioDb } from "@/lib/ipc/import-studio";
 import { IpcError } from "@/lib/ipc/result";
@@ -59,12 +62,20 @@ export function ImportSection({ settings }: { settings: Settings }) {
 
 	useEffect(() => {
 		if (!isTauri()) return;
-		const subscription = onStudioImportFinished((payload) => {
-			setFinished(payload.report);
-			setApplying(false);
-		});
+		const subscriptions = [
+			onStudioImportFinished((payload) => {
+				setFinished(payload.report);
+				setApplying(false);
+			}),
+			onStudioImportFailed((payload) => {
+				setApplying(false);
+				setError(payload.message);
+			}),
+		];
 		return () => {
-			void subscription.then((unlisten) => unlisten());
+			for (const subscription of subscriptions) {
+				void subscription.then((unlisten) => unlisten());
+			}
 		};
 	}, []);
 
@@ -117,7 +128,12 @@ export function ImportSection({ settings }: { settings: Settings }) {
 				<Input
 					id="studio-db-path"
 					value={path}
-					onChange={(event) => setPath(event.target.value)}
+					onChange={(event) => {
+						setPath(event.target.value);
+						// a preview describes ONE path; editing it stales the counts
+						setPreview(null);
+						setFinished(null);
+					}}
 					spellCheck={false}
 					className="min-w-0 flex-1 cursor-text font-mono text-xs"
 				/>
@@ -152,10 +168,12 @@ export function ImportSection({ settings }: { settings: Settings }) {
 						<div>
 							<Button
 								size="sm"
-								disabled={preview.imported === 0 || applying}
+								disabled={preview.imported + preview.updated === 0 || applying}
 								onClick={() => apply.mutate()}
 							>
-								{applying ? "Importing…" : `Import ${preview.imported} ideas`}
+								{applying
+									? "Importing…"
+									: `Import ${preview.imported + preview.updated} ideas`}
 							</Button>
 						</div>
 					</div>

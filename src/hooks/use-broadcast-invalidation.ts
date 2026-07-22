@@ -23,6 +23,7 @@ import { jobsKeys } from "@/lib/ipc/jobs";
 import { projectsKeys } from "@/lib/ipc/projects";
 import { scheduleKeys } from "@/lib/ipc/schedule";
 import { sessionsKeys } from "@/lib/ipc/sessions";
+import { settingsKeys } from "@/lib/ipc/settings";
 import { thumbKeys } from "@/lib/ipc/thumbnails";
 import { vfxKeys } from "@/lib/ipc/vfx";
 
@@ -72,6 +73,8 @@ export function useBroadcastInvalidation(): void {
 			}),
 			onStudioImportFinished(() => {
 				void queryClient.invalidateQueries({ queryKey: ideasKeys.all });
+				// the job wrote studio_import_last_run — refresh the wizard line
+				void queryClient.invalidateQueries({ queryKey: settingsKeys.all });
 			}),
 			onThumbnailsChanged((payload) => {
 				void queryClient.invalidateQueries({

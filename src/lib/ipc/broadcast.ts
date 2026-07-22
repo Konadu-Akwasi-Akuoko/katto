@@ -6,6 +6,7 @@ import type {
 	DownloadNeedsProject,
 	DriveStatusChanged,
 	SessionStateChanged,
+	StudioImportFailed,
 	StudioImportFinished,
 	ThumbnailsChanged,
 	VfxRenderLanded,
@@ -20,6 +21,7 @@ export type {
 	DownloadNeedsProject,
 	DriveStatusChanged,
 	SessionStateChanged,
+	StudioImportFailed,
 	StudioImportFinished,
 	ThumbnailsChanged,
 	VfxRenderLanded,
@@ -107,6 +109,11 @@ export const onDownloadFailed = (
 	events.downloadFailed.listen((event) => callback(event.payload));
 
 /** The studio.db import job finished — carries the final report. */
+export const onStudioImportFailed = (
+	callback: (payload: StudioImportFailed) => void,
+): Promise<Unlisten> =>
+	events.studioImportFailed.listen((event) => callback(event.payload));
+
 export const onStudioImportFinished = (
 	callback: (payload: StudioImportFinished) => void,
 ): Promise<Unlisten> =>

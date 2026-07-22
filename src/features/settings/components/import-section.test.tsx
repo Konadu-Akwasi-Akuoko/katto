@@ -8,7 +8,12 @@ import { ImportSection } from "./import-section";
 
 const DEFAULT_PATH = "~/Projects/WebDev/hyper-frames/tools/studio/studio.db";
 
-function renderSection(options: { failDryRun?: boolean } = {}) {
+function renderSection(
+	options: {
+		failDryRun?: boolean;
+		report?: { imported: number; updated: number; skipped: number };
+	} = {},
+) {
 	const calls = vi.fn();
 	mockIPC((cmd, args) => {
 		calls(cmd, args);
@@ -27,6 +32,7 @@ function renderSection(options: { failDryRun?: boolean } = {}) {
 						imported: 12,
 						updated: 3,
 						skipped: 40,
+						...options.report,
 						warnings: ['skipped c3: unknown status "weird"'],
 					},
 				};
@@ -65,7 +71,7 @@ describe("ImportSection", () => {
 			screen.getByText('skipped c3: unknown status "weird"'),
 		).toBeInTheDocument();
 		const importButton = screen.getByRole("button", {
-			name: "Import 12 ideas",
+			name: "Import 15 ideas",
 		});
 		expect(importButton).toBeEnabled();
 
@@ -84,5 +90,24 @@ describe("ImportSection", () => {
 		expect(
 			await screen.findByText("couldn't read studio.db: not a database"),
 		).toBeInTheDocument();
+	});
+
+	it("an updates-only preview still enables the import", async () => {
+		renderSection({ report: { imported: 0, updated: 3, skipped: 40 } });
+		await userEvent.click(screen.getByRole("button", { name: "Dry run" }));
+		expect(
+			await screen.findByRole("button", { name: "Import 3 ideas" }),
+		).toBeEnabled();
+	});
+
+	it("editing the path clears a stale preview", async () => {
+		renderSection();
+		await userEvent.click(screen.getByRole("button", { name: "Dry run" }));
+		await screen.findByText("12");
+		await userEvent.type(
+			screen.getByRole("textbox", { name: "studio.db path" }),
+			"x",
+		);
+		expect(screen.queryByText("12")).not.toBeInTheDocument();
 	});
 });
