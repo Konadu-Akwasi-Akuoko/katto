@@ -72,6 +72,40 @@ pub struct VfxRenderLanded {
     pub file: String,
 }
 
+/// Broadcast after any tab/history mutation in the browser host; the browser
+/// surface refetches its `browser_state` query.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct BrowserStateChanged;
+
+/// Broadcast when a download finished but no project could be resolved to
+/// file into; the browser surface opens the pick-a-project sheet.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct DownloadNeedsProject {
+    pub download_id: String,
+    pub filename: String,
+}
+
+/// Broadcast when a download filed into a project's assets folder.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct DownloadFiled {
+    pub project: String,
+    pub filename: String,
+    pub dest_rel: String,
+}
+
+/// Broadcast when interception had a blind spot (blob:/data: downloads) and
+/// the file went to ~/Downloads; the frontend shows a persistent notice.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct DownloadFallback {
+    pub filename: String,
+}
+
+/// Broadcast when a download errored before filing.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct DownloadFailed {
+    pub filename: String,
+}
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -136,6 +170,46 @@ pub fn vfx_render_landed(app: &AppHandle, slug: &str, effect: &str, file: &str) 
         slug: slug.to_string(),
         effect: effect.to_string(),
         file: file.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn browser_state_changed(app: &AppHandle) {
+    let _ = BrowserStateChanged.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn download_needs_project(app: &AppHandle, download_id: &str, filename: &str) {
+    let _ = DownloadNeedsProject {
+        download_id: download_id.to_string(),
+        filename: filename.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn download_filed(app: &AppHandle, project: &str, filename: &str, dest_rel: &str) {
+    let _ = DownloadFiled {
+        project: project.to_string(),
+        filename: filename.to_string(),
+        dest_rel: dest_rel.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn download_fallback(app: &AppHandle, filename: &str) {
+    let _ = DownloadFallback {
+        filename: filename.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn download_failed(app: &AppHandle, filename: &str) {
+    let _ = DownloadFailed {
+        filename: filename.to_string(),
     }
     .emit(app);
 }

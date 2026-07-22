@@ -1,3 +1,4 @@
+pub mod download;
 pub mod hub;
 pub mod pipeline;
 
