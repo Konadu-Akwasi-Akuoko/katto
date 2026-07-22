@@ -15,5 +15,9 @@ export const sleepToTray = (): Promise<null> => unwrap(commands.sleepToTray());
 /** Quit katto completely. */
 export const quitApp = (): Promise<null> => unwrap(commands.quitApp());
 
+/** Open an http(s) link in the default browser via the opener plugin. */
+export const openExternalUrl = (url: string): Promise<null> =>
+	unwrap(commands.openExternalUrl(url));
+
 /** TanStack Query key for the OS autostart state. */
 export const autostartKeys = { all: ["autostart"] as const };

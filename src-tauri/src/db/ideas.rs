@@ -102,14 +102,16 @@ pub fn update(
     title: Option<&str>,
     kind: Option<&str>,
     notes: Option<&str>,
+    kind_source: Option<&str>,
 ) -> Result<()> {
     conn.execute(
         "UPDATE ideas SET
            title = COALESCE(?2, title),
            kind  = COALESCE(?3, kind),
-           notes = COALESCE(?4, notes)
+           notes = COALESCE(?4, notes),
+           kind_source = COALESCE(?5, kind_source)
          WHERE id = ?1",
-        params![id, title, kind, notes],
+        params![id, title, kind, notes, kind_source],
     )?;
     Ok(())
 }
@@ -222,11 +224,12 @@ mod tests {
     fn update_patches_only_supplied_fields() {
         let conn = test_db();
         create(&conn, &sample("i1", "2026-07-09T00:00:00Z")).unwrap();
-        update(&conn, "i1", Some("Renamed"), None, Some("a note")).unwrap();
+        update(&conn, "i1", Some("Renamed"), None, Some("a note"), None).unwrap();
         let got = get(&conn, "i1").unwrap().unwrap();
         assert_eq!(got.title, "Renamed");
         assert_eq!(got.kind, "unset");
         assert_eq!(got.notes.as_deref(), Some("a note"));
+        assert_eq!(got.kind_source, None);
     }
 
     #[test]

@@ -271,6 +271,12 @@ export const commands = {
 	sleepToTray: () => typedError<null, Error>(__TAURI_INVOKE("sleep_to_tray")),
 	/**  Exit katto completely (same exit path as the tray's Quit item). */
 	quitApp: () => typedError<null, Error>(__TAURI_INVOKE("quit_app")),
+	/**
+	 *  Open a web link in the default browser. Only http(s) URLs are accepted —
+	 *  idea `source_url` values come from external tools, and anything else
+	 *  (`file:`, `javascript:`, custom schemes) must not reach the OS opener.
+	 */
+	openExternalUrl: (url: string) => typedError<null, Error>(__TAURI_INVOKE("open_external_url", { url })),
 };
 
 /** Events */
@@ -679,11 +685,16 @@ export type IdeaCreate = {
 	notes: string | null,
 };
 
-/**  A partial edit of an idea; a `None` field leaves that column unchanged. */
+/**
+ *  A partial edit of an idea; a `None` field leaves that column unchanged.
+ *  `kind_source` flips to `"human"` when the owner changes or confirms a kind
+ *  the curation run suggested.
+ */
 export type IdeaPatch = {
 	title: string | null,
 	kind: string | null,
 	notes: string | null,
+	kind_source: string | null,
 };
 
 /**

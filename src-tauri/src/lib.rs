@@ -93,6 +93,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::shell::get_autostart,
             commands::shell::sleep_to_tray,
             commands::shell::quit_app,
+            commands::shell::open_external_url,
         ])
         .events(collect_events![
             broadcast::EventsAppended,

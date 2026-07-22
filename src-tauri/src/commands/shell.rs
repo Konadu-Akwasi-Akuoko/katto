@@ -1,5 +1,6 @@
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
+use tauri_plugin_opener::OpenerExt;
 
 use crate::db::events;
 use crate::error::{Error, Result};
@@ -72,4 +73,44 @@ pub async fn sleep_to_tray(app: AppHandle) -> Result<()> {
 pub async fn quit_app(app: AppHandle) -> Result<()> {
     app.exit(0);
     Ok(())
+}
+
+/// Open a web link in the default browser. Only http(s) URLs are accepted —
+/// idea `source_url` values come from external tools, and anything else
+/// (`file:`, `javascript:`, custom schemes) must not reach the OS opener.
+#[tauri::command]
+#[specta::specta]
+pub async fn open_external_url(app: AppHandle, url: String) -> Result<()> {
+    validate_external_url(&url)?;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| Error::Io(e.to_string()))
+}
+
+/// The http(s)-only guard for [`open_external_url`], factored out for testing.
+fn validate_external_url(url: &str) -> Result<()> {
+    if url.starts_with("https://") || url.starts_with("http://") {
+        Ok(())
+    } else {
+        Err(Error::Io(format!("refusing to open non-http url: {url}")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_external_url;
+
+    #[test]
+    fn validate_external_url_accepts_http_and_https() {
+        assert!(validate_external_url("https://news.ycombinator.com/item?id=1").is_ok());
+        assert!(validate_external_url("http://example.com").is_ok());
+    }
+
+    #[test]
+    fn validate_external_url_rejects_other_schemes() {
+        assert!(validate_external_url("file:///etc/passwd").is_err());
+        assert!(validate_external_url("javascript:alert(1)").is_err());
+        assert!(validate_external_url("HTTPS://cased.example").is_err());
+        assert!(validate_external_url("not a url").is_err());
+    }
 }

@@ -24,11 +24,14 @@ pub struct IdeaCreate {
 }
 
 /// A partial edit of an idea; a `None` field leaves that column unchanged.
+/// `kind_source` flips to `"human"` when the owner changes or confirms a kind
+/// the curation run suggested.
 #[derive(Debug, Deserialize, specta::Type)]
 pub struct IdeaPatch {
     pub title: Option<String>,
     pub kind: Option<String>,
     pub notes: Option<String>,
+    pub kind_source: Option<String>,
 }
 
 /// The slug of the project an idea was promoted into.
@@ -197,6 +200,7 @@ fn update_idea_inner(conn: &Connection, id: &str, patch: IdeaPatch) -> Result<Id
         patch.title.as_deref(),
         patch.kind.as_deref(),
         patch.notes.as_deref(),
+        patch.kind_source.as_deref(),
     )?;
     db::ideas::get(conn, id)?.ok_or_else(|| Error::Io(format!("no such idea: {id}")))
 }
@@ -407,11 +411,40 @@ mod tests {
                 title: Some("Renamed".to_string()),
                 kind: Some("long".to_string()),
                 notes: None,
+                kind_source: None,
             },
         )
         .unwrap();
         assert_eq!(patched.title, "Renamed");
         assert_eq!(patched.kind, "long");
+    }
+
+    #[test]
+    fn update_idea_inner_flips_kind_source_to_human() {
+        let conn = test_db();
+        let idea = seed_backlog(&conn, "Curated one");
+        conn.execute(
+            "UPDATE ideas SET kind_source = 'ai', kind_why = 'past long-form wins' WHERE id = ?1",
+            [&idea.id],
+        )
+        .unwrap();
+
+        let patched = update_idea_inner(
+            &conn,
+            &idea.id,
+            IdeaPatch {
+                title: None,
+                kind: Some("long".to_string()),
+                notes: None,
+                kind_source: Some("human".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(patched.kind, "long");
+        assert_eq!(patched.kind_source.as_deref(), Some("human"));
+        // kind_why is provenance of the AI suggestion; it survives the flip.
+        assert_eq!(patched.kind_why.as_deref(), Some("past long-form wins"));
     }
 
     #[test]

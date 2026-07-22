@@ -23,6 +23,23 @@ function manualIdea(
 	};
 }
 
+/** A curation-run idea carrying the full provenance column set. */
+export const curatedFixture: Idea[] = [
+	manualIdea({
+		id: "idea-ai",
+		title: "SSD endurance myths",
+		type: "curated",
+		kind: "long",
+		kind_source: "ai",
+		kind_why: "Benchmark-heavy storage topics have run long-form",
+		rationale: "Three strong QLC endurance signals in one week",
+		evidence_json: '{"lean":"strong"}',
+		source: "hn",
+		source_url: "https://news.ycombinator.com/item?id=1",
+		first_seen: "2026-07-22T02:00:00.000Z",
+	}),
+];
+
 /** Newest-first backlog page for tests; spread-override per scenario. */
 export const backlogFixture: Idea[] = [
 	manualIdea({
