@@ -34,6 +34,10 @@ pub struct RescueClip {
     pub duration: Rational,
     /// Offset on the PARENT's local timeline (origin = the parent's `start`).
     pub offset: Rational,
+    /// Connected-clip lane, always negative (below the spine). Rescues sharing
+    /// a parent stack on distinct lanes — FCP rejects overlapping items in one
+    /// lane of one parent.
+    pub lane: i32,
 }
 
 /// One kept segment on the primary spine, carrying its anchored rescue clips.
@@ -205,9 +209,10 @@ fn write_spine_clip<W: Write>(
             let offset = time_attr(rescue.offset);
             let start = time_attr(rescue.source_start);
             let duration = time_attr(rescue.duration);
+            let lane = rescue.lane.to_string();
             w.create_element("asset-clip")
                 .with_attribute(("ref", doc.asset_id.as_str()))
-                .with_attribute(("lane", "-1"))
+                .with_attribute(("lane", lane.as_str()))
                 .with_attribute(("offset", offset.as_str()))
                 .with_attribute(("name", rescue.name.as_str()))
                 .with_attribute(("start", start.as_str()))
@@ -257,6 +262,7 @@ mod tests {
                     source_start: Rational::new(100, 25),
                     duration: Rational::new(25, 25),
                     offset: Rational::new(100, 25),
+                    lane: -1,
                 }],
             }],
         }

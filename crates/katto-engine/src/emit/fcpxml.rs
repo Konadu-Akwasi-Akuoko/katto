@@ -132,11 +132,15 @@ pub fn build_document(bundle: &Bundle, project_name: &str) -> Result<FcpxmlDoc> 
                     .source_start
                     .checked_add(parent.duration)
                     .ok_or_else(|| Error::Bundle("rescue offset overflow".into()))?;
+                let lane = -(i32::try_from(parent.rescues.len())
+                    .map_err(|_| Error::Bundle("too many rescues on one clip".into()))?
+                    + 1);
                 parent.rescues.push(RescueClip {
                     name,
                     source_start: start,
                     duration: rescue_duration,
                     offset,
+                    lane,
                 });
             }
             None => {
@@ -145,11 +149,15 @@ pub fn build_document(bundle: &Bundle, project_name: &str) -> Result<FcpxmlDoc> 
                     .source_start
                     .checked_sub(rescue_duration)
                     .ok_or_else(|| Error::Bundle("rescue offset overflow".into()))?;
+                let lane = -(i32::try_from(first.rescues.len())
+                    .map_err(|_| Error::Bundle("too many rescues on one clip".into()))?
+                    + 1);
                 first.rescues.push(RescueClip {
                     name,
                     source_start: start,
                     duration: rescue_duration,
                     offset,
+                    lane,
                 });
             }
         }
@@ -319,7 +327,24 @@ mod tests {
         let b = bundle_25fps(&[(0.0, 1.0), (5.0, 6.0)]); // includes a t=0 cut
         let xml = emit_fcpxml(&b, "demo-v1").unwrap();
         assert_eq!(xml.matches(r#"enabled="0""#).count(), 2); // one rescue per removed span
+        // Both rescues anchor to the same parent: they must sit on distinct
+        // lanes (FCP rejects overlapping items in one lane of one parent).
+        assert!(xml.contains(r#"lane="-1""#));
+        assert!(xml.contains(r#"lane="-2""#));
         insta::assert_snapshot!("fcpxml_rescue", xml);
+    }
+
+    #[test]
+    fn rescues_sharing_a_parent_stack_on_distinct_lanes() {
+        // A sub-frame sliver between two cuts is dropped, so both removed
+        // spans anchor to the surviving keep — lanes must differ.
+        let b = bundle_25fps(&[(1.0, 2.0), (2.02, 5.0)]);
+        let doc = build_document(&b, "demo-v1").unwrap();
+        let clip = doc.clips.iter().find(|c| c.rescues.len() > 1).unwrap();
+        let mut lanes: Vec<i32> = clip.rescues.iter().map(|r| r.lane).collect();
+        lanes.sort_unstable();
+        lanes.dedup();
+        assert_eq!(lanes.len(), clip.rescues.len());
     }
 
     #[test]

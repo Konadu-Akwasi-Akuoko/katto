@@ -17,7 +17,7 @@ expression: xml
         <spine>
           <asset-clip ref="r2" offset="0s" name="keep 1" start="1s" duration="4s" audioRole="dialogue">
             <asset-clip ref="r2" lane="-1" offset="0s" name="removed 1" start="0s" duration="1s" enabled="0" audioRole="dialogue"/>
-            <asset-clip ref="r2" lane="-1" offset="5s" name="removed 2" start="5s" duration="1s" enabled="0" audioRole="dialogue"/>
+            <asset-clip ref="r2" lane="-2" offset="5s" name="removed 2" start="5s" duration="1s" enabled="0" audioRole="dialogue"/>
           </asset-clip>
           <asset-clip ref="r2" offset="4s" name="keep 2" start="6s" duration="4s" audioRole="dialogue"/>
         </spine>
