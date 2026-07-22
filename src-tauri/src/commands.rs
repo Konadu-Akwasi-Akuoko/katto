@@ -8,6 +8,7 @@ pub mod jobs;
 pub mod onboarding;
 pub mod pipeline;
 pub mod projects;
+pub mod resolve;
 pub mod schedule;
 pub mod scheduler;
 pub mod sessions;

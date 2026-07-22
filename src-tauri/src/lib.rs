@@ -14,6 +14,7 @@ pub mod keychain;
 pub mod notify;
 pub mod paths;
 pub mod projects;
+pub mod resolve;
 pub mod scheduler;
 pub mod sessions;
 mod state;
@@ -110,6 +111,8 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::thumbnails::list_latest_thumbnails,
             commands::thumbnails::watch_thumbnails,
             commands::thumbnails::unwatch_thumbnails,
+            commands::resolve::resolve_available,
+            commands::resolve::open_in_resolve,
             commands::shell::set_autostart,
             commands::shell::get_autostart,
             commands::shell::sleep_to_tray,

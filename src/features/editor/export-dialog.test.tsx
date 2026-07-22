@@ -9,10 +9,12 @@ const noop = () => {};
 function mockCommands(
 	preview: ExportPreview,
 	result?: ExportResult,
+	resolveAvailable = false,
 ): ReturnType<typeof vi.fn> {
 	const exportSpy = vi.fn();
 	mockIPC((cmd, args) => {
 		if (cmd === "preview_export") return preview;
+		if (cmd === "resolve_available") return resolveAvailable;
 		if (cmd === "export_timeline") {
 			const a = args as {
 				bundlePath: string;
@@ -75,6 +77,35 @@ describe("ExportDialog", () => {
 			await screen.findByRole("button", { name: "Open in Final Cut" }),
 		).toBeInTheDocument();
 		expect(screen.getByText("/t/demo-v1.srt")).toBeInTheDocument();
+	});
+
+	it("offers Open in Resolve only when Resolve is installed", async () => {
+		mockCommands(
+			{ slug: "demo", version: 1, default_nle: "resolve" },
+			doneResult,
+			true,
+		);
+		render(<ExportDialog bundlePath="/b" onClose={noop} onExported={noop} />);
+		fireEvent.click(await screen.findByRole("button", { name: "Export" }));
+		expect(
+			await screen.findByRole("button", { name: "Open in Resolve" }),
+		).toBeInTheDocument();
+	});
+
+	it("falls back to Reveal in Finder when Resolve is absent", async () => {
+		mockCommands(
+			{ slug: "demo", version: 1, default_nle: "resolve" },
+			doneResult,
+			false,
+		);
+		render(<ExportDialog bundlePath="/b" onClose={noop} onExported={noop} />);
+		fireEvent.click(await screen.findByRole("button", { name: "Export" }));
+		expect(
+			await screen.findByRole("button", { name: "Reveal in Finder" }),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "Open in Resolve" }),
+		).not.toBeInTheDocument();
 	});
 
 	it("renders engine invariant errors inline and stays open", async () => {

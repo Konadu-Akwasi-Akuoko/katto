@@ -103,6 +103,18 @@ pub enum Error {
     #[error("no parked download with id {0}")]
     DownloadMissing(String),
 
+    #[error("{0}")]
+    ResolveNotInstalled(String),
+
+    #[error("{0}")]
+    ResolveNotRunning(String),
+
+    #[error("{0}")]
+    ResolveScriptingUnavailable(String),
+
+    #[error("{0}")]
+    ResolveFailed(String),
+
     /// The one structured variant: the relocation surface needs the fields
     /// (name a file, show its duration), not a flattened string. On the wire
     /// `message` becomes an object for this kind only; the IPC wrapper
