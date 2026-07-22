@@ -106,6 +106,7 @@ fn bootstrap_state(app: &tauri::App) -> Result<state::AppState, Box<dyn std::err
     Ok(state::AppState {
         db,
         jobs,
+        sessions: sessions::pool::SessionPool::new(),
         active_exports: std::sync::Arc::default(),
     })
 }
@@ -210,6 +211,9 @@ pub fn run() {
             setup_deep_links(handle);
             tauri::async_runtime::spawn(drive::watch(handle.clone()));
             volumes::start_watcher(handle.clone());
+            app.state::<state::AppState>()
+                .sessions
+                .start(handle.clone())?;
             Ok(())
         })
         .on_window_event(|window, event| {

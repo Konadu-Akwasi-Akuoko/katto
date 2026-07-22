@@ -84,4 +84,4 @@ trash = "5.2.6"
 [dev-dependencies]
 rstest = "0.26.1"
 tempfile = "3.27.0"
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "macros"] }

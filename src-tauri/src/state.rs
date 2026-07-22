@@ -5,12 +5,14 @@ use std::sync::{Arc, Mutex};
 use crate::db::DbHandle;
 use crate::ingest::offer::CardOffer;
 use crate::jobs::JobRuntime;
+use crate::sessions::pool::SessionPool;
 
 /// Application-wide managed state, injected into every command via
 /// `State<'_, AppState>`.
 pub struct AppState {
     pub db: DbHandle,
     pub jobs: JobRuntime,
+    pub sessions: SessionPool,
     /// Bundle roots with a timeline export in flight (exports are short
     /// direct commands with no jobs row; this stops a double-fire).
     pub active_exports: Arc<Mutex<HashSet<PathBuf>>>,
