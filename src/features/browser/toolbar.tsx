@@ -60,33 +60,33 @@ export function Toolbar({
 			>
 				<ArrowRightIcon className="size-4" />
 			</button>
-			<div className="relative min-w-0 flex-1">
-				<input
-					type="text"
-					aria-label="Address"
-					value={draft}
-					onChange={(e) => {
-						setDraft(e.target.value);
-						setHint(false);
-					}}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") submit();
-					}}
-					spellCheck={false}
-					autoCorrect="off"
-					autoCapitalize="off"
-					className={cn(
-						"h-7 w-full cursor-text rounded-md border bg-surface px-2 font-mono text-xs text-fg",
-						"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2",
-						hint && "border-warn",
-					)}
-				/>
-				{hint && (
-					<span className="absolute top-full left-1 mt-0.5 text-[11px] text-warn">
-						Enter a full address
-					</span>
+			<input
+				type="text"
+				aria-label="Address"
+				value={draft}
+				onChange={(e) => {
+					setDraft(e.target.value);
+					setHint(false);
+				}}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") submit();
+				}}
+				spellCheck={false}
+				autoCorrect="off"
+				autoCapitalize="off"
+				className={cn(
+					"h-7 min-w-0 flex-1 cursor-text rounded-md border bg-surface px-2 font-mono text-xs text-fg",
+					"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2",
+					hint && "border-warn",
 				)}
-			</div>
+			/>
+			{/* inline, never below the row: anything hanging under the toolbar
+			    would be occluded by the native webview */}
+			{hint && (
+				<span className="shrink-0 text-[11px] text-warn">
+					Enter a full address
+				</span>
+			)}
 			{children}
 		</div>
 	);

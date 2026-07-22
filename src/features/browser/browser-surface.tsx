@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { useSonner } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	browserCloseTab,
@@ -12,6 +13,8 @@ import {
 	browserSetVisible,
 	browserState,
 } from "@/lib/ipc/browser";
+import { useDownloadsStore } from "@/stores/downloads";
+import { useUiStore } from "@/stores/ui";
 import { DownloadsPopover } from "./downloads-popover";
 import { NeedsProjectSheet } from "./needs-project-sheet";
 import { TabStrip } from "./tab-strip";
@@ -26,7 +29,24 @@ export function BrowserSurface() {
 	const contentRef = useRef<HTMLDivElement>(null);
 	const openedDefault = useRef(false);
 	const [openFailed, setOpenFailed] = useState(false);
+	const [popoverOpen, setPopoverOpen] = useState(false);
 	const queryClient = useQueryClient();
+
+	// the native child webview paints over the DOM, so every overlay that
+	// could cover the page must hide it: palette, dock, downloads popover,
+	// needs-project sheet, active toasts
+	const paletteOpen = useUiStore((s) => s.paletteOpen);
+	const paletteDialog = useUiStore((s) => s.paletteDialog);
+	const dockOpen = useUiStore((s) => s.dockOpen);
+	const needsProject = useDownloadsStore((s) => s.needsProject);
+	const { toasts } = useSonner();
+	const overlayOpen =
+		paletteOpen ||
+		paletteDialog !== null ||
+		dockOpen ||
+		needsProject !== null ||
+		popoverOpen ||
+		toasts.length > 0;
 
 	const state = useQuery({
 		queryKey: browserKeys.state,
@@ -62,9 +82,12 @@ export function BrowserSurface() {
 		onSuccess: invalidate,
 	});
 
-	// surface visibility drives webview visibility
+	// surface visibility drives webview visibility; any open overlay hides
+	// the page so DOM chrome actually paints above it
 	useEffect(() => {
-		void browserSetVisible(true);
+		void browserSetVisible(!overlayOpen);
+	}, [overlayOpen]);
+	useEffect(() => {
 		return () => {
 			void browserSetVisible(false);
 		};
@@ -126,7 +149,7 @@ export function BrowserSurface() {
 					if (active !== null) go.mutate({ id: active.id, delta });
 				}}
 			>
-				<DownloadsPopover />
+				<DownloadsPopover open={popoverOpen} onOpenChange={setPopoverOpen} />
 			</Toolbar>
 			<div ref={contentRef} className="min-h-0 flex-1">
 				{showEmpty && (

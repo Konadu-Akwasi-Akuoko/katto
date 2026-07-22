@@ -1,8 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BrowserState } from "@/lib/ipc/browser";
+import { useDownloadsStore } from "@/stores/downloads";
+import { useUiStore } from "@/stores/ui";
 import { BrowserSurface } from "./browser-surface";
 
 function makeState(): BrowserState {
@@ -48,7 +56,20 @@ function renderSurface(state: BrowserState) {
 	return { calls };
 }
 
+function lastVisibleCall(calls: ReturnType<typeof vi.fn>): boolean | undefined {
+	const visible = calls.mock.calls.filter(
+		([cmd]) => cmd === "browser_set_visible",
+	);
+	const last = visible[visible.length - 1];
+	return (last?.[1] as { visible: boolean } | undefined)?.visible;
+}
+
 describe("BrowserSurface", () => {
+	afterEach(() => {
+		useUiStore.setState({ dockOpen: false, paletteOpen: false });
+		useDownloadsStore.setState({ rows: [], needsProject: null });
+	});
+
 	it("renders the tab strip and marks the active tab", async () => {
 		renderSurface(makeState());
 		const tabs = await screen.findAllByRole("tab");
@@ -76,5 +97,26 @@ describe("BrowserSurface", () => {
 		await waitFor(() => {
 			expect(calls).toHaveBeenCalledWith("browser_open_tab", { url: null });
 		});
+	});
+
+	it("hides the webview while the dock overlay is open, restores on close", async () => {
+		const { calls } = renderSurface(makeState());
+		await screen.findAllByRole("tab");
+		await waitFor(() => expect(lastVisibleCall(calls)).toBe(true));
+		act(() => useUiStore.setState({ dockOpen: true }));
+		await waitFor(() => expect(lastVisibleCall(calls)).toBe(false));
+		act(() => useUiStore.setState({ dockOpen: false }));
+		await waitFor(() => expect(lastVisibleCall(calls)).toBe(true));
+	});
+
+	it("hides the webview while the needs-project sheet is open", async () => {
+		const { calls } = renderSurface(makeState());
+		await screen.findAllByRole("tab");
+		act(() =>
+			useDownloadsStore
+				.getState()
+				.setNeedsProject({ id: "d1", filename: "dust.zip" }),
+		);
+		await waitFor(() => expect(lastVisibleCall(calls)).toBe(false));
 	});
 });

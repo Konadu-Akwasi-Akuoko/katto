@@ -84,7 +84,13 @@ function DownloadRowItem({ row }: { row: DownloadRow }) {
  * it filed, right-aligned actions. The header names the filing target and
  * offers the switcher.
  */
-export function DownloadsPopover() {
+export function DownloadsPopover({
+	open,
+	onOpenChange,
+}: {
+	open?: boolean;
+	onOpenChange?: (open: boolean) => void;
+}) {
 	const rows = useDownloadsStore((s) => s.rows);
 	const queryClient = useQueryClient();
 	const target = useQuery({
@@ -102,7 +108,7 @@ export function DownloadsPopover() {
 	});
 
 	return (
-		<Popover>
+		<Popover open={open} onOpenChange={onOpenChange}>
 			<PopoverTrigger
 				aria-label="Downloads"
 				className="relative flex size-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
