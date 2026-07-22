@@ -23,6 +23,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
         .commands(collect_commands![
             commands::settings::get_settings,
             commands::settings::set_settings,
+            commands::settings::set_capture_shortcut,
             commands::drive::get_drive_status,
             commands::events::list_events,
             commands::jobs::list_jobs,

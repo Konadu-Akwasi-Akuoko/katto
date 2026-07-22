@@ -63,6 +63,10 @@ objc2-user-notifications = "0.3"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 block2 = "0.6"
+# NSWindow.collectionBehavior for the capture window's fullscreen-Space fix
+# (tauri#11488). 0.3.2 is already resolved transitively via tao; default
+# features off because they enable every AppKit header.
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSResponder"] }
 # Move-to-Trash for project Delete. There is no Tauri 2 trash API (tauri#5680);
 # tauri-plugin-opener only reveals. Default DeleteMethod::Finder is kept so the
 # Trash item keeps its "Put Back" — "reversible" per the spec means restored to

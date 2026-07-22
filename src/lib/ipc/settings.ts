@@ -12,6 +12,10 @@ export const getSettings = (): Promise<Settings> =>
 export const setSettings = (patch: SettingsPatch): Promise<Settings> =>
 	unwrap(commands.setSettings(patch));
 
+/** Validate, re-register, and persist the quick-capture shortcut. */
+export const setCaptureShortcut = (accel: string): Promise<Settings> =>
+	unwrap(commands.setCaptureShortcut(accel));
+
 /** TanStack Query key for the settings object. */
 export const settingsKeys = { all: ["settings"] as const };
 

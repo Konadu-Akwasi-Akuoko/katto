@@ -7,5 +7,6 @@ export const settingsFixture: Settings = {
 	idle_reap_minutes: 10,
 	onboarding_complete: false,
 	claude_path: null,
+	capture_shortcut: "alt+cmd+k",
 	keys_present: { elevenlabs: false, anthropic: false },
 };
