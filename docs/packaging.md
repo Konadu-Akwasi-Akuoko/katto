@@ -11,10 +11,11 @@ just dmg
 ```
 
 Runs `bun run tauri build --bundles app,dmg` (release profile + Vite production build;
-expect several minutes cold). Artifacts:
+expect several minutes cold). Artifacts land in the workspace-root
+`target/` (the shared cargo workspace target dir):
 
-- dmg: `src-tauri/target/release/bundle/dmg/katto_<version>_aarch64.dmg`
-- app: `src-tauri/target/release/bundle/macos/katto.app`
+- dmg: `target/release/bundle/dmg/katto_<version>_aarch64.dmg`
+- app: `target/release/bundle/macos/katto.app`
 
 `<version>` comes from `src-tauri/tauri.conf.json` (`version`). The bundle carries
 `resources/thumbnail-templates/` (the guide-lined PSD scaffolds) via
