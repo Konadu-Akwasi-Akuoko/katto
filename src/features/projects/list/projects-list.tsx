@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { StatusChip } from "@/components/ui/status-chip";
 import { formatDate } from "@/features/projects/model/format";
 import type { Project } from "@/lib/ipc/projects";
 import { listProjects, projectsKeys } from "@/lib/ipc/projects";
+import { listLatestThumbnails, thumbKeys } from "@/lib/ipc/thumbnails";
 import { useUiStore } from "@/stores/ui";
 
 export function ProjectsList() {
@@ -11,6 +13,13 @@ export function ProjectsList() {
 		queryKey: projectsKeys.all,
 		queryFn: listProjects,
 	});
+	const { data: thumbs } = useQuery({
+		queryKey: thumbKeys.all,
+		queryFn: listLatestThumbnails,
+	});
+	const thumbBySlug = new Map(
+		(thumbs ?? []).map((thumb) => [thumb.slug, thumb.path]),
+	);
 
 	return (
 		<div className="flex flex-col gap-4 p-6">
@@ -29,6 +38,13 @@ export function ProjectsList() {
 								onClick={() => openDetail(project.slug)}
 								className="grain flex w-full items-center gap-3 rounded-lg border bg-surface px-3 py-2 text-left transition-colors hover:bg-surface-2"
 							>
+								{thumbBySlug.has(project.slug) && (
+									<img
+										src={convertFileSrc(thumbBySlug.get(project.slug) ?? "")}
+										alt=""
+										className="h-7 w-12 shrink-0 rounded-sm border object-cover"
+									/>
+								)}
 								<span className="min-w-0 flex-1 truncate text-sm text-fg">
 									{project.title}
 								</span>

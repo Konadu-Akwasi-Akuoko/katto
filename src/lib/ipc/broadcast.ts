@@ -6,6 +6,7 @@ import type {
 	DownloadNeedsProject,
 	DriveStatusChanged,
 	SessionStateChanged,
+	ThumbnailsChanged,
 	VfxRenderLanded,
 } from "@/lib/ipc/bindings.gen";
 import { events } from "@/lib/ipc/bindings.gen";
@@ -18,6 +19,7 @@ export type {
 	DownloadNeedsProject,
 	DriveStatusChanged,
 	SessionStateChanged,
+	ThumbnailsChanged,
 	VfxRenderLanded,
 };
 
@@ -101,6 +103,12 @@ export const onDownloadFailed = (
 	callback: (payload: DownloadFailed) => void,
 ): Promise<Unlisten> =>
 	events.downloadFailed.listen((event) => callback(event.payload));
+
+/** A PNG landed in the watched project's thumbnails/ — refetch previews. */
+export const onThumbnailsChanged = (
+	callback: (payload: ThumbnailsChanged) => void,
+): Promise<Unlisten> =>
+	events.thumbnailsChanged.listen((event) => callback(event.payload));
 
 /** A `katto://` deep link was opened — navigate to its route. */
 export const onDeepLinkOpened = (

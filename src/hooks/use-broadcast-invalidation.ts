@@ -11,6 +11,7 @@ import {
 	onScheduleChanged,
 	onSessionStateChanged,
 	onSessionsChanged,
+	onThumbnailsChanged,
 	onVfxRenderLanded,
 } from "@/lib/ipc/broadcast";
 import { browserKeys } from "@/lib/ipc/browser";
@@ -21,6 +22,7 @@ import { jobsKeys } from "@/lib/ipc/jobs";
 import { projectsKeys } from "@/lib/ipc/projects";
 import { scheduleKeys } from "@/lib/ipc/schedule";
 import { sessionsKeys } from "@/lib/ipc/sessions";
+import { thumbKeys } from "@/lib/ipc/thumbnails";
 import { vfxKeys } from "@/lib/ipc/vfx";
 
 /**
@@ -66,6 +68,12 @@ export function useBroadcastInvalidation(): void {
 			}),
 			onBrowserStateChanged(() => {
 				void queryClient.invalidateQueries({ queryKey: browserKeys.state });
+			}),
+			onThumbnailsChanged((payload) => {
+				void queryClient.invalidateQueries({
+					queryKey: thumbKeys.latest(payload.slug),
+				});
+				void queryClient.invalidateQueries({ queryKey: thumbKeys.all });
 			}),
 		];
 		return () => {
