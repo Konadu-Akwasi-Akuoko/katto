@@ -419,6 +419,33 @@ pub async fn relocate_source(
     .map_err(|e| Error::Io(e.to_string()))?
 }
 
+/// Native open-file picker for relocation, filtered to the missing file's
+/// extension. `None` when the user cancels (same pattern as
+/// `pick_studio_root`).
+#[tauri::command]
+#[specta::specta]
+pub async fn pick_relocation_file(
+    app: tauri::AppHandle,
+    filename: String,
+) -> Result<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    tauri::async_runtime::spawn_blocking(move || {
+        let ext = Path::new(&filename)
+            .extension()
+            .map(|e| e.to_string_lossy().into_owned());
+        let mut dialog = app.dialog().file();
+        if let Some(ext) = &ext {
+            dialog = dialog.add_filter(filename.clone(), &[ext]);
+        }
+        Ok(dialog
+            .blocking_pick_file()
+            .and_then(|p| p.into_path().ok())
+            .map(|p| p.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| Error::Io(e.to_string()))?
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn open_in_fcp(app: tauri::AppHandle, path: String) -> Result<bool> {

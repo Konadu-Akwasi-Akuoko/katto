@@ -48,6 +48,12 @@ export const commands = {
 	renderMp4: (bundlePath: string, out: string | null, onProgress: Channel<JobProgress>) => typedError<Job, Error>(__TAURI_INVOKE("render_mp4", { bundlePath, out, onProgress })),
 	generateThumbs: (bundlePath: string, onProgress: Channel<JobProgress>) => typedError<Job, Error>(__TAURI_INVOKE("generate_thumbs", { bundlePath, onProgress })),
 	relocateSource: (bundlePath: string, newPath: string) => typedError<null, Error>(__TAURI_INVOKE("relocate_source", { bundlePath, newPath })),
+	/**
+	 *  Native open-file picker for relocation, filtered to the missing file's
+	 *  extension. `None` when the user cancels (same pattern as
+	 *  `pick_studio_root`).
+	 */
+	pickRelocationFile: (filename: string) => typedError<string | null, Error>(__TAURI_INVOKE("pick_relocation_file", { filename })),
 	openInFcp: (path: string) => typedError<boolean, Error>(__TAURI_INVOKE("open_in_fcp", { path })),
 	revealTimeline: (path: string) => typedError<null, Error>(__TAURI_INVOKE("reveal_timeline", { path })),
 	/**

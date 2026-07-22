@@ -56,6 +56,10 @@ export const generateThumbs = (
 	return unwrap(commands.generateThumbs(bundlePath, channel));
 };
 
+/** Native picker for the relocation flow; null when cancelled. */
+export const pickRelocationFile = (filename: string): Promise<string | null> =>
+	unwrap(commands.pickRelocationFile(filename));
+
 /** Swap the manifest's source path after the same-file check passes. */
 export const relocateSource = (
 	bundlePath: string,

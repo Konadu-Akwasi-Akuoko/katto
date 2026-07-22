@@ -1,10 +1,12 @@
 import { ArrowLeftIcon, PauseIcon, PlayIcon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 
 import { Button } from "@/components/ui/button";
+import { ExportDialog } from "@/features/editor/export-dialog";
 import {
 	coalesceRanges,
 	effectiveCutRanges,
@@ -15,6 +17,7 @@ import { clampViewport } from "@/features/editor/model/timeline-geometry";
 import { buildTokenSpans } from "@/features/editor/model/tokens";
 import type { Range } from "@/features/editor/model/wire";
 import { fromWireEdits } from "@/features/editor/model/wire";
+import { RelocateDialog } from "@/features/editor/relocate-dialog";
 import { createAutosave } from "@/features/editor/store/autosave";
 import type { EditorStore } from "@/features/editor/store/editor-store";
 import {
@@ -70,6 +73,8 @@ function keptTimeOf(t: number, coalesced: Range[]): number {
  */
 export function EditorView({ bundlePath }: { bundlePath: string }) {
 	const closeCutEditor = useUiStore((s) => s.closeCutEditor);
+	const queryClient = useQueryClient();
+	const [relocating, setRelocating] = useState(false);
 
 	const bundle = useQuery({
 		queryKey: pipelineKeys.bundle(bundlePath),
@@ -127,8 +132,35 @@ export function EditorView({ bundlePath }: { bundlePath: string }) {
 				<p className="text-sm text-fg-muted">Opening bundle…</p>
 			)}
 			{bundle.isError && (
-				<p className="text-sm text-failed">{openErrorCopy(bundle.error)}</p>
+				<div className="flex flex-col items-start gap-2">
+					<p className="text-sm text-failed">{openErrorCopy(bundle.error)}</p>
+					{bundle.error instanceof IpcError && bundle.error.sourceMissing && (
+						<Button
+							variant="secondary"
+							size="sm"
+							className="cursor-default"
+							onClick={() => setRelocating(true)}
+						>
+							Locate the source…
+						</Button>
+					)}
+				</div>
 			)}
+			{relocating &&
+				bundle.error instanceof IpcError &&
+				bundle.error.sourceMissing && (
+					<RelocateDialog
+						bundlePath={bundlePath}
+						info={bundle.error.sourceMissing}
+						onClose={() => setRelocating(false)}
+						onRelocated={() => {
+							setRelocating(false);
+							void queryClient.invalidateQueries({
+								queryKey: pipelineKeys.bundle(bundlePath),
+							});
+						}}
+					/>
+				)}
 			{bundle.isSuccess &&
 				(bundle.data.cuts ? (
 					<EditingSurface bundlePath={bundlePath} data={bundle.data} />
@@ -279,6 +311,32 @@ function Editing({
 	);
 	const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
+	const [exportOpen, setExportOpen] = useState(false);
+	const [relocateInfo, setRelocateInfo] = useState<{
+		expected_path: string;
+		filename: string;
+		duration_secs: number;
+	} | null>(null);
+
+	// D21 close guard: while a save is pending/saving, hold the close, flush,
+	// then destroy (the Rust side keeps katto in the tray either way).
+	useEffect(() => {
+		const win = getCurrentWindow();
+		const unlisten = win.onCloseRequested(async (event) => {
+			const autosave = autosaveRef.current;
+			if (!autosave) return;
+			const s = autosave.state();
+			if (s === "pending" || s === "saving") {
+				event.preventDefault();
+				await autosave.flushNow().catch(() => {});
+				await win.destroy();
+			}
+		});
+		return () => {
+			void unlisten.then((u) => u());
+		};
+	}, []);
+
 	// Thumbnails: regenerate once when the strip probe misses.
 	const [thumbsVersion, setThumbsVersion] = useState(0);
 	const thumbsRequested = useRef(false);
@@ -397,6 +455,14 @@ function Editing({
 						Show original
 					</Button>
 					<div className="ml-auto flex items-center gap-2">
+						<Button
+							variant="secondary"
+							size="sm"
+							className="cursor-default"
+							onClick={() => setExportOpen(true)}
+						>
+							Export…
+						</Button>
 						<input
 							type="range"
 							aria-label="Timeline zoom"
@@ -413,6 +479,34 @@ function Editing({
 					</div>
 				</div>
 			</div>
+
+			{exportOpen && (
+				<ExportDialog
+					bundlePath={bundlePath}
+					flush={() => autosaveRef.current?.flushNow() ?? Promise.resolve()}
+					onClose={() => setExportOpen(false)}
+					onExported={() => {
+						void queryClient.invalidateQueries({ queryKey: ["events"] });
+					}}
+					onSourceMissing={(info) => {
+						setExportOpen(false);
+						setRelocateInfo(info);
+					}}
+				/>
+			)}
+			{relocateInfo !== null && (
+				<RelocateDialog
+					bundlePath={bundlePath}
+					info={relocateInfo}
+					onClose={() => setRelocateInfo(null)}
+					onRelocated={() => {
+						setRelocateInfo(null);
+						void queryClient.invalidateQueries({
+							queryKey: pipelineKeys.bundle(bundlePath),
+						});
+					}}
+				/>
+			)}
 		</div>
 	);
 }

@@ -43,6 +43,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::editor::render_mp4,
             commands::editor::generate_thumbs,
             commands::editor::relocate_source,
+            commands::editor::pick_relocation_file,
             commands::editor::open_in_fcp,
             commands::editor::reveal_timeline,
             commands::onboarding::pick_studio_root,
