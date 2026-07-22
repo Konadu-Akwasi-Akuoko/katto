@@ -1,0 +1,8 @@
+---
+source: crates/katto-cli/src/output.rs
+assertion_line: 103
+expression: "render_auth_status(&s, false)"
+---
+claude: /Users/x/.local/bin/claude (subscription auth)
+elevenlabs key: keychain
+anthropic key: missing
