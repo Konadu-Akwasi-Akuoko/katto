@@ -31,6 +31,12 @@ pub enum Error {
     /// A persisted cuts.json failed re-validation on load.
     #[error("cuts validation failed: {0}")]
     CutsInvalid(String),
+    /// Every keep-window was removed or sub-epsilon; nothing remains to encode.
+    #[error("whole duration removed: the cuts cover the entire source")]
+    WholeDurationRemoved,
+    /// MP4 render failed (ffmpeg stderr tail included).
+    #[error("render: {0}")]
+    Render(String),
     /// The manifest's source video is missing on open (Phase 5 adds relocation).
     #[error("source missing: expected {expected_path}", expected_path = .expected_path.display())]
     SourceMissing {
