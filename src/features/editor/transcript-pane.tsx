@@ -9,6 +9,7 @@ import {
 	groupParagraphs,
 } from "@/features/editor/model/tokens";
 import type { EditorDocument, Range } from "@/features/editor/model/wire";
+import { isEditableTarget } from "@/features/editor/transport";
 import type { Cuts, Transcript } from "@/lib/ipc/pipeline";
 
 const EMPTY_DOCUMENT: EditorDocument = {
@@ -23,16 +24,6 @@ function timecode(seconds: number): string {
 	const m = Math.floor(seconds / 60);
 	const s = seconds - m * 60;
 	return `${m}:${s.toFixed(1).padStart(4, "0")}`;
-}
-
-/** Keyboard shortcuts must not fire while typing in a field. */
-function isEditableTarget(target: EventTarget | null): boolean {
-	if (!(target instanceof HTMLElement)) return false;
-	return (
-		target instanceof HTMLInputElement ||
-		target instanceof HTMLTextAreaElement ||
-		target.isContentEditable
-	);
 }
 
 /** The current DOM selection projected onto token indices -> a time range. */
