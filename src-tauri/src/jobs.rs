@@ -1,4 +1,5 @@
 pub mod hub;
+pub mod pipeline;
 
 use std::sync::Arc;
 

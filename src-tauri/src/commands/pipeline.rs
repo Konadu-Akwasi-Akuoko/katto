@@ -1,22 +1,18 @@
-//! The cut-pipeline job (`plan_rough_cut`) plus bundle read commands. One job
-//! per run: import -> transcribe -> plan, streaming [`PipelineEvent`]s over
-//! the command's `Channel` while the jobs framework mirrors tray/dashboard
-//! state. Keys are resolved before the job spawns — no key, no job row.
+//! Thin command shells for the cut pipeline: `plan_rough_cut` validates paths
+//! and resolves keys (no key, no job row), then spawns the job future living
+//! in `jobs::pipeline`; the bundle read commands serve the review surface.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 
-use katto_engine::planner::subprocess::{PartialObserver, SubprocessClaudePlanner};
-use katto_engine::planner::{CutPlanner, Planner, http::HttpAnthropicPlanner};
 use katto_engine::schema::{Cut, Cuts, Edits, Transcript};
-use katto_engine::transcribe::{ELEVENLABS_BASE_URL, TranscribeConfig};
 
-use crate::db::{DbHandle, jobs as jobs_repo, settings as settings_repo};
+use crate::db::{jobs as jobs_repo, settings as settings_repo};
 use crate::error::{Error, Result};
+use crate::jobs::pipeline::{PipelineSpec, PlannerKind, run_pipeline_job};
 use crate::keychain::{self, KeyService};
 use crate::state::AppState;
 
@@ -41,8 +37,23 @@ pub enum PipelineEvent {
     CutsPartial { cuts_so_far: Vec<Cut> },
     /// The run finished; cuts.json is on disk.
     Done { bundle_path: String },
-    /// The run failed; the jobs framework records the terminal state.
-    Failed { error: String },
+    /// The run failed; the jobs framework records the terminal state. `kind`
+    /// tells the UI which owner action applies (re-enter key vs retry later).
+    Failed { error: String, kind: FailureKind },
+}
+
+/// Why a pipeline run failed, as UI copy needs to distinguish it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum FailureKind {
+    /// A backend rejected credentials — the fix is re-entering a key.
+    Auth,
+    /// Quota/rate limit — the fix is waiting and retrying.
+    Quota,
+    /// Planner output never validated, even after the correction turn.
+    InvalidOutput,
+    /// Everything else (transport, filesystem, ffmpeg).
+    Other,
 }
 
 /// One `.kruproj` row in the project's bundle list.
@@ -157,31 +168,6 @@ pub async fn list_footage(
         .map_err(|e| Error::Io(e.to_string()))?
 }
 
-/// Streams `CutsPartial` while the subprocess planner emits.
-struct ChannelObserver(Channel<PipelineEvent>);
-
-impl PartialObserver for ChannelObserver {
-    fn on_cuts(&self, cuts: &[Cut]) {
-        let _ = self.0.send(PipelineEvent::CutsPartial {
-            cuts_so_far: cuts.to_vec(),
-        });
-    }
-}
-
-/// Everything the job future needs, resolved before spawn.
-struct PipelineSpec {
-    project_slug: String,
-    footage_path: PathBuf,
-    audio_dir: PathBuf,
-    elevenlabs_key: String,
-    planner_kind: PlannerKind,
-}
-
-enum PlannerKind {
-    Subprocess { claude_path: PathBuf },
-    Http { api_key: String, model: String },
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn plan_rough_cut(
@@ -251,6 +237,19 @@ pub async fn plan_rough_cut(
     })
     .to_string();
 
+    // DB-backed one-run-per-bundle guard: an in-memory check would die with a
+    // webview reload, and two concurrent runs interleave the same .tmp paths.
+    let bundle_needle = bundle_path.to_string_lossy().into_owned();
+    let busy = state
+        .db
+        .call(move |conn| jobs_repo::active_with_payload(conn, "cut_pipeline", &bundle_needle))
+        .await?;
+    if busy {
+        return Err(Error::PipelineBusy(format!(
+            "a rough-cut run for {file_name} is already in progress"
+        )));
+    }
+
     let spec = PipelineSpec {
         project_slug: project_slug.clone(),
         footage_path: footage_canonical,
@@ -280,17 +279,7 @@ async fn resolve_planner(
         claude_setting
             .map(PathBuf::from)
             .filter(|p| p.exists())
-            .or_else(|| {
-                let out = std::process::Command::new("zsh")
-                    .args(["-lc", "which claude"])
-                    .output()
-                    .ok()?;
-                if !out.status.success() {
-                    return None;
-                }
-                let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                (!path.is_empty()).then(|| PathBuf::from(path))
-            })
+            .or_else(katto_engine::detect::detect_claude)
     })
     .await
     .map_err(|e| Error::Io(e.to_string()))?;
@@ -313,140 +302,41 @@ async fn resolve_planner(
     }
 }
 
-/// The job future: each stage streams a `PipelineEvent` and ticks the jobs
-/// framework's progress so the tray/dashboard mirror. Errors surface as a
-/// best-effort `Failed` event plus the returned message (the framework writes
-/// the terminal events row).
-async fn run_pipeline_job(
-    ctx: crate::jobs::JobContext,
-    db: DbHandle,
-    app: AppHandle,
-    spec: PipelineSpec,
-    on_event: Channel<PipelineEvent>,
-) -> std::result::Result<(), String> {
-    match run_pipeline_inner(&ctx, &db, &app, &spec, &on_event).await {
-        Ok(()) => Ok(()),
-        Err(message) => {
-            let _ = on_event.send(PipelineEvent::Failed {
-                error: message.clone(),
-            });
-            Err(message)
-        }
+/// A bundle path from the frontend must resolve inside the studio root —
+/// same containment stance as `validate_footage_path`.
+fn validate_bundle_path(studio_root: &Path, path: &Path) -> Result<PathBuf> {
+    let canonical_root = studio_root
+        .canonicalize()
+        .map_err(|e| Error::Io(format!("studio root {}: {e}", studio_root.display())))?;
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| Error::Io(format!("bundle {}: {e}", path.display())))?;
+    if !canonical.starts_with(&canonical_root) {
+        return Err(Error::IngestInvalid(format!(
+            "bundle {} is outside the studio root",
+            path.display()
+        )));
     }
-}
-
-async fn run_pipeline_inner(
-    ctx: &crate::jobs::JobContext,
-    db: &DbHandle,
-    app: &AppHandle,
-    spec: &PipelineSpec,
-    on_event: &Channel<PipelineEvent>,
-) -> std::result::Result<(), String> {
-    let send = |e: PipelineEvent| {
-        let _ = on_event.send(e);
-    };
-
-    // Stage 1: import (probe + audio extraction).
-    send(PipelineEvent::Stage {
-        name: StageName::ExtractingAudio,
-        progress: 0.0,
-    });
-    ctx.progress(0.02, Some("Extracting audio".to_string()))
-        .await;
-    let outcome = katto_engine::import::import(&spec.footage_path, &spec.audio_dir)
-        .await
-        .map_err(|e| e.to_string())?;
-    let bundle_root = outcome.bundle_root.clone();
-    let bundle_path = bundle_root.to_string_lossy().into_owned();
-
-    // Stage 2: transcribe, with a heartbeat nudging progress while we await.
-    send(PipelineEvent::Stage {
-        name: StageName::Transcribing,
-        progress: 0.33,
-    });
-    ctx.progress(0.33, Some("Transcribing".to_string())).await;
-    let cfg = TranscribeConfig {
-        api_key: spec.elevenlabs_key.clone(),
-        base_url: ELEVENLABS_BASE_URL.to_string(),
-    };
-    let transcript = {
-        let transcribe = katto_engine::transcribe::transcribe_into_bundle(&cfg, &bundle_root);
-        let mut transcribe = std::pin::pin!(transcribe);
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
-        let mut nudge = 0.33f64;
-        loop {
-            tokio::select! {
-                result = &mut transcribe => break result.map_err(|e| e.to_string())?,
-                _ = interval.tick() => {
-                    nudge = (nudge + 0.02).min(0.6);
-                    ctx.progress(nudge, Some("Transcribing".to_string())).await;
-                }
-            }
-        }
-    };
-    send(PipelineEvent::TranscriptReady {
-        bundle_path: bundle_path.clone(),
-    });
-
-    // Stage 3: plan cuts.
-    send(PipelineEvent::Stage {
-        name: StageName::DetectingCuts,
-        progress: 0.66,
-    });
-    ctx.progress(0.66, Some("Detecting cuts".to_string())).await;
-    let observer = Arc::new(ChannelObserver(on_event.clone()));
-    let planner = match &spec.planner_kind {
-        PlannerKind::Subprocess { claude_path } => Planner::Subprocess(
-            SubprocessClaudePlanner::new(claude_path.clone(), bundle_root.clone())
-                .with_observer(observer),
-        ),
-        PlannerKind::Http { api_key, model } => Planner::Http(HttpAnthropicPlanner {
-            api_key: api_key.clone(),
-            model: model.clone(),
-            base_url: katto_engine::planner::http::ANTHROPIC_BASE_URL.to_string(),
-        }),
-    };
-    let cuts = planner.plan(&transcript).await.map_err(|e| e.to_string())?;
-    katto_engine::bundle::write_json_atomic(
-        &bundle_root.join(katto_engine::bundle::CUTS_JSON),
-        &cuts,
-    )
-    .map_err(|e| e.to_string())?;
-
-    // Domain event + broadcast (the jobs framework writes job_done separately).
-    let event_payload = serde_json::json!({
-        "bundle": bundle_path,
-        "cuts": cuts.cuts.len(),
-        "flags": cuts.flags.len(),
-    })
-    .to_string();
-    let slug = spec.project_slug.clone();
-    if let Err(err) = db
-        .call(move |conn| {
-            crate::db::events::record(conn, "rough_cut_planned", Some(&slug), Some(&event_payload))
-        })
-        .await
-    {
-        // The pipeline succeeded; only the domain event write failed. The jobs
-        // framework still records job_done, so log rather than fail the run.
-        eprintln!("rough_cut_planned event write failed: {err}");
-    }
-    crate::broadcast::events_appended(app);
-
-    ctx.progress(1.0, Some("Rough cut ready".to_string())).await;
-    send(PipelineEvent::Done { bundle_path });
-    Ok(())
+    Ok(canonical)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn open_bundle(state: State<'_, AppState>, path: String) -> Result<BundleData> {
-    let _ = &state; // bundle data comes from the filesystem; folders are truth
-    let bundle =
-        tauri::async_runtime::spawn_blocking(move || katto_engine::bundle::open(Path::new(&path)))
-            .await
-            .map_err(|e| Error::Io(e.to_string()))?
-            .map_err(Error::from)?;
+    let studio_root: PathBuf = state
+        .db
+        .call(|conn| {
+            settings_repo::get(conn, "studio_root")?
+                .map(PathBuf::from)
+                .ok_or_else(|| Error::Onboarding("no studio root configured".to_string()))
+        })
+        .await?;
+    let bundle = tauri::async_runtime::spawn_blocking(move || {
+        let canonical = validate_bundle_path(&studio_root, Path::new(&path))?;
+        katto_engine::bundle::open(&canonical).map_err(Error::from)
+    })
+    .await
+    .map_err(|e| Error::Io(e.to_string()))??;
 
     let transcript = bundle
         .transcript
@@ -526,6 +416,30 @@ mod tests {
         let link = footage.join("sneaky.mp4");
         std::os::unix::fs::symlink(&outside, &link).unwrap();
         assert!(validate_footage_path(dir.path(), &link).is_err());
+    }
+
+    #[test]
+    fn bundle_path_must_live_under_studio_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("studio");
+        std::fs::create_dir_all(root.join("p/audio/c.kruproj")).unwrap();
+        let inside = root.join("p/audio/c.kruproj");
+        assert!(validate_bundle_path(&root, &inside).is_ok());
+        let outside = dir.path().join("elsewhere.kruproj");
+        std::fs::create_dir(&outside).unwrap();
+        assert!(validate_bundle_path(&root, &outside).is_err());
+    }
+
+    #[test]
+    fn bundle_path_rejects_escape_via_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("studio");
+        std::fs::create_dir_all(&root).unwrap();
+        let outside = dir.path().join("outside.kruproj");
+        std::fs::create_dir(&outside).unwrap();
+        let link = root.join("sneaky.kruproj");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        assert!(validate_bundle_path(&root, &link).is_err());
     }
 
     #[test]

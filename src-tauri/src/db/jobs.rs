@@ -94,6 +94,20 @@ pub fn list(conn: &Connection, active_only: bool) -> Result<Vec<Job>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+/// Whether an active (queued/running) job of `kind` references `needle` in
+/// its payload. DB-backed on purpose: this guards one-run-per-bundle, and an
+/// in-memory guard would die with a webview reload.
+pub fn active_with_payload(conn: &Connection, kind: &str, needle: &str) -> Result<bool> {
+    let exists: i64 = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM jobs
+          WHERE kind = ?1 AND status IN ('queued','running')
+            AND instr(payload_json, ?2) > 0)",
+        params![kind, needle],
+        |row| row.get(0),
+    )?;
+    Ok(exists != 0)
+}
+
 /// `queued -> running`. Stamps `started_at`.
 pub fn start(conn: &Connection, id: &str) -> Result<Job> {
     transition(conn, id, "running")?;
@@ -165,6 +179,28 @@ mod tests {
 
     fn seed(conn: &Connection) -> Job {
         create(conn, "j1", "transcribe", "Transcribe clip", None).unwrap()
+    }
+
+    #[test]
+    fn active_with_payload_guards_only_live_jobs_of_the_kind() {
+        let conn = test_db();
+        create(
+            &conn,
+            "j1",
+            "cut_pipeline",
+            "Rough cut",
+            Some("{\"bundle_path\":\"/studio/p/audio/c.kruproj\"}"),
+        )
+        .unwrap();
+        assert!(active_with_payload(&conn, "cut_pipeline", "/studio/p/audio/c.kruproj").unwrap());
+        assert!(
+            !active_with_payload(&conn, "cut_pipeline", "/studio/p/audio/other.kruproj").unwrap()
+        );
+        assert!(!active_with_payload(&conn, "ingest", "/studio/p/audio/c.kruproj").unwrap());
+        start(&conn, "j1").unwrap();
+        assert!(active_with_payload(&conn, "cut_pipeline", "/studio/p/audio/c.kruproj").unwrap());
+        fail(&conn, "j1", "boom").unwrap();
+        assert!(!active_with_payload(&conn, "cut_pipeline", "/studio/p/audio/c.kruproj").unwrap());
     }
 
     #[test]
