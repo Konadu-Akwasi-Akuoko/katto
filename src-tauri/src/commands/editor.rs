@@ -117,7 +117,7 @@ pub async fn preview_export(
         .and_then(|s| NleTarget::from_setting(&s));
     tauri::async_runtime::spawn_blocking(move || {
         let (timelines_dir, slug) = katto_engine::timelines::project_context(&canonical);
-        let version = katto_engine::timelines::next_version(&timelines_dir, &slug);
+        let version = katto_engine::timelines::next_version(&timelines_dir, &slug)?;
         Ok(ExportPreview {
             slug,
             version,
@@ -126,6 +126,48 @@ pub async fn preview_export(
     })
     .await
     .map_err(|e| Error::Io(e.to_string()))?
+}
+
+/// RAII membership in the in-memory active-exports set. Exports are short
+/// direct commands with no jobs row, so an in-process guard is the right
+/// scope; the `create_new` version claim independently protects the files
+/// themselves, this only stops a double-click from racing two exports.
+struct ExportGuard {
+    set: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<PathBuf>>>,
+    path: PathBuf,
+}
+
+impl ExportGuard {
+    fn acquire(state: &State<'_, AppState>, path: &Path) -> Result<Self> {
+        let set = state.active_exports.clone();
+        {
+            let mut live = set
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !live.insert(path.to_path_buf()) {
+                let name = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "bundle".into());
+                return Err(Error::PipelineBusy(format!(
+                    "an export for {name} is already in progress"
+                )));
+            }
+        }
+        Ok(Self {
+            set,
+            path: path.to_path_buf(),
+        })
+    }
+}
+
+impl Drop for ExportGuard {
+    fn drop(&mut self) {
+        self.set
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&self.path);
+    }
 }
 
 #[tauri::command]
@@ -138,6 +180,7 @@ pub async fn export_timeline(
     open_after: bool,
 ) -> Result<ExportResult> {
     let canonical = checked_studio_path(&state, bundle_path).await?;
+    let _guard = ExportGuard::acquire(&state, &canonical)?;
 
     let (paths, slug) = tauri::async_runtime::spawn_blocking(move || {
         // Checked open: a moved source surfaces as the typed SourceMissing
@@ -237,13 +280,17 @@ pub async fn render_mp4(
 
     let out_path = {
         let target = canonical.clone();
+        let stem = name.clone();
         tauri::async_runtime::spawn_blocking(move || {
             let (timelines_dir, slug) = katto_engine::timelines::project_context(&target);
             let exports = timelines_dir.with_file_name("exports");
-            std::fs::create_dir_all(&exports)?;
-            let render_slug = format!("{slug}-render");
-            let version = katto_engine::timelines::next_version(&exports, &render_slug);
-            Ok::<_, Error>(exports.join(format!("{render_slug}-v{version}.mp4")))
+            // Per-bundle slug (two bundles in one project must never share a
+            // version sequence or a .tmp name) reserved via create_new — the
+            // claim, not a scan, enforces never-overwrite.
+            let render_slug = format!("{slug}-{stem}-render");
+            let (_, path) =
+                katto_engine::timelines::claim_next_version(&exports, &render_slug, "mp4")?;
+            Ok::<_, Error>(path)
         })
         .await
         .map_err(|e| Error::Io(e.to_string()))??
@@ -286,6 +333,11 @@ pub async fn render_mp4(
                 let outcome = katto_engine::render::render_mp4(&bundle, &out_path, &callback).await;
                 drop(callback);
                 let _ = consumer.await;
+                if outcome.is_err() {
+                    // The claimed -vN file is ours and empty; release it so
+                    // the version isn't burned by a failed run.
+                    let _ = tokio::fs::remove_file(&out_path).await;
+                }
                 outcome.map_err(|e| e.to_string())
             },
         )
@@ -347,6 +399,7 @@ pub async fn generate_thumbs(
 #[tauri::command]
 #[specta::specta]
 pub async fn relocate_source(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     bundle_path: String,
     new_path: String,
@@ -354,33 +407,24 @@ pub async fn relocate_source(
     let canonical = checked_studio_path(&state, bundle_path).await?;
     let new_path = PathBuf::from(new_path);
 
-    // Probe the picked file's exact timing with the engine's pinned argv.
-    let argv = katto_engine::import::ffprobe_argv(&new_path);
-    let output = tokio::process::Command::new("ffprobe")
-        .args(&argv)
-        .output()
-        .await
-        .map_err(|e| Error::Io(format!("ffprobe: {e}")))?;
-    if !output.status.success() {
-        return Err(Error::Relocate(format!(
-            "could not probe {}: {}",
-            new_path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    let timing =
-        katto_engine::ffprobe::parse_probe_timing(&String::from_utf8_lossy(&output.stdout))
-            .map_err(Error::from)?;
-    let probed_duration = timing
-        .duration
-        .ok_or_else(|| Error::Relocate("picked file has no video duration".to_string()))?;
-
+    let granted = new_path.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // Probe through the app's single ffprobe spawn site.
+        let timing = crate::ffprobe::probe_timing(&new_path)?;
+        let probed_duration = timing
+            .duration
+            .ok_or_else(|| Error::Relocate("picked file has no video duration".to_string()))?;
         katto_engine::bundle::apply_relocation(&canonical, probed_duration, new_path)
             .map_err(Error::from)
     })
     .await
-    .map_err(|e| Error::Io(e.to_string()))?
+    .map_err(|e| Error::Io(e.to_string()))??;
+
+    // The healed source may live anywhere the picker reached — extend the
+    // asset-protocol scope now or playback stays black until relaunch
+    // (open_bundle re-grants outside-root sources on later launches).
+    crate::assets::allow_source_file(&app, &granted);
+    Ok(())
 }
 
 /// Native open-file picker for relocation, filtered to the missing file's

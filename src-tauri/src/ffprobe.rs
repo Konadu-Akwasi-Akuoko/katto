@@ -24,12 +24,8 @@ fn ffprobe_argv(path: &Path) -> Vec<String> {
     ]
 }
 
-/// Probe one clip's metadata by spawning `ffprobe`.
-///
-/// # Errors
-/// [`Error::Io`] if ffprobe cannot be spawned or exits nonzero;
-/// [`Error::Engine`] if its output does not parse.
-pub fn probe_clip(path: &Path) -> Result<MediaInfo> {
+/// The one place in the app crate that actually spawns ffprobe.
+fn run_ffprobe(path: &Path) -> Result<String> {
     let output = Command::new("ffprobe").args(ffprobe_argv(path)).output()?;
     if !output.status.success() {
         return Err(Error::Io(format!(
@@ -38,8 +34,26 @@ pub fn probe_clip(path: &Path) -> Result<MediaInfo> {
             String::from_utf8_lossy(&output.stderr)
         )));
     }
-    let json = String::from_utf8_lossy(&output.stdout);
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Probe one clip's metadata by spawning `ffprobe`.
+///
+/// # Errors
+/// [`Error::Io`] if ffprobe cannot be spawned or exits nonzero;
+/// [`Error::Engine`] if its output does not parse.
+pub fn probe_clip(path: &Path) -> Result<MediaInfo> {
+    let json = run_ffprobe(path)?;
     Ok(parse_probe(&json)?)
+}
+
+/// Probe one clip's exact rational timing (relocation's same-recording check).
+///
+/// # Errors
+/// As [`probe_clip`].
+pub fn probe_timing(path: &Path) -> Result<katto_engine::ffprobe::ProbeTiming> {
+    let json = run_ffprobe(path)?;
+    Ok(katto_engine::ffprobe::parse_probe_timing(&json)?)
 }
 
 #[cfg(test)]

@@ -102,7 +102,32 @@ fn bootstrap_state(app: &tauri::App) -> Result<state::AppState, Box<dyn std::err
         db.call(|conn| db::events::record(conn, "app_started", None, None)),
     )?;
     let jobs = jobs::JobRuntime::new(app.handle().clone(), db.clone());
-    Ok(state::AppState { db, jobs })
+    Ok(state::AppState {
+        db,
+        jobs,
+        active_exports: std::sync::Arc::default(),
+    })
+}
+
+/// Fail over jobs rows stranded queued/running by a crash — otherwise the
+/// per-bundle busy guards would refuse work forever. Each interrupted job is
+/// marked failed and gets an events row; a DB failure here is logged, never
+/// fatal to startup.
+fn fail_interrupted_jobs(app: &tauri::App) {
+    let db = app.state::<state::AppState>().db.clone();
+    let result = tauri::async_runtime::block_on(db.call(|conn| {
+        let interrupted = db::jobs::fail_interrupted(conn)?;
+        for job in &interrupted {
+            let payload = serde_json::json!({ "id": job.id, "kind": job.kind }).to_string();
+            db::events::record(conn, "job_interrupted", Some(&job.label), Some(&payload))?;
+        }
+        Ok(interrupted.len())
+    }));
+    match result {
+        Ok(0) => {}
+        Ok(n) => eprintln!("failed over {n} interrupted job(s) from the previous run"),
+        Err(err) => eprintln!("interrupted-jobs failover failed: {err}"),
+    }
 }
 
 /// Reconcile the projects index against the studio-root folders at launch —
@@ -173,6 +198,7 @@ pub fn run() {
             app.manage(bootstrap_state(app)?);
             app.manage(state::IngestState::default());
             assets::grant_at_launch(app);
+            fail_interrupted_jobs(app);
             launch_reconcile(app);
 
             let handle = app.handle();

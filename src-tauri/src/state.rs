@@ -1,4 +1,6 @@
-use std::sync::Mutex;
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use crate::db::DbHandle;
 use crate::ingest::offer::CardOffer;
@@ -9,6 +11,9 @@ use crate::jobs::JobRuntime;
 pub struct AppState {
     pub db: DbHandle,
     pub jobs: JobRuntime,
+    /// Bundle roots with a timeline export in flight (exports are short
+    /// direct commands with no jobs row; this stops a double-fire).
+    pub active_exports: Arc<Mutex<HashSet<PathBuf>>>,
 }
 
 /// Holds the currently-detected card offer, if any. Populated by the volume

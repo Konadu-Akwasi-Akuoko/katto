@@ -15,6 +15,16 @@ pub fn allow_studio_root(app: &tauri::AppHandle, root: &str) {
     }
 }
 
+/// Allow one file over `asset://` — for a source that lives OUTSIDE the
+/// studio root (a relocated recording). Called at relocation time and again
+/// on every bundle open, because runtime grants do not survive a relaunch.
+/// Same failure policy as the root grant: log, keep going.
+pub fn allow_source_file(app: &tauri::AppHandle, path: &std::path::Path) {
+    if let Err(err) = app.asset_protocol_scope().allow_file(path) {
+        eprintln!("asset scope grant failed for {}: {err}", path.display());
+    }
+}
+
 /// Launch-time grant from the persisted `studio_root` setting, if any.
 pub fn grant_at_launch(app: &tauri::App) {
     let db = app.state::<crate::state::AppState>().db.clone();

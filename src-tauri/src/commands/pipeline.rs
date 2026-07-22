@@ -323,7 +323,11 @@ pub(crate) fn validate_bundle_path(studio_root: &Path, path: &Path) -> Result<Pa
 
 #[tauri::command]
 #[specta::specta]
-pub async fn open_bundle(state: State<'_, AppState>, path: String) -> Result<BundleData> {
+pub async fn open_bundle(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<BundleData> {
     let studio_root: PathBuf = state
         .db
         .call(|conn| {
@@ -332,12 +336,20 @@ pub async fn open_bundle(state: State<'_, AppState>, path: String) -> Result<Bun
                 .ok_or_else(|| Error::Onboarding("no studio root configured".to_string()))
         })
         .await?;
-    let bundle = tauri::async_runtime::spawn_blocking(move || {
+    let (bundle, outside_source) = tauri::async_runtime::spawn_blocking(move || {
         let canonical = validate_bundle_path(&studio_root, Path::new(&path))?;
-        katto_engine::bundle::open(&canonical).map_err(Error::from)
+        let bundle = katto_engine::bundle::open(&canonical).map_err(Error::from)?;
+        // A relocated source may live outside the studio root, which the
+        // launch-time asset grant does not cover.
+        let source = &bundle.manifest.source_video_absolute_path;
+        let outside = !source.starts_with(&studio_root);
+        Ok::<_, Error>((bundle, outside))
     })
     .await
     .map_err(|e| Error::Io(e.to_string()))??;
+    if outside_source {
+        crate::assets::allow_source_file(&app, &bundle.manifest.source_video_absolute_path);
+    }
 
     let transcript = bundle
         .transcript
