@@ -70,30 +70,10 @@ pub enum Command {
     },
 }
 
-/// Where a bundle's exports belong: when the bundle sits at
-/// `<project>/audio/<x>.kruproj`, timelines land in `<project>/timelines` and
-/// the slug is the project folder name; a loose bundle uses a sibling
-/// `timelines/` and its own basename.
+/// Where a bundle's exports belong (engine-shared logic; the app crate uses
+/// the same resolution).
 pub fn project_context(bundle_root: &std::path::Path) -> (PathBuf, String) {
-    if let Some(audio) = bundle_root.parent()
-        && audio.file_name().is_some_and(|n| n == "audio")
-        && let Some(project) = audio.parent()
-        && let Some(slug) = project.file_name()
-    {
-        return (
-            project.join("timelines"),
-            slug.to_string_lossy().into_owned(),
-        );
-    }
-    let parent = bundle_root
-        .parent()
-        .map(std::path::Path::to_path_buf)
-        .unwrap_or_default();
-    let slug = bundle_root
-        .file_stem()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "bundle".into());
-    (parent.join("timelines"), slug)
+    katto_engine::timelines::project_context(bundle_root)
 }
 
 #[cfg(test)]

@@ -9,6 +9,32 @@ use crate::emit::fcpxml::emit_fcpxml;
 use crate::error::{Error, Result};
 use crate::render::{coalesce_cuts, effective_cut_spans};
 
+/// Where a bundle's exports belong: when the bundle sits at
+/// `<project>/audio/<x>.kruproj`, timelines land in `<project>/timelines` and
+/// the slug is the project folder name; a loose bundle uses a sibling
+/// `timelines/` and its own basename.
+pub fn project_context(bundle_root: &Path) -> (PathBuf, String) {
+    if let Some(audio) = bundle_root.parent()
+        && audio.file_name().is_some_and(|n| n == "audio")
+        && let Some(project) = audio.parent()
+        && let Some(slug) = project.file_name()
+    {
+        return (
+            project.join("timelines"),
+            slug.to_string_lossy().into_owned(),
+        );
+    }
+    let parent = bundle_root
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default();
+    let slug = bundle_root
+        .file_stem()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "bundle".into());
+    (parent.join("timelines"), slug)
+}
+
 /// Next free version in `timelines_dir`: max N over `<slug>-v<N>.<any ext>`
 /// plus 1 (1 when none). Any extension counts — an existing `-v3.srt` blocks
 /// fcpxml v3 too.
