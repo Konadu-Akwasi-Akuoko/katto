@@ -37,6 +37,10 @@ pub struct Settings {
     pub claude_path: Option<String>,
     pub capture_shortcut: String,
     pub planner_model: String,
+    /// Nightly-curation discovery sweep toggle (`"true"`/`"false"` in the k/v
+    /// table; default off — it needs uv and a hyper-frames checkout).
+    pub discovery_enabled: bool,
+    pub hyperframes_path: Option<String>,
     pub keys_present: KeysPresent,
 }
 
@@ -49,6 +53,8 @@ pub struct SettingsPatch {
     pub onboarding_complete: Option<bool>,
     pub claude_path: Option<String>,
     pub planner_model: Option<String>,
+    pub discovery_enabled: Option<bool>,
+    pub hyperframes_path: Option<String>,
 }
 
 fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Settings> {
@@ -64,6 +70,8 @@ fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Setting
             .unwrap_or_else(|| crate::capture::DEFAULT_CAPTURE_SHORTCUT.to_string()),
         planner_model: repo::get(conn, "planner_model")?
             .unwrap_or_else(|| DEFAULT_PLANNER_MODEL.to_string()),
+        discovery_enabled: repo::get(conn, "discovery_enabled")?.as_deref() == Some("true"),
+        hyperframes_path: repo::get(conn, "hyperframes_path")?,
         keys_present,
     })
 }
@@ -90,6 +98,12 @@ fn apply_patch(conn: &Connection, patch: &SettingsPatch) -> Result<()> {
     }
     if let Some(v) = &patch.planner_model {
         repo::set(conn, "planner_model", v)?;
+    }
+    if let Some(v) = patch.discovery_enabled {
+        repo::set(conn, "discovery_enabled", if v { "true" } else { "false" })?;
+    }
+    if let Some(v) = &patch.hyperframes_path {
+        repo::set(conn, "hyperframes_path", v)?;
     }
     Ok(())
 }
@@ -211,6 +225,8 @@ mod tests {
             onboarding_complete: None,
             claude_path: None,
             planner_model: None,
+            discovery_enabled: None,
+            hyperframes_path: None,
         }
     }
 

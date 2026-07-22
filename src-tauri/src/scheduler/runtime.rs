@@ -211,12 +211,10 @@ fn spawn_run(shared: &Arc<Shared>, name: String) {
 /// The job registry. The scheduler needs the outcome to gate
 /// `last_success_at`; each entry's jobs row is its visibility contract.
 async fn run_job(app: &AppHandle, name: &str) -> std::result::Result<(), String> {
-    let _ = app;
-    if name == "nightly-curation" {
-        // Wired in the curation task: crate::curation::run(app).await.
-        return Err("nightly curation is not wired yet".to_string());
+    match name {
+        "nightly-curation" => crate::curation::run(app).await,
+        other => Err(format!("unknown scheduled job: {other}")),
     }
-    Err(format!("unknown scheduled job: {name}"))
 }
 
 fn record_event(shared: &Arc<Shared>, kind: &'static str, payload: serde_json::Value) {

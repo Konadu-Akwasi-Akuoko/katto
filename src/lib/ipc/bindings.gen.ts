@@ -950,6 +950,12 @@ export type Settings = {
 	claude_path: string | null,
 	capture_shortcut: string,
 	planner_model: string,
+	/**
+	 *  Nightly-curation discovery sweep toggle (`"true"`/`"false"` in the k/v
+	 *  table; default off — it needs uv and a hyper-frames checkout).
+	 */
+	discovery_enabled: boolean,
+	hyperframes_path: string | null,
 	keys_present: KeysPresent,
 };
 
@@ -961,6 +967,8 @@ export type SettingsPatch = {
 	onboarding_complete: boolean | null,
 	claude_path: string | null,
 	planner_model: string | null,
+	discovery_enabled: boolean | null,
+	hyperframes_path: string | null,
 };
 
 /**  One pipeline step, as the step indicator renders it. */

@@ -63,6 +63,9 @@ struct Entry {
     idle_since: Option<Instant>,
     last_output: Instant,
     job_done: Option<DoneTx>,
+    /// Curation's completion watch: resolved Ok on the first HookStop, Err on
+    /// death before one.
+    stop_watch: Option<DoneTx>,
     settings_path: Option<PathBuf>,
 }
 
@@ -372,6 +375,7 @@ impl SessionPool {
             idle_since: None,
             last_output: Instant::now(),
             job_done,
+            stop_watch: None,
             settings_path,
         };
         self.sessions().insert(id.to_string(), entry);
@@ -477,20 +481,53 @@ impl SessionPool {
             HookEvent::Notification { session_id } => (session_id, SessionEvent::HookNotification),
         };
         let mut transition = None;
+        let mut stop_watch = None;
         {
             let mut sessions = self.sessions();
             let Some(entry) = sessions.get_mut(&id) else {
                 return;
             };
             entry.hooks_live = true;
+            if matches!(machine_event, SessionEvent::HookStop) {
+                stop_watch = entry.stop_watch.take();
+            }
             let new = apply(&entry.state, &machine_event, true);
             if new != entry.state {
                 transition = Some(set_state(entry, &id, new));
             }
         }
+        if let Some(tx) = stop_watch {
+            let _ = tx.send(Ok(()));
+        }
         if let Some(t) = transition {
             self.after_transition(t);
         }
+    }
+
+    /// Watch for a session's first `Stop` hook: `Ok(())` when Claude finishes
+    /// its first turn, `Err` if the session dies before one. Already-terminal
+    /// sessions resolve immediately.
+    pub fn watch_first_stop(
+        &self,
+        id: &str,
+    ) -> tokio::sync::oneshot::Receiver<std::result::Result<(), String>> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let mut sessions = self.sessions();
+        match sessions.get_mut(id) {
+            None => {
+                let _ = tx.send(Err(format!("no session {id}")));
+            }
+            Some(entry) => match &entry.state {
+                SessionState::Failed { error } => {
+                    let _ = tx.send(Err(error.clone()));
+                }
+                SessionState::Closed { .. } => {
+                    let _ = tx.send(Err("session closed before finishing".to_string()));
+                }
+                _ => entry.stop_watch = Some(tx),
+            },
+        }
+        rx
     }
 
     /// Degraded-mode timer: sessions the endpoint never heard from go idle
@@ -548,6 +585,13 @@ impl SessionPool {
             entry.killer = None;
             (transition, job_done, settings)
         };
+        if let Some(tx) = self.take_stop_watch(id) {
+            let outcome = match self.get_state(id) {
+                Some(SessionState::Failed { error }) => Err(error),
+                _ => Err("session closed before finishing".to_string()),
+            };
+            let _ = tx.send(outcome);
+        }
         if let Some(path) = settings {
             let _ = std::fs::remove_file(path);
         }
@@ -669,6 +713,9 @@ impl SessionPool {
         if let Some(tx) = job_done {
             let _ = tx.send(Ok(()));
         }
+        if let Some(tx) = self.take_stop_watch(id) {
+            let _ = tx.send(Err("session closed before finishing".to_string()));
+        }
         if matches!(reason, CloseReason::IdleReaped) {
             let label = self
                 .sessions()
@@ -716,6 +763,12 @@ impl SessionPool {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         dock.open = open;
         dock.focused = focused;
+    }
+
+    fn take_stop_watch(&self, id: &str) -> Option<DoneTx> {
+        self.sessions()
+            .get_mut(id)
+            .and_then(|entry| entry.stop_watch.take())
     }
 
     pub(crate) fn get_state(&self, id: &str) -> Option<SessionState> {
@@ -898,6 +951,32 @@ mod tests {
             other => panic!("expected Failed, got {other:?}"),
         }
         assert!(!pool.scrollback(&id).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn watch_first_stop_resolves_on_hook_stop() {
+        let pool = SessionPool::new();
+        let id = pool
+            .spawn_headless(task("t"), Program::Custom("bash -c 'cat'".into()))
+            .await
+            .unwrap();
+        let rx = pool.watch_first_stop(&id);
+        pool.apply_hook_event(HookEvent::Stop {
+            session_id: id.clone(),
+        });
+        assert!(rx.await.unwrap().is_ok());
+        pool.close(&id, CloseReason::UserClosed).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn watch_first_stop_errors_on_failure() {
+        let pool = SessionPool::new();
+        let id = pool
+            .spawn_headless(task("t"), Program::Custom("bash -c 'exit 7'".into()))
+            .await
+            .unwrap();
+        let rx = pool.watch_first_stop(&id);
+        assert!(rx.await.unwrap().is_err());
     }
 
     /// Live smoke: spawns the owner's real `claude` (subscription auth) once.

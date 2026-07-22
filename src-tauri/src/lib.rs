@@ -2,6 +2,7 @@ mod assets;
 pub mod broadcast;
 pub mod capture;
 pub mod commands;
+pub mod curation;
 pub mod db;
 pub mod drive;
 pub mod error;
