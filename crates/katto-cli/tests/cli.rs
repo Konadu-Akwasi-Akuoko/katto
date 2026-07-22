@@ -32,6 +32,16 @@ fn auth_status_exits_0() {
 }
 
 #[test]
+fn export_on_nonexistent_bundle_exits_1() {
+    Command::cargo_bin("katto")
+        .unwrap()
+        .args(["export", "/nonexistent.kruproj"])
+        .assert()
+        .code(1)
+        .stderr(predicates::str::is_empty().not());
+}
+
+#[test]
 fn plan_on_bundle_without_transcript_exits_1() {
     let dir = tempfile::tempdir().unwrap();
     Command::cargo_bin("katto")

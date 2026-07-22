@@ -5,6 +5,7 @@ use std::path::Path;
 
 use katto_engine::import::ImportOutcome;
 use katto_engine::schema::Cuts;
+use katto_engine::timelines::ExportPaths;
 
 use crate::keys::KeySource;
 
@@ -89,6 +90,34 @@ pub fn render_plan(bundle: &Path, cuts: &Cuts, json: bool) -> String {
     )
 }
 
+/// Render `katto export` success.
+pub fn render_export(p: &ExportPaths, json: bool) -> String {
+    if json {
+        return serde_json::json!({
+            "fcpxml": p.fcpxml,
+            "srt": p.srt,
+            "vtt": p.vtt,
+            "version": p.version,
+        })
+        .to_string();
+    }
+    format!(
+        "exported v{}:\n  {}\n  {}\n  {}",
+        p.version,
+        p.fcpxml.display(),
+        p.srt.display(),
+        p.vtt.display()
+    )
+}
+
+/// Render `katto render` success.
+pub fn render_render(out: &Path, json: bool) -> String {
+    if json {
+        return serde_json::json!({ "out": out }).to_string();
+    }
+    format!("rendered {}", out.display())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,6 +140,30 @@ mod tests {
             anthropic: KeySource::Env,
         };
         insta::assert_snapshot!("auth_status_json", render_auth_status(&s, true));
+    }
+
+    #[test]
+    fn export_renders_paths_and_version() {
+        let p = ExportPaths {
+            fcpxml: "/p/timelines/demo-v3.fcpxml".into(),
+            srt: "/p/timelines/demo-v3.srt".into(),
+            vtt: "/p/timelines/demo-v3.vtt".into(),
+            version: 3,
+        };
+        insta::assert_snapshot!("export_human", render_export(&p, false));
+        insta::assert_snapshot!("export_json", render_export(&p, true));
+    }
+
+    #[test]
+    fn render_render_names_the_output() {
+        insta::assert_snapshot!(
+            "render_human",
+            render_render(Path::new("/p/exports/demo-render-v1.mp4"), false)
+        );
+        insta::assert_snapshot!(
+            "render_json",
+            render_render(Path::new("/p/exports/demo-render-v1.mp4"), true)
+        );
     }
 
     #[test]

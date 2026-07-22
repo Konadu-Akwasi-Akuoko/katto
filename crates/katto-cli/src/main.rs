@@ -63,6 +63,38 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
             let cuts = plan(&outcome.bundle_root, planner, None).await?;
             println!("{}", output::render_plan(&outcome.bundle_root, &cuts, json));
         }
+        Command::Render { bundle, out } => {
+            let opened = katto_engine::bundle::open(&bundle)?;
+            let out_path = match out {
+                Some(out) => out,
+                None => {
+                    let (timelines_dir, slug) = cli::project_context(&bundle);
+                    let exports = timelines_dir.with_file_name("exports");
+                    std::fs::create_dir_all(&exports)?;
+                    let render_slug = format!("{slug}-render");
+                    let version = katto_engine::timelines::next_version(&exports, &render_slug);
+                    exports.join(format!("{render_slug}-v{version}.mp4"))
+                }
+            };
+            let on_progress = move |p: f64| {
+                if !json {
+                    use std::io::Write;
+                    print!("\r{:>5.1}%", p * 100.0);
+                    let _ = std::io::stdout().flush();
+                }
+            };
+            katto_engine::render::render_mp4(&opened, &out_path, &on_progress).await?;
+            if !json {
+                println!();
+            }
+            println!("{}", output::render_render(&out_path, json));
+        }
+        Command::Export { bundle } => {
+            let opened = katto_engine::bundle::open(&bundle)?;
+            let (timelines_dir, slug) = cli::project_context(&bundle);
+            let paths = katto_engine::timelines::export_timeline(&opened, &timelines_dir, &slug)?;
+            println!("{}", output::render_export(&paths, json));
+        }
         Command::Auth {
             cmd: AuthCmd::Status,
         } => {
