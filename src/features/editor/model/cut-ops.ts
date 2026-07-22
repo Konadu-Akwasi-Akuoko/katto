@@ -54,6 +54,22 @@ export function removeManualCut(
 	};
 }
 
+/**
+ * Clamp a dragged edge so the range keeps at least one frame of width (and
+ * a start never goes negative) — an inverted range would silently erase the
+ * cut and persist the inversion.
+ */
+export function clampEdge(
+	range: Range,
+	edge: "start" | "end",
+	newTime: number,
+	frameSeconds: number,
+): number {
+	return edge === "start"
+		? Math.max(0, Math.min(newTime, range.end - frameSeconds))
+		: Math.max(newTime, range.start + frameSeconds);
+}
+
 /** Upsert a base-cut boundary adjustment by (cutIndex, edge). */
 export function adjustBaseBoundary(
 	doc: EditorDocument,

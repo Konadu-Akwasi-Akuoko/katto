@@ -11,6 +11,7 @@ import {
 import type { EditorDocument, Range } from "@/features/editor/model/wire";
 import { isEditableTarget } from "@/features/editor/transport";
 import type { Cuts, Transcript } from "@/lib/ipc/pipeline";
+import { cn } from "@/lib/utils";
 
 const EMPTY_DOCUMENT: EditorDocument = {
 	toggledOff: [],
@@ -118,9 +119,10 @@ function Token({
 			type="button"
 			data-token-index={span.index}
 			data-active={active || selected ? "" : undefined}
-			className={`select-text inline cursor-default whitespace-pre-wrap text-left ${
-				active || selected ? "bg-surface-2" : ""
-			}`}
+			className={cn(
+				"select-text inline cursor-default whitespace-pre-wrap text-left",
+				(active || selected) && "bg-surface-2",
+			)}
 			title={note ?? undefined}
 			onClick={handleClick}
 		>
@@ -146,6 +148,7 @@ export function TranscriptPane({
 	onApplyDiscretionary,
 	onManualCut,
 	selectedKey,
+	suspendKeys = false,
 }: {
 	transcript: Transcript;
 	cuts: Cuts | null;
@@ -156,6 +159,8 @@ export function TranscriptPane({
 	onApplyDiscretionary?: (index: number) => void;
 	onManualCut?: (range: Range) => void;
 	selectedKey?: string | null;
+	/** True while a dialog is up: X/Delete must not mutate history behind it. */
+	suspendKeys?: boolean;
 }) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const { spans, overlays, paragraphs } = useMemo(() => {
@@ -168,7 +173,7 @@ export function TranscriptPane({
 	}, [transcript, cuts, editDocument]);
 
 	useEffect(() => {
-		if (!onManualCut) return;
+		if (!onManualCut || suspendKeys) return;
 		const handler = (event: KeyboardEvent) => {
 			if (event.key !== "x" && event.key !== "X" && event.key !== "Delete") {
 				return;
@@ -182,7 +187,7 @@ export function TranscriptPane({
 		};
 		document.addEventListener("keydown", handler);
 		return () => document.removeEventListener("keydown", handler);
-	}, [onManualCut, spans]);
+	}, [onManualCut, spans, suspendKeys]);
 
 	// Scroll the selected region's first token into view when selection moves.
 	useEffect(() => {

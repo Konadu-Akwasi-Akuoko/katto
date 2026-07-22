@@ -8,6 +8,7 @@ import {
 	adjustBaseBoundary,
 	adjustManualBoundary,
 	applyDiscretionary,
+	clampEdge,
 	convertDiscretionaryDrag,
 	removeManualCut,
 	toggleCut,
@@ -19,6 +20,7 @@ import type {
 	Range,
 } from "@/features/editor/model/wire";
 import { HISTORY_LIMIT } from "@/features/editor/model/wire";
+import type { Rational } from "@/lib/ipc/editor";
 import type { Cuts } from "@/lib/ipc/pipeline";
 
 export type DragTarget =
@@ -94,10 +96,33 @@ export function createEditorStore(init: {
 	history: EditorHistory;
 	cuts: Cuts;
 	tokens: TokenSpan[];
+	fps: Rational;
 }): EditorStore {
 	let preDrag: EditorDocument | null = null;
 	/** Set once a disc drag converts, so later ticks adjust that manual cut. */
 	let discDragManualIndex: number | null = null;
+	const frameSeconds = init.fps.den / init.fps.num;
+
+	/** The dragged target's current range, for edge clamping. */
+	const rangeOf = (doc: EditorDocument, target: DragTarget): Range | null => {
+		if (target.kind === "base") {
+			const cut = init.cuts.cuts[target.cutIndex];
+			if (cut === undefined) return null;
+			let { start, end } = cut;
+			for (const adj of doc.boundaryAdjustments) {
+				if (adj.cutIndex !== target.cutIndex) continue;
+				if (adj.edge === "start") start = adj.newTime;
+				else end = adj.newTime;
+			}
+			return { start, end };
+		}
+		if (target.kind === "manual") return doc.manualCuts[target.index] ?? null;
+		if (discDragManualIndex !== null) {
+			return doc.manualCuts[discDragManualIndex] ?? null;
+		}
+		const disc = init.cuts.discretionary[target.index];
+		return disc === undefined ? null : { start: disc.start, end: disc.end };
+	};
 
 	const store = createStore<EditorState>()(
 		temporal(
@@ -112,16 +137,19 @@ export function createEditorStore(init: {
 					set(removeManualCut(documentOf(get()), index)),
 				dragBoundary: (target, edge, newTime) => {
 					const doc = documentOf(get());
+					const range = rangeOf(doc, target);
+					if (range === null) return;
+					const clamped = clampEdge(range, edge, newTime, frameSeconds);
 					if (target.kind === "base") {
-						set(adjustBaseBoundary(doc, target.cutIndex, edge, newTime));
+						set(adjustBaseBoundary(doc, target.cutIndex, edge, clamped));
 						return;
 					}
 					if (target.kind === "manual") {
-						set(adjustManualBoundary(doc, target.index, edge, newTime));
+						set(adjustManualBoundary(doc, target.index, edge, clamped));
 						return;
 					}
 					if (discDragManualIndex !== null) {
-						set(adjustManualBoundary(doc, discDragManualIndex, edge, newTime));
+						set(adjustManualBoundary(doc, discDragManualIndex, edge, clamped));
 						return;
 					}
 					discDragManualIndex = doc.manualCuts.length;
@@ -131,7 +159,7 @@ export function createEditorStore(init: {
 							init.cuts,
 							target.index,
 							edge,
-							newTime,
+							clamped,
 						),
 					);
 				},

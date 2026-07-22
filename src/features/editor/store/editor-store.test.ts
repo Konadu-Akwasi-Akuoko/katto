@@ -61,6 +61,7 @@ function init() {
 		history: { past: [], future: [] },
 		cuts: fixtureCuts,
 		tokens,
+		fps: PAL,
 	};
 }
 
@@ -110,6 +111,25 @@ describe("editor store", () => {
 		const doc = documentOf(store.getState());
 		expect(doc.appliedDiscretionary).toEqual([]);
 		expect(doc.manualCuts).toEqual([{ start: 9.0, end: 11.8, note: null }]);
+	});
+
+	it("an edge drag clamps at the opposite edge minus one frame, never inverting", () => {
+		const store = createEditorStore(init());
+		store.getState().beginDrag();
+		// Base cut 0 is [1, 2]; drag its end far past its start.
+		store.getState().dragBoundary({ kind: "base", cutIndex: 0 }, "end", 0.2);
+		store.getState().commitDrag();
+		const adjusted = documentOf(store.getState()).boundaryAdjustments[0];
+		expect(adjusted?.newTime).toBeCloseTo(1 + 1 / 25, 9);
+
+		store.getState().addManualCut({ start: 7, end: 8 });
+		store.getState().beginDrag();
+		store.getState().dragBoundary({ kind: "manual", index: 0 }, "start", 9.5);
+		store.getState().commitDrag();
+		expect(documentOf(store.getState()).manualCuts[0]?.start).toBeCloseTo(
+			8 - 1 / 25,
+			9,
+		);
 	});
 
 	it("history seeds from edits.json and survives recreation (restart simulation)", () => {

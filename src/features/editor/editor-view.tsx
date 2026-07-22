@@ -7,6 +7,7 @@ import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { ExportDialog } from "@/features/editor/export-dialog";
 import {
 	coalesceRanges,
@@ -231,6 +232,7 @@ function Editing({
 				...fromWireEdits(data.edits, fps),
 				cuts,
 				tokens,
+				fps,
 			}),
 		};
 	}
@@ -266,6 +268,7 @@ function Editing({
 				setSaveBanner(
 					`Auto-save paused: ${message}. Edits stay in memory; the next edit retries.`,
 				),
+			onResumed: () => setSaveBanner(null),
 		});
 		autosaveRef.current = autosave;
 		return () => {
@@ -389,6 +392,7 @@ function Editing({
 						onApplyDiscretionary={(i) => store.getState().applyDiscretionary(i)}
 						onManualCut={(range) => store.getState().addManualCut(range)}
 						selectedKey={selectedKey}
+						suspendKeys={exportOpen || relocateInfo !== null}
 					/>
 				</div>
 				<div className="min-h-0">
@@ -482,17 +486,15 @@ function Editing({
 						>
 							Export…
 						</Button>
-						<input
-							type="range"
+						<Slider
 							aria-label="Timeline zoom"
+							className="w-32"
 							min={2}
 							max={200}
-							value={viewport.pxPerSec}
-							onChange={(e) =>
-								onViewportChange({
-									...viewport,
-									pxPerSec: Number(e.target.value),
-								})
+							value={[viewport.pxPerSec]}
+							onValueChange={([pxPerSec]) =>
+								pxPerSec !== undefined &&
+								onViewportChange({ ...viewport, pxPerSec })
 							}
 						/>
 					</div>

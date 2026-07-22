@@ -10,6 +10,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { ExportPreview, ExportResult, NleTarget } from "@/lib/ipc/editor";
 import {
 	exportTimeline,
@@ -55,6 +56,10 @@ export function ExportDialog({
 	const [alsoRender, setAlsoRender] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [flushWarning, setFlushWarning] = useState(false);
+	// Failures AFTER the export succeeded (render spawn, open/reveal) — shown
+	// in whichever view is up; never silently discarded.
+	const [postError, setPostError] = useState<string | null>(null);
 	const [done, setDone] = useState<ExportResult | null>(null);
 
 	useEffect(() => {
@@ -63,8 +68,9 @@ export function ExportDialog({
 			try {
 				await flush?.();
 			} catch {
-				// A paused auto-save surfaces through its own banner; the export
-				// command reads whatever landed on disk.
+				// The export command reads whatever landed on disk — say so
+				// instead of silently exporting stale edits.
+				if (!cancelled) setFlushWarning(true);
 			}
 			try {
 				const p = await previewExport(bundlePath);
@@ -89,8 +95,13 @@ export function ExportDialog({
 			setDone(result);
 			onExported(result);
 			if (alsoRender) {
-				// Progress lives in the jobs surface, not the dialog.
-				void renderMp4(bundlePath, () => {}).catch(() => {});
+				// Progress lives in the jobs surface, not the dialog — but a
+				// refused spawn (busy guard, bad bundle) surfaces here.
+				void renderMp4(bundlePath, () => {}).catch((e) =>
+					setPostError(
+						`Render did not start: ${e instanceof Error ? e.message : String(e)}`,
+					),
+				);
 			}
 		} catch (e) {
 			if (e instanceof IpcError && e.sourceMissing && onSourceMissing) {
@@ -118,6 +129,12 @@ export function ExportDialog({
 					</DialogDescription>
 				</DialogHeader>
 
+				{flushWarning && (
+					<p className="text-sm text-warn">
+						The latest edits could not be saved — this export uses the last
+						saved state.
+					</p>
+				)}
 				{done === null ? (
 					<div className="flex flex-col gap-4">
 						{preview !== null && (
@@ -160,18 +177,20 @@ export function ExportDialog({
 							<legend className="mb-1 text-sm text-fg-muted">
 								Open exports in
 							</legend>
-							{NLE_LABELS.map(({ value, label }) => (
-								<Label key={value} className="flex items-center gap-2 text-sm">
-									<input
-										type="radio"
-										name="nle-target"
-										value={value}
-										checked={target === value}
-										onChange={() => setTarget(value)}
-									/>
-									{label}
-								</Label>
-							))}
+							<RadioGroup
+								value={target ?? undefined}
+								onValueChange={(v) => setTarget(v as NleTarget)}
+							>
+								{NLE_LABELS.map(({ value, label }) => (
+									<Label
+										key={value}
+										className="flex items-center gap-2 text-sm"
+									>
+										<RadioGroupItem value={value} />
+										{label}
+									</Label>
+								))}
+							</RadioGroup>
 						</fieldset>
 
 						{error !== null && <p className="text-sm text-failed">{error}</p>}
@@ -195,6 +214,9 @@ export function ExportDialog({
 							<span>{done.srt_path}</span>
 							<span>{done.vtt_path}</span>
 						</div>
+						{postError !== null && (
+							<p className="text-sm text-failed">{postError}</p>
+						)}
 						<DialogFooter>
 							<Button variant="ghost" onClick={onClose}>
 								Done
@@ -202,7 +224,9 @@ export function ExportDialog({
 							{target === "final_cut" ? (
 								<Button
 									onClick={() =>
-										void openInFcp(done.fcpxml_path).catch(() => {})
+										void openInFcp(done.fcpxml_path).catch((e) =>
+											setPostError(e instanceof Error ? e.message : String(e)),
+										)
 									}
 								>
 									Open in Final Cut
@@ -210,7 +234,9 @@ export function ExportDialog({
 							) : (
 								<Button
 									onClick={() =>
-										void revealTimeline(done.fcpxml_path).catch(() => {})
+										void revealTimeline(done.fcpxml_path).catch((e) =>
+											setPostError(e instanceof Error ? e.message : String(e)),
+										)
 									}
 								>
 									Reveal in Finder

@@ -27,6 +27,7 @@ function makeStore() {
 		history: { past: [], future: [] },
 		cuts,
 		tokens: [],
+		fps,
 	});
 }
 
@@ -82,6 +83,66 @@ describe("autosave", () => {
 		expect(autosave.state()).toBe("paused-error");
 		await autosave.flushNow();
 		expect(autosave.state()).toBe("idle");
+		autosave.dispose();
+	});
+
+	it("an edit during an in-flight save is never reported idle", async () => {
+		const store = makeStore();
+		const pending: Array<(v: null) => void> = [];
+		const save = vi
+			.fn()
+			.mockImplementation(
+				() => new Promise<null>((resolve) => pending.push(resolve)),
+			);
+		const autosave = createAutosave({ store, fps, save, onPaused: vi.fn() });
+		store.getState().toggleCut(0);
+		await vi.advanceTimersByTimeAsync(200);
+		expect(autosave.state()).toBe("saving");
+		// Edit lands while the first save is still in flight.
+		store.getState().toggleCut(1);
+		for (const resolve of pending.splice(0)) {
+			resolve(null);
+		}
+		await Promise.resolve();
+		await Promise.resolve();
+		// The resolved save must not clobber the newer pending edit to idle —
+		// the close guard would skip its flush and silently drop the edit.
+		expect(autosave.state()).not.toBe("idle");
+		await vi.advanceTimersByTimeAsync(200);
+		for (const resolve of pending.splice(0)) {
+			resolve(null);
+		}
+		await vi.runAllTimersAsync();
+		expect(save).toHaveBeenCalledTimes(2);
+		expect(autosave.state()).toBe("idle");
+		autosave.dispose();
+	});
+
+	it("the next edit genuinely retries after a paused error", async () => {
+		const store = makeStore();
+		const save = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("disk full"))
+			.mockRejectedValueOnce(new Error("disk full"))
+			.mockResolvedValue(null);
+		const onResumed = vi.fn();
+		const autosave = createAutosave({
+			store,
+			fps,
+			save,
+			onPaused: vi.fn(),
+			onResumed,
+		});
+		store.getState().toggleCut(0);
+		await vi.advanceTimersByTimeAsync(200);
+		await vi.runAllTimersAsync();
+		expect(autosave.state()).toBe("paused-error");
+		store.getState().toggleCut(1);
+		await vi.advanceTimersByTimeAsync(200);
+		await vi.runAllTimersAsync();
+		expect(save).toHaveBeenCalledTimes(3);
+		expect(autosave.state()).toBe("idle");
+		expect(onResumed).toHaveBeenCalledOnce();
 		autosave.dispose();
 	});
 
