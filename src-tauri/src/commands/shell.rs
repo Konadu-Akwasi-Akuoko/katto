@@ -87,9 +87,14 @@ pub async fn open_external_url(app: AppHandle, url: String) -> Result<()> {
         .map_err(|e| Error::Io(e.to_string()))
 }
 
-/// The http(s)-only guard for [`open_external_url`], factored out for testing.
+/// The http(s)-only guard for [`open_external_url`], factored out for
+/// testing. Schemes compare case-insensitively (RFC 3986).
 fn validate_external_url(url: &str) -> Result<()> {
-    if url.starts_with("https://") || url.starts_with("http://") {
+    let lowered = url
+        .get(..8.min(url.len()))
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if lowered.starts_with("https://") || lowered.starts_with("http://") {
         Ok(())
     } else {
         Err(Error::Io(format!("refusing to open non-http url: {url}")))
@@ -104,13 +109,16 @@ mod tests {
     fn validate_external_url_accepts_http_and_https() {
         assert!(validate_external_url("https://news.ycombinator.com/item?id=1").is_ok());
         assert!(validate_external_url("http://example.com").is_ok());
+        // URL schemes are case-insensitive (RFC 3986); an uppercase scheme is
+        // the same safe scheme, not a different one.
+        assert!(validate_external_url("HTTPS://cased.example").is_ok());
     }
 
     #[test]
     fn validate_external_url_rejects_other_schemes() {
         assert!(validate_external_url("file:///etc/passwd").is_err());
         assert!(validate_external_url("javascript:alert(1)").is_err());
-        assert!(validate_external_url("HTTPS://cased.example").is_err());
+        assert!(validate_external_url("FILE:///etc/passwd").is_err());
         assert!(validate_external_url("not a url").is_err());
     }
 }
