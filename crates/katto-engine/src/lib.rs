@@ -5,6 +5,7 @@
 pub mod error;
 pub mod ffprobe;
 pub mod ingest;
+pub mod merge;
 pub mod rational;
 pub mod schema;
 pub mod validate;
