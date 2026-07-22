@@ -76,7 +76,10 @@ pub fn first_attempt_argv() -> Vec<String> {
     ]
 }
 
-/// Argv for the session-resumed correction attempt.
+/// Argv for the session-resumed correction attempt. Re-pins the cut-decider
+/// system prompt: `--resume` alone would run the turn under the stock Claude
+/// Code prompt (with tools, cwd = the bundle dir); redundant when the session
+/// already carries it, harmful never.
 pub fn correction_argv(session_id: &str) -> Vec<String> {
     vec![
         "-p".into(),
@@ -84,6 +87,8 @@ pub fn correction_argv(session_id: &str) -> Vec<String> {
         "json".into(),
         "--resume".into(),
         session_id.into(),
+        "--system-prompt".into(),
+        format!("{CUT_DECIDER_PROMPT}{OUTPUT_OVERRIDE}"),
     ]
 }
 
@@ -211,16 +216,9 @@ impl SubprocessClaudePlanner {
                 .spawn()
                 .map_err(|e| sub(format!("spawn: {e}")))?;
 
-            if let Some(mut stdin) = child.stdin.take() {
-                stdin
-                    .write_all(stdin_text.as_bytes())
-                    .await
-                    .map_err(|e| sub(format!("stdin: {e}")))?;
-                drop(stdin);
-            }
-
-            // Drain stderr concurrently with the stdout line loop — a child
-            // filling the stderr pipe while we only read stdout would deadlock.
+            // Drain stderr from the start — a child flooding stderr while we
+            // are still blocked writing a large transcript to stdin (or later,
+            // only reading stdout) would fill the pipe and deadlock.
             let stderr_pipe = child.stderr.take();
             let stderr_task = tokio::spawn(async move {
                 let mut buf = Vec::new();
@@ -229,6 +227,14 @@ impl SubprocessClaudePlanner {
                 }
                 buf
             });
+
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin
+                    .write_all(stdin_text.as_bytes())
+                    .await
+                    .map_err(|e| sub(format!("stdin: {e}")))?;
+                drop(stdin);
+            }
 
             let stdout = child.stdout.take().ok_or_else(|| sub("no stdout".into()))?;
             let mut lines = BufReader::new(stdout).lines();
@@ -383,10 +389,19 @@ mod tests {
         assert!(!argv.contains(&"--bare".to_string())); // auth: never bare (D14)
         assert!(!argv.contains(&"--model".to_string())); // subscription default
 
+        let corr = correction_argv("sess-1");
         assert_eq!(
-            correction_argv("sess-1"),
-            vec!["-p", "--output-format", "json", "--resume", "sess-1"]
+            &corr[..5],
+            &["-p", "--output-format", "json", "--resume", "sess-1"]
         );
+        // The resumed turn must re-pin the cut-decider system prompt: without
+        // it the correction runs under the stock Claude Code prompt with tools,
+        // cwd = the bundle directory.
+        let sys = &corr[corr.iter().position(|a| a == "--system-prompt").unwrap() + 1];
+        assert!(sys.starts_with("# cut-decider"));
+        assert!(sys.ends_with(OUTPUT_OVERRIDE));
+        assert!(!corr.contains(&"--bare".to_string()));
+        assert!(!corr.contains(&"--model".to_string()));
     }
 
     #[test]
