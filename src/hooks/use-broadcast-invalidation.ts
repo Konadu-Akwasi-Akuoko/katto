@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 import {
+	onBrowserStateChanged,
 	onDriveStatusChanged,
 	onEventsAppended,
 	onIdeasChanged,
@@ -12,6 +13,7 @@ import {
 	onSessionsChanged,
 	onVfxRenderLanded,
 } from "@/lib/ipc/broadcast";
+import { browserKeys } from "@/lib/ipc/browser";
 import { driveKeys } from "@/lib/ipc/drive";
 import { eventsKeys } from "@/lib/ipc/events";
 import { ideasKeys } from "@/lib/ipc/ideas";
@@ -61,6 +63,9 @@ export function useBroadcastInvalidation(): void {
 				void queryClient.invalidateQueries({
 					queryKey: vfxKeys.byProject(payload.slug),
 				});
+			}),
+			onBrowserStateChanged(() => {
+				void queryClient.invalidateQueries({ queryKey: browserKeys.state });
 			}),
 		];
 		return () => {

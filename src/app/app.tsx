@@ -6,6 +6,8 @@ import { DriveBanner } from "@/components/layout/drive-banner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Titlebar } from "@/components/layout/titlebar";
 import { Toaster } from "@/components/ui/sonner";
+import { BrowserSurface } from "@/features/browser/browser-surface";
+import { DownloadsBridge } from "@/features/browser/downloads-bridge";
 import { CaptureForm } from "@/features/capture/capture-form";
 import { Dashboard } from "@/features/dashboard/dashboard";
 import { DockIcon } from "@/features/dock/dock-icon";
@@ -67,6 +69,7 @@ function MainApp() {
 	return (
 		<Providers>
 			<BroadcastBridge />
+			<DownloadsBridge />
 			<OnboardingGate>
 				<AppShell
 					titlebar={<Titlebar dark={dark} onToggleTheme={toggleTheme} />}
@@ -84,6 +87,7 @@ function MainApp() {
 						) : (
 							<ProjectsList />
 						))}
+					{surface === "browser" && <BrowserSurface />}
 					{surface === "settings" && <SettingsPage />}
 				</AppShell>
 				<Palette />

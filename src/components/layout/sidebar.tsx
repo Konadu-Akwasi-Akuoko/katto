@@ -2,6 +2,7 @@ import {
 	CalendarBlankIcon,
 	FilmSlateIcon,
 	GearSixIcon,
+	GlobeSimpleIcon,
 	HouseIcon,
 } from "@phosphor-icons/react";
 import type { ComponentType, ReactNode } from "react";
@@ -15,6 +16,7 @@ const studioNav: { surface: Surface; icon: IconType; label: string }[] = [
 	{ surface: "dashboard", icon: HouseIcon, label: "Dashboard" },
 	{ surface: "planner", icon: CalendarBlankIcon, label: "Planner" },
 	{ surface: "projects", icon: FilmSlateIcon, label: "Projects" },
+	{ surface: "browser", icon: GlobeSimpleIcon, label: "Browser" },
 ];
 
 function NavButton({

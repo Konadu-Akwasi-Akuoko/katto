@@ -1,6 +1,11 @@
 import { create } from "zustand";
 
-export type Surface = "dashboard" | "planner" | "projects" | "settings";
+export type Surface =
+	| "dashboard"
+	| "planner"
+	| "projects"
+	| "browser"
+	| "settings";
 
 /**
  * A palette command that needs a second step (a picker or a text prompt) opens

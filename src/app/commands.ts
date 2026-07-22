@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { registerCommand } from "@/features/palette/registry";
+import { browserOpenTab } from "@/lib/ipc/browser";
 import { detectClaude } from "@/lib/ipc/onboarding";
 import { runScheduledJobNow } from "@/lib/ipc/scheduler";
 import { sessionsKeys, spawnSession } from "@/lib/ipc/sessions";
@@ -31,6 +32,23 @@ export function registerAppCommands(queryClient: QueryClient): void {
 		keywords: ["preferences", "keys", "root", "autostart"],
 		group: "Navigate",
 		run: () => useUiStore.getState().setSurface("settings"),
+	});
+	registerCommand({
+		id: "browser.open",
+		title: "Open browser",
+		keywords: ["web", "envato", "tabs", "assets", "download"],
+		group: "Navigate",
+		run: () => useUiStore.getState().setSurface("browser"),
+	});
+	registerCommand({
+		id: "browser.new-tab",
+		title: "New browser tab",
+		keywords: ["web", "tab", "envato"],
+		group: "App",
+		run: async () => {
+			useUiStore.getState().setSurface("browser");
+			await browserOpenTab();
+		},
 	});
 	registerCommand({
 		id: "app.sleep",
