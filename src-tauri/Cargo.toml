@@ -63,6 +63,9 @@ notify = "8.2"
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 # Already in the graph via tauri; direct dep because browser code names its types.
 url = "2"
+# Runtime dep (not just dev): unzip extracts into a same-volume temp dir before
+# the atomic rename into assets/, and the Resolve bridge writes its script here.
+tempfile = "3.27.0"
 # Phase 6 dock sessions: PTY spawn/stream for claude sessions and the
 # localhost hooks endpoint (synchronous, own thread, mirrors the DB writer).
 portable-pty = "0.9"

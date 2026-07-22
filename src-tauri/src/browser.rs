@@ -4,3 +4,4 @@
 
 pub mod downloads;
 pub mod tabs;
+pub mod unzip;
