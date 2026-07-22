@@ -1,9 +1,9 @@
 import { CheckIcon, RobotIcon } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
 import { useSessions } from "@/features/dock/use-sessions";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
 import { deriveDockIconState } from "./model/dock-state";
+import { useDoneFlash } from "./use-done-flash";
 
 /**
  * The sidebar Claude entry (the PRD's "dock icon"): running → pulsing ember
@@ -16,26 +16,7 @@ export function DockIcon() {
 	const { data: sessions = [] } = useSessions();
 	const iconState = deriveDockIconState(sessions);
 
-	const prevRunning = useRef<Set<string>>(new Set());
-	const [doneFlash, setDoneFlash] = useState(false);
-	useEffect(() => {
-		const running = new Set(
-			sessions.filter((s) => s.state.kind === "running").map((s) => s.id),
-		);
-		const settled = [...prevRunning.current].some((id) => {
-			const session = sessions.find((s) => s.id === id);
-			return (
-				session !== undefined &&
-				(session.state.kind === "idle" || session.state.kind === "closed")
-			);
-		});
-		prevRunning.current = running;
-		if (settled) {
-			setDoneFlash(true);
-			const timer = setTimeout(() => setDoneFlash(false), 3000);
-			return () => clearTimeout(timer);
-		}
-	}, [sessions]);
+	const doneFlash = useDoneFlash(sessions);
 
 	return (
 		<button
