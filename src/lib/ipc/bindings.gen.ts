@@ -39,9 +39,17 @@ export const commands = {
 	 */
 	devRunSmokeJob: (fail: boolean) => typedError<Job, Error>(__TAURI_INVOKE("dev_run_smoke_job", { fail })),
 	planRoughCut: (projectSlug: string, footagePath: string, onEvent: Channel<PipelineEvent>) => typedError<Job, Error>(__TAURI_INVOKE("plan_rough_cut", { projectSlug, footagePath, onEvent })),
-	openBundle: (path: string) => typedError<BundleData, Error>(__TAURI_INVOKE("open_bundle", { path })).then((v) => ((v.status === "ok" ? { ...v, data: ({...v.data,transcript:({...v.data.transcript,audio_duration_secs:v.data.transcript.audio_duration_secs==null?v.data.transcript.audio_duration_secs:v.data.transcript.audio_duration_secs,words:v.data.transcript.words.map(i=>i)}),cuts:v.data.cuts==null?v.data.cuts:({...v.data.cuts,cuts:v.data.cuts.cuts.map(i=>i),discretionary:v.data.cuts.discretionary.map(i=>i),flags:v.data.cuts.flags.map(i=>i)})}) } : v) as typeof v)),
+	openBundle: (path: string) => typedError<BundleData_Serialize, Error>(__TAURI_INVOKE("open_bundle", { path })).then((v) => ((v.status === "ok" ? { ...v, data: ({...v.data,transcript:({...v.data.transcript,audio_duration_secs:v.data.transcript.audio_duration_secs==null?v.data.transcript.audio_duration_secs:v.data.transcript.audio_duration_secs,words:v.data.transcript.words.map(i=>i)}),cuts:v.data.cuts==null?v.data.cuts:({...v.data.cuts,cuts:v.data.cuts.cuts.map(i=>i),discretionary:v.data.cuts.discretionary.map(i=>i),flags:v.data.cuts.flags.map(i=>i)})}) } : v) as typeof v)),
 	listBundles: (projectSlug: string) => typedError<BundleSummary[], Error>(__TAURI_INVOKE("list_bundles", { projectSlug })),
 	listFootage: (projectSlug: string) => typedError<FootageClip[], Error>(__TAURI_INVOKE("list_footage", { projectSlug })),
+	saveEdits: (bundlePath: string, edits: Edits_Deserialize) => typedError<null, Error>(__TAURI_INVOKE("save_edits", { bundlePath, edits })),
+	previewExport: (bundlePath: string) => typedError<ExportPreview, Error>(__TAURI_INVOKE("preview_export", { bundlePath })),
+	exportTimeline: (bundlePath: string, nleTarget: NleTarget, openAfter: boolean) => typedError<ExportResult, Error>(__TAURI_INVOKE("export_timeline", { bundlePath, nleTarget, openAfter })),
+	renderMp4: (bundlePath: string, out: string | null, onProgress: Channel<JobProgress>) => typedError<Job, Error>(__TAURI_INVOKE("render_mp4", { bundlePath, out, onProgress })),
+	generateThumbs: (bundlePath: string, onProgress: Channel<JobProgress>) => typedError<Job, Error>(__TAURI_INVOKE("generate_thumbs", { bundlePath, onProgress })),
+	relocateSource: (bundlePath: string, newPath: string) => typedError<null, Error>(__TAURI_INVOKE("relocate_source", { bundlePath, newPath })),
+	openInFcp: (path: string) => typedError<boolean, Error>(__TAURI_INVOKE("open_in_fcp", { path })),
+	revealTimeline: (path: string) => typedError<null, Error>(__TAURI_INVOKE("reveal_timeline", { path })),
 	/**
 	 *  Open the native folder picker and inspect the chosen directory. `None` when
 	 *  the user cancels. Nothing is persisted here — the wizard saves the path via
@@ -250,7 +258,13 @@ export type BoundaryAdjustment = {
  *  The full bundle payload for the editor — one `open_bundle` call, JSON only
  *  (media plays via the asset protocol).
  */
-export type BundleData = {
+export type BundleData = BundleData_Serialize | BundleData_Deserialize;
+
+/**
+ *  The full bundle payload for the editor — one `open_bundle` call, JSON only
+ *  (media plays via the asset protocol).
+ */
+export type BundleData_Deserialize = {
 	root: string,
 	source_path: string,
 	frame_rate: Rational,
@@ -258,7 +272,22 @@ export type BundleData = {
 	duration_secs: number,
 	transcript: Transcript,
 	cuts: Cuts | null,
-	edits: Edits | null,
+	edits: Edits_Deserialize | null,
+};
+
+/**
+ *  The full bundle payload for the editor — one `open_bundle` call, JSON only
+ *  (media plays via the asset protocol).
+ */
+export type BundleData_Serialize = {
+	root: string,
+	source_path: string,
+	frame_rate: Rational,
+	/**  UI projection (`to_secs_f64`) — display only, never cut math. */
+	duration_secs: number,
+	transcript: Transcript,
+	cuts: Cuts | null,
+	edits: Edits_Serialize | null,
 };
 
 /**  One `.kruproj` row in the project's bundle list. */
@@ -408,8 +437,31 @@ export type DriveStatusChanged = {
 	path: string,
 };
 
+/**  Undo/redo stacks persisted across sessions (bounded to 100 by the frontend). */
+export type EditHistory = {
+	/**  Undo stack, oldest first. */
+	past?: EditSnapshot[],
+	/**  Redo stack. */
+	future?: EditSnapshot[],
+};
+
+/**  One undo/redo step: the document-state fields of [`Edits`] at a point in time. */
+export type EditSnapshot = {
+	/**  Indices into cuts.json `cuts[]` the human switched off. */
+	toggled_off?: number[],
+	/**  Indices into `discretionary[]` the human applied. */
+	applied_discretionary?: number[],
+	/**  Human-added cuts. */
+	manual_cuts?: ManualCut[],
+	/**  Human nudges to base-cut edges. */
+	boundary_adjustments?: BoundaryAdjustment[],
+};
+
 /**  The `edits.json` document: human review state layered over cuts.json. */
-export type Edits = {
+export type Edits = Edits_Serialize | Edits_Deserialize;
+
+/**  The `edits.json` document: human review state layered over cuts.json. */
+export type Edits_Deserialize = {
 	/**  Wire format version (currently 1). */
 	schema_version: number,
 	/**  Indices into cuts.json `cuts[]` the human switched off. */
@@ -420,6 +472,30 @@ export type Edits = {
 	manual_cuts?: ManualCut[],
 	/**  Human nudges to base-cut edges. */
 	boundary_adjustments?: BoundaryAdjustment[],
+	/**
+	 *  Undo/redo history persisted across sessions (absent in phase-4 files;
+	 *  the merge ignores it).
+	 */
+	history?: EditHistory | null,
+};
+
+/**  The `edits.json` document: human review state layered over cuts.json. */
+export type Edits_Serialize = {
+	/**  Wire format version (currently 1). */
+	schema_version: number,
+	/**  Indices into cuts.json `cuts[]` the human switched off. */
+	toggled_off: number[],
+	/**  Indices into `discretionary[]` the human applied. */
+	applied_discretionary: number[],
+	/**  Human-added cuts. */
+	manual_cuts: ManualCut[],
+	/**  Human nudges to base-cut edges. */
+	boundary_adjustments: BoundaryAdjustment[],
+	/**
+	 *  Undo/redo history persisted across sessions (absent in phase-4 files;
+	 *  the merge ignores it).
+	 */
+	history?: EditHistory | null,
 };
 
 /**
@@ -431,7 +507,7 @@ export type Edits = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | 
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | 
 /**
  *  The one structured variant: the relocation surface needs the fields
  *  (name a file, show its duration), not a flattened string. On the wire
@@ -456,6 +532,23 @@ export type Event = {
 
 /**  Broadcast after any `events` row is written; the dashboard refetches its feed. */
 export type EventsAppended = null;
+
+/**  What the export dialog shows before exporting. */
+export type ExportPreview = {
+	slug: string,
+	version: number,
+	default_nle: NleTarget | null,
+};
+
+/**  The written artifacts of one export plus what happened after. */
+export type ExportResult = {
+	fcpxml_path: string,
+	srt_path: string,
+	vtt_path: string,
+	version: number,
+	opened_in_nle: boolean,
+	revealed: boolean,
+};
 
 /**  Why a pipeline run failed, as UI copy needs to distinguish it. */
 export type FailureKind = 
@@ -608,6 +701,13 @@ export type ManualCut = {
 	/**  Optional human note. */
 	note: string | null,
 };
+
+/**
+ *  Which NLE the export opens in. Stored in settings as its snake_case
+ *  string; only Final Cut has an open action this phase — Resolve/Premiere
+ *  export identically and fall back to reveal.
+ */
+export type NleTarget = "final_cut" | "resolve" | "premiere";
 
 /**  Streamed pipeline progress for the footage-card step indicator. */
 export type PipelineEvent = 

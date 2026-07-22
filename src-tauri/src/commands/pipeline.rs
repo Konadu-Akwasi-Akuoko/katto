@@ -303,8 +303,9 @@ async fn resolve_planner(
 }
 
 /// A bundle path from the frontend must resolve inside the studio root —
-/// same containment stance as `validate_footage_path`.
-fn validate_bundle_path(studio_root: &Path, path: &Path) -> Result<PathBuf> {
+/// same containment stance as `validate_footage_path`. Shared with the
+/// editor command domain.
+pub(crate) fn validate_bundle_path(studio_root: &Path, path: &Path) -> Result<PathBuf> {
     let canonical_root = studio_root
         .canonicalize()
         .map_err(|e| Error::Io(format!("studio root {}: {e}", studio_root.display())))?;

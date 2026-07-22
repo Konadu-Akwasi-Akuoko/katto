@@ -1,4 +1,5 @@
 pub mod drive;
+pub mod editor;
 pub mod events;
 pub mod ideas;
 pub mod ingest;

@@ -73,6 +73,9 @@ pub enum Error {
     #[error("{0}")]
     PipelineBusy(String),
 
+    #[error("{0}")]
+    Relocate(String),
+
     /// The one structured variant: the relocation surface needs the fields
     /// (name a file, show its duration), not a flattened string. On the wire
     /// `message` becomes an object for this kind only; the IPC wrapper
