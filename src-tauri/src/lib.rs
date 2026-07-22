@@ -124,11 +124,25 @@ fn bootstrap_state(app: &tauri::App) -> Result<state::AppState, Box<dyn std::err
         db.call(|conn| db::events::record(conn, "app_started", None, None)),
     )?;
     let jobs = jobs::JobRuntime::new(app.handle().clone(), db.clone());
+    let single_webview = tauri::async_runtime::block_on(
+        db.call(|conn| db::settings::get(conn, "browser_single_webview")),
+    )
+    .ok()
+    .flatten()
+    .is_some_and(|v| v == "true");
+    let browser: std::sync::Arc<dyn browser::host::BrowserTabHost> = if single_webview {
+        std::sync::Arc::new(browser::host::SingleWebviewHost::new())
+    } else {
+        std::sync::Arc::new(browser::host::MultiWebviewHost::new())
+    };
     Ok(state::AppState {
         db,
         jobs,
         sessions: sessions::pool::SessionPool::new(),
         active_exports: std::sync::Arc::default(),
+        browser,
+        downloads: browser::host::DownloadRegistry::default(),
+        active_asset_project: std::sync::Mutex::new(None),
     })
 }
 
@@ -238,12 +252,18 @@ pub fn run() {
                 .start(handle.clone())?;
             app.manage(scheduler::runtime::start(handle.clone()));
             vfx::start_watch(handle.clone());
+            browser::host::sweep_staging(handle);
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { .. } => {
                 window::on_close_requested(window);
             }
+            tauri::WindowEvent::Destroyed if window.label() == window::MAIN => {
+                let state: tauri::State<state::AppState> = window.app_handle().state();
+                state.browser.on_window_destroyed();
+            }
+            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

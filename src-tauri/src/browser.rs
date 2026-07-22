@@ -3,5 +3,6 @@
 //! math — nothing here belongs in the engine.
 
 pub mod downloads;
+pub mod host;
 pub mod tabs;
 pub mod unzip;

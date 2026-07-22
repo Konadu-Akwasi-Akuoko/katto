@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use crate::browser::host::{BrowserTabHost, DownloadRegistry};
 use crate::db::DbHandle;
 use crate::ingest::offer::CardOffer;
 use crate::jobs::JobRuntime;
@@ -16,6 +17,15 @@ pub struct AppState {
     /// Bundle roots with a timeline export in flight (exports are short
     /// direct commands with no jobs row; this stops a double-fire).
     pub active_exports: Arc<Mutex<HashSet<PathBuf>>>,
+    /// The in-app browser's webview strategy, chosen at startup from the
+    /// `browser_single_webview` settings flag (flip requires a relaunch).
+    pub browser: Arc<dyn BrowserTabHost>,
+    /// Downloads between interception and filing, plus parked ones awaiting
+    /// a project pick.
+    pub downloads: DownloadRegistry,
+    /// Explicit filing-target override; `None` falls back to the most
+    /// recently touched project.
+    pub active_asset_project: Mutex<Option<String>>,
 }
 
 /// Holds the currently-detected card offer, if any. Populated by the volume
