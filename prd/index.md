@@ -97,7 +97,7 @@ Update the table as phases land (link the PR that closed each).
 | 0 | PRDs + guidance layer + repo identity | done | [#3](https://github.com/Konadu-Akwasi-Akuoko/katto/pull/3) |
 | 1 | Shell & First Light | done (exit criteria passed 2026-07-09; merged to main via the phase-2 branch) | [#9](https://github.com/Konadu-Akwasi-Akuoko/katto/pull/9) |
 | 2 | Projects & Planner | done (exit criteria signed off 2026-07-17) | [#9](https://github.com/Konadu-Akwasi-Akuoko/katto/pull/9) |
-| 3 | SD Ingest | not started | — |
+| 3 | SD Ingest | implemented 2026-07-22 (overnight run); pending owner hardware verification | — |
 | 4 | Cut Pipeline | not started | — |
 | 5 | Cut Editor & Export | not started | — |
 | 6 | Claude Dock & Automations | not started | — |
