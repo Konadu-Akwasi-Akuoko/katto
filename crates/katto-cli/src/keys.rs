@@ -1,5 +1,6 @@
-//! API-key resolution: env var first, then the shared "katto" keychain
-//! service (same constants as the app crate). Values are never logged.
+//! API-key resolution: env var first, then the keychain, using the shared
+//! service/account constants from `katto_engine::detect`. Values are never
+//! logged.
 
 /// Which credential to resolve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,8 +19,8 @@ impl KeyName {
 
     fn account(self) -> &'static str {
         match self {
-            KeyName::Elevenlabs => "elevenlabs",
-            KeyName::Anthropic => "anthropic",
+            KeyName::Elevenlabs => katto_engine::detect::ELEVENLABS_ACCOUNT,
+            KeyName::Anthropic => katto_engine::detect::ANTHROPIC_ACCOUNT,
         }
     }
 }
@@ -44,7 +45,7 @@ impl KeySource {
 }
 
 /// The keychain service name shared with the app crate.
-const SERVICE: &str = "katto";
+const SERVICE: &str = katto_engine::detect::KEYCHAIN_SERVICE;
 
 /// Install the macOS login-keychain store as the keyring backend. No-op off
 /// macOS; failures degrade to keychain lookups reporting Missing.

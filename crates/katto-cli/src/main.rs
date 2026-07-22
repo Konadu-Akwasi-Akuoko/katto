@@ -67,7 +67,7 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
             cmd: AuthCmd::Status,
         } => {
             let status = AuthStatus {
-                claude_path: detect_claude().map(|p| p.display().to_string()),
+                claude_path: katto_engine::detect::detect_claude().map(|p| p.display().to_string()),
                 elevenlabs: resolve(KeyName::Elevenlabs).1,
                 anthropic: resolve(KeyName::Anthropic).1,
             };
@@ -145,7 +145,7 @@ fn select_planner(
         })
     };
     match choice {
-        Some(PlannerChoice::Subprocess) => detect_claude()
+        Some(PlannerChoice::Subprocess) => katto_engine::detect::detect_claude()
             .map(subprocess)
             .ok_or_else(|| anyhow::anyhow!("--planner subprocess but no claude binary found")),
         Some(PlannerChoice::Http) => resolve(KeyName::Anthropic)
@@ -153,7 +153,7 @@ fn select_planner(
             .map(http)
             .ok_or_else(|| anyhow::anyhow!("--planner http but no Anthropic API key found")),
         None => {
-            if let Some(path) = detect_claude() {
+            if let Some(path) = katto_engine::detect::detect_claude() {
                 return Ok(subprocess(path));
             }
             if let Some(key) = resolve(KeyName::Anthropic).0 {
@@ -164,17 +164,4 @@ fn select_planner(
             )
         }
     }
-}
-
-/// Detect the claude binary the way the app does: a login-shell `which`.
-fn detect_claude() -> Option<PathBuf> {
-    let out = std::process::Command::new("zsh")
-        .args(["-lc", "which claude"])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (!path.is_empty()).then(|| PathBuf::from(path))
 }

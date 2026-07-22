@@ -3,6 +3,7 @@
 //! and SD-ingest logic. Never depends on tauri or any UI concern.
 
 pub mod bundle;
+pub mod detect;
 pub mod error;
 pub mod ffprobe;
 pub mod import;

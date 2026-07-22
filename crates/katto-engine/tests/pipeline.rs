@@ -86,7 +86,7 @@ async fn full_pipeline_real_binaries() {
         eprintln!("set ELEVENLABS_API_KEY to run");
         return;
     };
-    let claude = which_claude();
+    let claude = katto_engine::detect::detect_claude();
     let Some(claude_path) = claude else {
         eprintln!("no claude binary on PATH");
         return;
@@ -111,16 +111,4 @@ async fn full_pipeline_real_binaries() {
     assert!(validate_cuts(&cuts, &transcript).is_empty());
     bundle::write_json_atomic(&out.bundle_root.join(CUTS_JSON), &cuts).unwrap();
     assert!(bundle::open(&out.bundle_root).is_ok());
-}
-
-fn which_claude() -> Option<std::path::PathBuf> {
-    let out = std::process::Command::new("zsh")
-        .args(["-lc", "which claude"])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (!path.is_empty()).then(|| std::path::PathBuf::from(path))
 }

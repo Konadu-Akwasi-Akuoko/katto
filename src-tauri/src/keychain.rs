@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::Result;
 
 /// The keychain service name every katto credential lives under.
-const SERVICE: &str = "katto";
+const SERVICE: &str = katto_engine::detect::KEYCHAIN_SERVICE;
 
 /// The credentials katto stores. Wire values are the snake_case names the
 /// frontend sends.
@@ -18,8 +18,8 @@ impl KeyService {
     /// The keychain account name for this credential.
     pub fn account(self) -> &'static str {
         match self {
-            KeyService::Elevenlabs => "elevenlabs",
-            KeyService::Anthropic => "anthropic",
+            KeyService::Elevenlabs => katto_engine::detect::ELEVENLABS_ACCOUNT,
+            KeyService::Anthropic => katto_engine::detect::ANTHROPIC_ACCOUNT,
         }
     }
 }
