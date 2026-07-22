@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 
+pub mod enumerate;
 pub mod recognize;
 
 /// The kind of camera card recognized, by on-card layout.
