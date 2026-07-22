@@ -207,6 +207,15 @@ export const commands = {
 	 *  the frontend once this resolves.
 	 */
 	captureSubmit: (title: string, note: string | null, kind: string | null) => typedError<null, Error>(__TAURI_INVOKE("capture_submit", { title, note, kind })),
+	/**  Every scheduled job row (Settings' nightly-curation section). */
+	getSchedulerState: () => typedError<ScheduledJob[], Error>(__TAURI_INVOKE("get_scheduler_state")),
+	/**  Run one scheduled job immediately (palette / Settings "Run now"). */
+	runScheduledJobNow: (name: string) => typedError<null, Error>(__TAURI_INVOKE("run_scheduled_job_now", { name })),
+	/**
+	 *  Update a job's daily time and enabled flag. The catch-up window is fixed
+	 *  (20 h) — the schedule spec is validated before it is written.
+	 */
+	setScheduledJob: (name: string, hour: number, minute: number, enabled: boolean) => typedError<null, Error>(__TAURI_INVOKE("set_scheduled_job", { name, hour, minute, enabled })),
 	/**  Spawn a new claude dock session; returns its session id. */
 	spawnSession: (task: NewSession) => typedError<string, Error>(__TAURI_INVOKE("spawn_session", { task })),
 	/**
@@ -886,6 +895,14 @@ export type ScheduleEntry = {
 	kind: string,
 	date: string,
 	note: string | null,
+};
+
+/**  A named recurring job with anacron-style catch-up semantics (Phase 6). */
+export type ScheduledJob = {
+	name: string,
+	spec: string,
+	last_success_at: string | null,
+	enabled: boolean,
 };
 
 /**  One session as the frontend sees it (tab strip + dock icon states). */

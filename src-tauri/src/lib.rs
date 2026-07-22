@@ -72,6 +72,9 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::ideas::discard_idea,
             commands::ideas::promote_idea,
             commands::ideas::capture_submit,
+            commands::scheduler::get_scheduler_state,
+            commands::scheduler::run_scheduled_job_now,
+            commands::scheduler::set_scheduled_job,
             commands::sessions::spawn_session,
             commands::sessions::attach_session,
             commands::sessions::write_session,
@@ -224,6 +227,7 @@ pub fn run() {
             app.state::<state::AppState>()
                 .sessions
                 .start(handle.clone())?;
+            app.manage(scheduler::runtime::start(handle.clone()));
             Ok(())
         })
         .on_window_event(|window, event| {
