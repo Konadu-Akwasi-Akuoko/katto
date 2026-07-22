@@ -17,21 +17,12 @@ import {
 import type { TokenSpan } from "@/features/editor/model/tokens";
 import type { Range } from "@/features/editor/model/wire";
 import type { DragTarget } from "@/features/editor/store/editor-store";
+import { keyToDragTarget } from "@/features/editor/store/editor-store";
 import type { Rational } from "@/lib/ipc/bindings.gen";
 
 const RULER_HEIGHT = 20;
 const TRACK_HEIGHT = 64;
 const MIN_MARQUEE_SECONDS = 0.05;
-
-/** base-N / manual-N / disc-N region keys -> store drag targets. */
-function keyToDragTarget(key: string): DragTarget | null {
-	const match = key.match(/^(base|manual|disc)-(\d+)$/);
-	if (!match || match[2] === undefined) return null;
-	const index = Number.parseInt(match[2], 10);
-	if (match[1] === "base") return { kind: "base", cutIndex: index };
-	if (match[1] === "manual") return { kind: "manual", index };
-	return { kind: "disc", index };
-}
 
 /** Token colors resolved from the live CSS custom properties. */
 function themeColors(el: HTMLElement) {

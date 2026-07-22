@@ -1,5 +1,6 @@
 import { ArrowLeftIcon, PauseIcon, PlayIcon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 
@@ -19,6 +20,7 @@ import type { EditorStore } from "@/features/editor/store/editor-store";
 import {
 	createEditorStore,
 	documentOf,
+	keyToDragTarget,
 } from "@/features/editor/store/editor-store";
 import { TimelinePane } from "@/features/editor/timeline-pane";
 import { TranscriptPane } from "@/features/editor/transcript-pane";
@@ -26,6 +28,7 @@ import { isEditableTarget, keyToAction } from "@/features/editor/transport";
 import { useTransport } from "@/features/editor/use-transport";
 import type { VideoPaneHandle } from "@/features/editor/video-pane";
 import { VideoPane } from "@/features/editor/video-pane";
+import { Waveform } from "@/features/editor/waveform";
 import { generateThumbs, saveEdits } from "@/lib/ipc/editor";
 import type { BundleData, Cut, Cuts } from "@/lib/ipc/pipeline";
 import { openBundle, pipelineKeys } from "@/lib/ipc/pipeline";
@@ -353,6 +356,22 @@ function Editing({
 						commit ? state.commitDrag() : state.cancelDrag()
 					}
 					onMarqueeCut={(range) => state.addManualCut(range)}
+				/>
+
+				<Waveform
+					audioUrl={convertFileSrc(`${bundlePath}/cached_audio.wav`)}
+					ranges={ranges}
+					currentTime={currentTime}
+					viewport={viewport}
+					selectedKey={selectedKey}
+					onSeek={seek}
+					onDragBegin={() => state.beginDrag()}
+					onDrag={(key, edge, t) => {
+						const target = keyToDragTarget(key);
+						if (target) state.dragBoundary(target, edge, t);
+					}}
+					onDragEnd={() => state.commitDrag()}
+					onSelect={setSelectedKey}
 				/>
 
 				<div className="flex h-8 items-center gap-2">

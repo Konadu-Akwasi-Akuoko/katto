@@ -47,6 +47,16 @@ export type EditorState = EditorDocument & {
 export type TemporalStore = StoreApi<TemporalState<EditorDocument>>;
 export type EditorStore = StoreApi<EditorState> & { temporal: TemporalStore };
 
+/** Shared region-key -> drag-target mapping (timeline canvas + waveform). */
+export function keyToDragTarget(key: string): DragTarget | null {
+	const match = key.match(/^(base|manual|disc)-(\d+)$/);
+	if (!match || match[2] === undefined) return null;
+	const index = Number.parseInt(match[2], 10);
+	if (match[1] === "base") return { kind: "base", cutIndex: index };
+	if (match[1] === "manual") return { kind: "manual", index };
+	return { kind: "disc", index };
+}
+
 /** The partialize projection: only document state enters history. */
 export function documentOf(s: EditorDocument): EditorDocument {
 	return {
