@@ -55,17 +55,25 @@ export function ImportSheet() {
 	const [selected, setSelected] = useState<ReadonlySet<string>>(
 		() => new Set(),
 	);
+	// Initialize the selection once per card (keyed on the volume, not the
+	// offer object): the async duration fill republishes the offer and must
+	// not wipe out selections the user already made.
+	const [selectionFor, setSelectionFor] = useState<string | null>(null);
 	useEffect(() => {
-		if (offer) {
-			setSelected(
-				new Set(
-					offer.groups.flatMap((g) =>
-						g.clips.filter((c) => c.selected).map((c) => c.path),
-					),
-				),
-			);
+		if (!offer) {
+			setSelectionFor(null);
+			return;
 		}
-	}, [offer]);
+		if (offer.volume === selectionFor) return;
+		setSelected(
+			new Set(
+				offer.groups.flatMap((g) =>
+					g.clips.filter((c) => c.selected).map((c) => c.path),
+				),
+			),
+		);
+		setSelectionFor(offer.volume);
+	}, [offer, selectionFor]);
 
 	const [creating, setCreating] = useState(false);
 	const [newTitle, setNewTitle] = useState("");
@@ -100,6 +108,7 @@ export function ImportSheet() {
 		id: string;
 		count: number;
 		volume: string;
+		projectSlug: string;
 		projectTitle: string;
 	} | null>(null);
 
@@ -110,13 +119,31 @@ export function ImportSheet() {
 		},
 		onSuccess: (job) => {
 			void queryClient.invalidateQueries({ queryKey: jobsKeys.all });
-			if (!offer) return;
+			if (!offer || !activeSlug) return;
 			setActiveJob({
 				id: job.id,
 				count: totals.count,
 				volume: offer.volume,
+				projectSlug: activeSlug,
 				projectTitle: activeProject?.title ?? "project",
 			});
+		},
+		onError: (err) => toast.error(err.message),
+	});
+
+	// Retry the un-imported remainder of a failed job: same card, same
+	// project, only the sources the ingest_failed events row reported.
+	const retryMutation = useMutation({
+		mutationFn: (vars: {
+			volume: string;
+			projectSlug: string;
+			remaining: string[];
+		}) => startIngest(vars.volume, vars.projectSlug, vars.remaining),
+		onSuccess: (job, vars) => {
+			void queryClient.invalidateQueries({ queryKey: jobsKeys.all });
+			setActiveJob((prev) =>
+				prev ? { ...prev, id: job.id, count: vars.remaining.length } : prev,
+			);
 		},
 		onError: (err) => toast.error(err.message),
 	});
@@ -139,6 +166,17 @@ export function ImportSheet() {
 						volume={activeJob.volume}
 						projectTitle={activeJob.projectTitle}
 						clipCount={activeJob.count}
+						onRetry={
+							// Retrying needs the card still mounted as offered.
+							offer?.volume === activeJob.volume
+								? (remaining) =>
+										retryMutation.mutate({
+											volume: activeJob.volume,
+											projectSlug: activeJob.projectSlug,
+											remaining,
+										})
+								: undefined
+						}
 					/>
 					<div className="flex justify-end">
 						<Button

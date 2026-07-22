@@ -8,6 +8,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { importFiles } from "@/lib/ipc/ingest";
 import { jobsKeys } from "@/lib/ipc/jobs";
 
+const VIDEO_EXTS = new Set(["mp4", "mov", "mts", "m4v"]);
+
+/** Keep only paths with a video extension (folders and sidecars drop out). */
+function videoPaths(paths: string[]): string[] {
+	return paths.filter((p) =>
+		VIDEO_EXTS.has(p.split(".").pop()?.toLowerCase() ?? ""),
+	);
+}
+
 /**
  * The manual iPhone-footage path: drop video files anywhere over the detail
  * view and they run the same rename+verify ingest pipeline as a card import —
@@ -44,9 +53,13 @@ export function FootageCard({ slug }: { slug: string }) {
 			else if (event.payload.type === "leave") setOver(false);
 			else if (event.payload.type === "drop") {
 				setOver(false);
-				if (!drop.isPending && event.payload.paths.length > 0) {
-					drop.mutate(event.payload.paths);
+				if (drop.isPending) return;
+				const videos = videoPaths(event.payload.paths);
+				if (videos.length === 0) {
+					toast.error("No video files in that drop");
+					return;
 				}
+				drop.mutate(videos);
 			}
 		});
 		return () => {

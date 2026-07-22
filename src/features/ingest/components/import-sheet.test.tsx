@@ -87,6 +87,8 @@ function renderSheet() {
 				finished_at: null,
 			};
 		if (cmd === "subscribe_job_progress") return null;
+		if (cmd === "list_jobs") return [];
+		if (cmd === "list_events") return [];
 		if (typeof cmd === "string" && cmd.startsWith("plugin:event|")) return 1;
 		throw new Error(`unexpected command: ${cmd}`);
 	});

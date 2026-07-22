@@ -7,6 +7,7 @@ import {
 	formatBytes,
 	formatDuration,
 	hasEnoughFreeSpace,
+	remainingClips,
 	selectionTotals,
 } from "@/features/ingest/model/select";
 import type { CardOffer } from "@/lib/ipc/ingest";
@@ -102,6 +103,39 @@ describe("clipCountLabel", () => {
 	it("pluralizes everything else", () => {
 		expect(clipCountLabel(0)).toBe("0 clips");
 		expect(clipCountLabel(14)).toBe("14 clips");
+	});
+});
+
+describe("remainingClips", () => {
+	const failedEvent = {
+		kind: "ingest_failed",
+		payload_json: JSON.stringify({
+			job_id: "job-1",
+			remaining: ["CLIP/C0002.MP4", "CLIP/C0003.MP4"],
+		}),
+	};
+
+	it("returns the remainder for the matching job", () => {
+		const events = [
+			{ kind: "ingested", payload_json: "{}" },
+			failedEvent,
+			{ kind: "ingest_failed", payload_json: '{"job_id":"other"}' },
+		];
+		expect(remainingClips(events, "job-1")).toEqual([
+			"CLIP/C0002.MP4",
+			"CLIP/C0003.MP4",
+		]);
+	});
+
+	it("returns null for unknown jobs or malformed payloads", () => {
+		expect(remainingClips([failedEvent], "job-9")).toBeNull();
+		expect(
+			remainingClips(
+				[{ kind: "ingest_failed", payload_json: "not json" }],
+				"job-1",
+			),
+		).toBeNull();
+		expect(remainingClips([], "job-1")).toBeNull();
 	});
 });
 

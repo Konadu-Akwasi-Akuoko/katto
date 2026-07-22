@@ -53,6 +53,42 @@ export function clipCountLabel(count: number): string {
 	return count === 1 ? `${count} clip` : `${count} clips`;
 }
 
+interface EventLike {
+	kind: string;
+	payload_json: string | null;
+}
+
+/**
+ * The un-imported source paths a failed ingest job left behind, from the
+ * job's `ingest_failed` events row (most-recent-first list). Null when the
+ * job has no such row or the payload does not parse.
+ */
+export function remainingClips(
+	events: readonly EventLike[],
+	jobId: string,
+): string[] | null {
+	for (const event of events) {
+		if (event.kind !== "ingest_failed" || event.payload_json === null) continue;
+		let payload: unknown;
+		try {
+			payload = JSON.parse(event.payload_json);
+		} catch {
+			continue;
+		}
+		if (typeof payload !== "object" || payload === null) continue;
+		const record = payload as Record<string, unknown>;
+		if (record.job_id !== jobId) continue;
+		const remaining = record.remaining;
+		if (
+			Array.isArray(remaining) &&
+			remaining.every((p): p is string => typeof p === "string")
+		) {
+			return remaining;
+		}
+	}
+	return null;
+}
+
 interface ProjectLike {
 	slug: string;
 	shoot_date: string | null;
