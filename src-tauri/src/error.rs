@@ -48,6 +48,9 @@ pub enum Error {
 
     #[error("{0}")]
     ShortcutUnavailable(String),
+
+    #[error("{0}")]
+    Engine(String),
 }
 
 impl Error {
@@ -94,6 +97,12 @@ impl From<std::io::Error> for Error {
 impl From<keyring_core::Error> for Error {
     fn from(err: keyring_core::Error) -> Self {
         Error::Keychain(err.to_string())
+    }
+}
+
+impl From<katto_engine::Error> for Error {
+    fn from(err: katto_engine::Error) -> Self {
+        Error::Engine(err.to_string())
     }
 }
 

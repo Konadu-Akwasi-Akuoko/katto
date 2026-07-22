@@ -1,19 +1,10 @@
+#![warn(missing_docs)]
+//! Pure media-pipeline library: rational time, cut schemas, ffprobe parsing,
+//! and SD-ingest logic. Never depends on tauri or any UI concern.
+
+pub mod error;
 pub mod rational;
 pub mod schema;
 
+pub use error::{Error, Result};
 pub use rational::Rational;
-
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}

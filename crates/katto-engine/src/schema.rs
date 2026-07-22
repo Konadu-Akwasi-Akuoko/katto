@@ -1,8 +1,14 @@
+//! Serde schemas for the cut-decider artifact files (`projects.json`,
+//! `cuts.json`, `edits.json`), mirrored verbatim from the hyper-frames studio
+//! pipeline.
+
 use crate::rational::Rational;
 use serde::{Deserialize, Serialize};
 
+/// Why a span is a hard cut in `cuts.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[allow(missing_docs)]
 pub enum CutReason {
     Filler,
     Stutter,
@@ -12,8 +18,10 @@ pub enum CutReason {
     AudioEvent,
 }
 
+/// Why a span is a discretionary (human-decided) cut candidate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[allow(missing_docs)]
 pub enum DiscretionaryReason {
     Filler,
     Stutter,
@@ -24,15 +32,17 @@ pub enum DiscretionaryReason {
     Other,
 }
 
+/// The model's confidence in a discretionary suggestion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[allow(missing_docs)]
 pub enum Confidence {
     Low,
     Medium,
     High,
 }
 
-// projects.json
+/// The `projects.json` document: source video identity and timing.
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -42,7 +52,7 @@ pub struct Project {
     schema_version: String,
 }
 
-// cuts.json
+/// The `cuts.json` document: the decider's proposed cut list.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Cuts {
@@ -53,7 +63,7 @@ pub struct Cuts {
     total_cut_secs: Rational,
 }
 
-// edits.json
+/// The `edits.json` document: the human-reviewed edit state over a cut list.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Edits {
@@ -64,6 +74,7 @@ pub struct Edits {
     boundary_adjustments: String,
 }
 
+/// One cut span with its reason and transcript excerpt.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Cut {
@@ -73,6 +84,7 @@ pub struct Cut {
     excerpt: String,
 }
 
+/// A discretionary cut candidate: a [`Cut`] plus a note and confidence.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Discretionary {
@@ -82,6 +94,7 @@ pub struct Discretionary {
     confidence: String,
 }
 
+/// A flagged span the decider is unsure about, with its raw logprob.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Flag {
