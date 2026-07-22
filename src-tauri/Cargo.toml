@@ -52,10 +52,14 @@ fs4 = { version = "1.1", features = ["sync"] }
 # in the graph transitively (via tauri → cookie), this only enables the feature.
 time = { version = "0.3", features = ["formatting"] }
 # Weekday name (`%A`) for the tray's next-shoot line; already in the graph
-# transitively (via serde_with), this makes it a direct dep. No `clock` feature —
-# the date is passed in, never read from the wall clock.
-chrono = { version = "0.4", default-features = false, features = ["std"] }
+# transitively (via serde_with), this makes it a direct dep. `clock` exists for
+# the Phase 6 scheduler's local-time due-math; everything else passes dates in.
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 notify = "8.2"
+# Phase 6 dock sessions: PTY spawn/stream for claude sessions and the
+# localhost hooks endpoint (synchronous, own thread, mirrors the DB writer).
+portable-pty = "0.9"
+tiny_http = "0.12"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
@@ -69,7 +73,7 @@ block2 = "0.6"
 # NSWindow.collectionBehavior for the capture window's fullscreen-Space fix
 # (tauri#11488). 0.3.2 is already resolved transitively via tao; default
 # features off because they enable every AppKit header.
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSResponder"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSResponder", "NSWorkspace"] }
 # Move-to-Trash for project Delete. There is no Tauri 2 trash API (tauri#5680);
 # tauri-plugin-opener only reveals. Default DeleteMethod::Finder is kept so the
 # Trash item keeps its "Put Back" — "reversible" per the spec means restored to

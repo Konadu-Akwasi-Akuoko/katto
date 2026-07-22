@@ -114,6 +114,16 @@ pub fn update(
     Ok(())
 }
 
+/// Ideas first seen at/after `iso_utc` (curation-run delta counting).
+pub fn count_since(conn: &Connection, iso_utc: &str) -> Result<u32> {
+    let n = conn.query_row(
+        "SELECT COUNT(*) FROM ideas WHERE first_seen >= ?1",
+        [iso_utc],
+        |r| r.get::<_, u32>(0),
+    )?;
+    Ok(n)
+}
+
 /// Set an idea's status (e.g. `discarded`); the row is retained as an audit trail.
 pub fn set_status(conn: &Connection, id: &str, status: &str) -> Result<()> {
     conn.execute(
@@ -156,6 +166,14 @@ mod tests {
             kind_source: None,
             kind_why: None,
         }
+    }
+
+    #[test]
+    fn count_since_counts_first_seen_after_cutoff() {
+        let conn = test_db();
+        create(&conn, &sample("before", "2026-07-22 07:59:59")).unwrap();
+        create(&conn, &sample("after", "2026-07-22 08:00:01")).unwrap();
+        assert_eq!(count_since(&conn, "2026-07-22 08:00:00").unwrap(), 1);
     }
 
     #[test]
