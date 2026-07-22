@@ -2,10 +2,14 @@ import { Channel } from "@tauri-apps/api/core";
 import type {
 	BundleData,
 	BundleSummary,
+	Cut,
+	Cuts,
 	FootageClip,
 	Job,
 	PipelineEvent,
 	StageName,
+	Transcript,
+	WordEntry,
 } from "@/lib/ipc/bindings.gen";
 import { commands } from "@/lib/ipc/bindings.gen";
 import { unwrap } from "@/lib/ipc/result";
@@ -13,9 +17,13 @@ import { unwrap } from "@/lib/ipc/result";
 export type {
 	BundleData,
 	BundleSummary,
+	Cut,
+	Cuts,
 	FootageClip,
 	PipelineEvent,
 	StageName,
+	Transcript,
+	WordEntry,
 };
 
 export const pipelineKeys = {

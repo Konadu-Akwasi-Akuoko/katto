@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { fixtureCuts, fixtureWords } from "@/features/editor/model/fixtures";
 import { classifyTokens, flagSeekTimes } from "@/features/editor/model/overlay";
 import { buildTokenSpans } from "@/features/editor/model/tokens";
+import { fixtureCuts, fixtureWords } from "@/test/fixtures/editor";
 
 describe("classifyTokens", () => {
 	it("classifies each covered token once with precedence", () => {

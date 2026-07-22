@@ -1,5 +1,5 @@
 import type { TokenSpan } from "@/features/editor/model/tokens";
-import type { Cuts } from "@/lib/ipc/bindings.gen";
+import type { Cuts } from "@/lib/ipc/pipeline";
 
 export type OverlayKind = "cut" | "discretionary" | "flag";
 

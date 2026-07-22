@@ -93,11 +93,6 @@ export function FootageCard({ slug }: { slug: string }) {
 }
 
 /**
- * The project's footage clips, each with the rough-cut runner: a ghost "Plan
- * rough cut" action that swaps to the three-step indicator while its pipeline
- * job runs, then offers "Review cut plan".
- */
-/**
  * Existing `.kruproj` cut plans for this project: bundle name plus artifact
  * presence dots; clicking a row opens the read-only review surface.
  */
@@ -144,6 +139,11 @@ function CutPlansList({ slug }: { slug: string }) {
 	);
 }
 
+/**
+ * The project's footage clips, each with the rough-cut runner: a ghost "Plan
+ * rough cut" action that swaps to the three-step indicator while its pipeline
+ * job runs, then offers "Review cut plan".
+ */
 function FootageClipList({ slug }: { slug: string }) {
 	const openCutEditor = useUiStore((s) => s.openCutEditor);
 	const runs = usePipelineStore((s) => s.runs);

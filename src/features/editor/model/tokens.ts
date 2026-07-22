@@ -1,4 +1,4 @@
-import type { WordEntry } from "@/lib/ipc/bindings.gen";
+import type { WordEntry } from "@/lib/ipc/pipeline";
 
 export type TokenSpan = {
 	/** Position in transcript.words. */

@@ -6,7 +6,7 @@ import {
 	buildTokenSpans,
 	groupParagraphs,
 } from "@/features/editor/model/tokens";
-import type { Cuts, Transcript } from "@/lib/ipc/bindings.gen";
+import type { Cuts, Transcript } from "@/lib/ipc/pipeline";
 
 /** m:ss.s paragraph gutter timecode. */
 function timecode(seconds: number): string {

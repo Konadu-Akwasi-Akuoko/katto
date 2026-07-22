@@ -1,10 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import {
-	fixtureCuts,
-	fixtureTranscript,
-} from "@/features/editor/model/fixtures";
 import { TranscriptPane } from "@/features/editor/transcript-pane";
+import { fixtureCuts, fixtureTranscript } from "@/test/fixtures/editor";
 
 describe("TranscriptPane", () => {
 	it("clicking a word seeks to its start", () => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { StageName } from "@/lib/ipc/bindings.gen";
+import type { StageName } from "@/lib/ipc/pipeline";
 import { cn } from "@/lib/utils";
 import type { PipelineRun, StepState } from "@/stores/pipeline";
 

@@ -1,4 +1,4 @@
-import type { Cuts, Transcript, WordEntry } from "@/lib/ipc/bindings.gen";
+import type { Cuts, Transcript, WordEntry } from "@/lib/ipc/pipeline";
 
 /** Four tokens with a 2s gap before the last — shared editor test data. */
 export const fixtureWords: WordEntry[] = [

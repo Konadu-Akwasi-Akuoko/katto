@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Cut, PipelineEvent, StageName } from "@/lib/ipc/bindings.gen";
+import type { Cut, PipelineEvent, StageName } from "@/lib/ipc/pipeline";
 import { planRoughCut } from "@/lib/ipc/pipeline";
 
 export type StepState = "pending" | "active" | "done" | "failed";

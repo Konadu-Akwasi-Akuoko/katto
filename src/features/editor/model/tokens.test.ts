@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { fixtureWords } from "@/features/editor/model/fixtures";
 import {
 	buildTokenSpans,
 	groupParagraphs,
 	tokenAtTime,
 } from "@/features/editor/model/tokens";
+import { fixtureWords } from "@/test/fixtures/editor";
 
 describe("buildTokenSpans", () => {
 	it("builds spans preserving indices", () => {
