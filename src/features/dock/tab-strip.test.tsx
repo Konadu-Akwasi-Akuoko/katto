@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { SessionInfo } from "@/lib/ipc/bindings.gen";
+import type { SessionInfo } from "@/lib/ipc/sessions";
 import { TabStrip } from "./tab-strip";
 
 function makeSession(

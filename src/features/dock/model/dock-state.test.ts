@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SessionInfo } from "@/lib/ipc/bindings.gen";
+import type { SessionInfo } from "@/lib/ipc/sessions";
 import { deriveDockIconState, tabNote } from "./dock-state";
 
 const base: Omit<SessionInfo, "state"> = {

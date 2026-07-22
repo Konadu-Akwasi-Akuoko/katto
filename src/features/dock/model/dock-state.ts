@@ -1,4 +1,4 @@
-import type { SessionInfo } from "@/lib/ipc/bindings.gen";
+import type { SessionInfo } from "@/lib/ipc/sessions";
 
 export type DockIconState = "idle" | "running" | "needs-input";
 

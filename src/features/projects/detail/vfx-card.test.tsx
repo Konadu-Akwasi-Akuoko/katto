@@ -3,7 +3,7 @@ import { mockConvertFileSrc, mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { VfxEffect } from "@/lib/ipc/bindings.gen";
+import type { VfxEffect } from "@/lib/ipc/vfx";
 import { useUiStore } from "@/stores/ui";
 import { VfxCard } from "./vfx-card";
 

@@ -287,7 +287,7 @@ function LeanNotch({ lean }: { lean: Lean }) {
 				<span
 					key={step}
 					className={cn(
-						"h-[3px] w-3 rounded-full",
+						"h-1 w-3 rounded-full",
 						step < filled ? "bg-ember" : "bg-border",
 					)}
 				/>

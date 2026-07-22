@@ -1,6 +1,6 @@
 import { XIcon } from "@phosphor-icons/react";
 import type { KeyboardEvent } from "react";
-import type { SessionInfo } from "@/lib/ipc/bindings.gen";
+import type { SessionInfo } from "@/lib/ipc/sessions";
 import { cn } from "@/lib/utils";
 import { tabNote } from "./model/dock-state";
 

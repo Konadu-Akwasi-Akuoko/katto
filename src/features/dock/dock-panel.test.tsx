@@ -3,7 +3,7 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SessionInfo } from "@/lib/ipc/bindings.gen";
+import type { SessionInfo } from "@/lib/ipc/sessions";
 import { useUiStore } from "@/stores/ui";
 import { DockPanel } from "./dock-panel";
 
