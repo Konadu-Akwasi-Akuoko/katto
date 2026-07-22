@@ -40,6 +40,7 @@ pub fn spawn_pty(
     }
     cmd.cwd(cwd);
     cmd.env("TERM", "xterm-256color");
+    scrub_env(&mut cmd);
 
     let child = pair
         .slave
@@ -64,4 +65,41 @@ pub fn spawn_pty(
         reader,
         child,
     })
+}
+
+/// Drop Anthropic auth/routing vars from a session's env. An exported
+/// `ANTHROPIC_API_KEY` would silently flip every claude session from
+/// subscription auth to per-token API billing (non-negotiable invariant);
+/// `ANTHROPIC_BASE_URL` could redirect traffic entirely. Belt half of the
+/// belt-and-braces scrub — [`super::launch::shell_invocation`] re-unsets the
+/// same vars after `zsh -l` profile sourcing.
+fn scrub_env(cmd: &mut CommandBuilder) {
+    for var in crate::sessions::launch::SCRUBBED_ENV_VARS {
+        cmd.env_remove(var);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sessions::launch::SCRUBBED_ENV_VARS;
+
+    #[test]
+    fn scrub_env_removes_anthropic_vars_present_in_parent_env() {
+        let mut cmd = CommandBuilder::new("true");
+        for var in SCRUBBED_ENV_VARS {
+            cmd.env(var, "leaked-value");
+        }
+        cmd.env("TERM", "xterm-256color");
+
+        scrub_env(&mut cmd);
+
+        for var in SCRUBBED_ENV_VARS {
+            assert!(
+                cmd.get_env(var).is_none(),
+                "{var} must not reach the session env"
+            );
+        }
+        assert!(cmd.get_env("TERM").is_some(), "unrelated env survives");
+    }
 }

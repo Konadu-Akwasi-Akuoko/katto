@@ -10,6 +10,18 @@ pub struct LaunchSpec {
     pub permission_mode: Option<String>,
 }
 
+/// Anthropic auth/routing vars that must never reach a dock session: an
+/// exported `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` silently flips
+/// claude from subscription auth to API billing, and `ANTHROPIC_BASE_URL`
+/// could redirect the session's traffic. Scrubbed at the PTY spawn AND
+/// re-unset inside the `zsh -lc` invocation (the login profile is sourced
+/// after the spawn-side scrub and could re-export them).
+pub const SCRUBBED_ENV_VARS: &[&str] = &[
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+];
+
 /// Single-quote shell escaping: wrap in `'…'`, embedded `'` becomes `'\''`.
 pub fn sh_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
@@ -51,10 +63,13 @@ pub fn hook_settings_json(
 
 /// The single string handed to `zsh -lc`: `exec` keeps the PTY child pid equal
 /// to the claude process, and the login shell provides the owner's PATH and
-/// subscription auth environment. Every operand is `sh_quote`d.
+/// subscription auth environment. The [`SCRUBBED_ENV_VARS`] unset runs after
+/// profile sourcing so a profile `export` cannot reintroduce an API key.
+/// Every operand is `sh_quote`d.
 pub fn shell_invocation(spec: &LaunchSpec) -> String {
     let mut line = format!(
-        "exec {} --settings {}",
+        "unset {}; exec {} --settings {}",
+        SCRUBBED_ENV_VARS.join(" "),
         sh_quote(&spec.claude_path.to_string_lossy()),
         sh_quote(&spec.settings_path.to_string_lossy()),
     );
@@ -115,9 +130,11 @@ mod tests {
             permission_mode: Some("acceptEdits".into()),
         };
         let line = shell_invocation(&spec);
-        assert!(line.starts_with(
-            "exec '/usr/local/bin/claude' --settings '/data/sessions/s1.settings.json'"
-        ));
+        assert!(
+            line.contains(
+                "exec '/usr/local/bin/claude' --settings '/data/sessions/s1.settings.json'"
+            )
+        );
         assert!(line.contains("--permission-mode 'acceptEdits'"));
         assert!(line.contains("--append-system-prompt 'sys'"));
         assert!(line.ends_with(r#"'plan the cut; it'\''s due'"#));
@@ -134,6 +151,32 @@ mod tests {
             permission_mode: None,
         };
         let line = shell_invocation(&spec);
-        assert_eq!(line, "exec '/x/claude' --settings '/d/s.json'");
+        assert_eq!(
+            line,
+            "unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL; \
+             exec '/x/claude' --settings '/d/s.json'"
+        );
+    }
+
+    #[test]
+    fn shell_invocation_unsets_anthropic_env_after_profile_sourcing() {
+        // The string runs under `zsh -lc`: the login profile is sourced first,
+        // so an `export ANTHROPIC_API_KEY=…` in ~/.zprofile would re-enter the
+        // session env even after the spawn-side scrub. The unset prefix runs
+        // after profile sourcing and must precede the exec.
+        let spec = LaunchSpec {
+            claude_path: PathBuf::from("/x/claude"),
+            cwd: PathBuf::from("/tmp"),
+            initial_prompt: None,
+            append_system_prompt: None,
+            settings_path: PathBuf::from("/d/s.json"),
+            permission_mode: None,
+        };
+        let line = shell_invocation(&spec);
+        for var in SCRUBBED_ENV_VARS {
+            let unset_pos = line.find(var).unwrap();
+            let exec_pos = line.find("exec ").unwrap();
+            assert!(unset_pos < exec_pos, "{var} must be unset before exec");
+        }
     }
 }
