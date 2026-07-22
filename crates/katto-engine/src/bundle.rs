@@ -136,6 +136,69 @@ pub fn save_edits(root: &Path, edits: &Edits) -> Result<()> {
     write_json_atomic(&root.join(EDITS_JSON), edits)
 }
 
+/// The manifest's source can only be swapped for the same recording: same
+/// file name, duration within one frame of the manifest's. Pure.
+///
+/// # Errors
+/// [`Error::Relocate`] naming the mismatch (file name or duration).
+pub fn relocation_matches(
+    manifest: &ProjectManifest,
+    probed_duration: crate::rational::Rational,
+    new_path: &Path,
+) -> Result<()> {
+    let expected = manifest
+        .source_video_absolute_path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let got = new_path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if expected != got {
+        return Err(Error::Relocate(format!(
+            "file name mismatch: expected {expected}, picked {got}"
+        )));
+    }
+    let fps = manifest.frame_rate;
+    let diff = manifest
+        .duration
+        .checked_sub(probed_duration)
+        .ok_or_else(|| Error::Relocate("duration comparison overflowed".to_string()))?;
+    // |diff| <= one frame (fps.den/fps.num seconds), cross-multiplied exactly.
+    let abs = i128::from(diff.num).unsigned_abs() * u128::from(fps.num.unsigned_abs());
+    let one_frame = u128::from(fps.den) * u128::from(diff.den);
+    if abs > one_frame {
+        return Err(Error::Relocate(format!(
+            "duration mismatch: manifest {:.3}s, picked file {:.3}s",
+            manifest.duration.to_secs_f64(),
+            probed_duration.to_secs_f64()
+        )));
+    }
+    Ok(())
+}
+
+/// Swap the manifest's source for `new_path` once [`relocation_matches`]
+/// passes; the manifest rewrite is atomic (`.tmp` -> rename).
+///
+/// # Errors
+/// [`Error::Relocate`] on a mismatch; [`Error::Io`] / [`Error::Bundle`] when
+/// the manifest cannot be read or rewritten.
+pub fn apply_relocation(
+    root: &Path,
+    probed_duration: crate::rational::Rational,
+    new_path: PathBuf,
+) -> Result<()> {
+    let manifest_path = root.join(PROJECT_JSON);
+    let raw = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| Error::Io(format!("{}: {e}", manifest_path.display())))?;
+    let mut manifest: ProjectManifest = serde_json::from_str(&raw)
+        .map_err(|e| Error::Bundle(format!("{}: {e}", manifest_path.display())))?;
+    relocation_matches(&manifest, probed_duration, &new_path)?;
+    manifest.source_video_absolute_path = new_path;
+    write_json_atomic(&manifest_path, &manifest)
+}
+
 /// Parse an optional artifact: absent file is `None`; a present file that
 /// fails to parse is a typed error, never a silent `None`.
 fn read_optional<T: serde::de::DeserializeOwned>(root: &Path, name: &str) -> Result<Option<T>> {
@@ -236,5 +299,54 @@ mod tests {
         write_atomic(&p, b"first-longer-content").unwrap();
         write_atomic(&p, b"second").unwrap();
         assert_eq!(std::fs::read(&p).unwrap(), b"second");
+    }
+
+    fn manifest_25fps(name: &str) -> ProjectManifest {
+        ProjectManifest {
+            schema_version: 1,
+            source_video_absolute_path: PathBuf::from("/media").join(name),
+            frame_rate: Rational::new(25, 1),
+            duration: Rational::new(250, 25),
+        }
+    }
+
+    #[test]
+    fn relocation_requires_same_filename_and_duration() {
+        let m = manifest_25fps("clip.mp4");
+        assert!(relocation_matches(&m, m.duration, Path::new("/elsewhere/clip.mp4")).is_ok());
+        assert!(relocation_matches(&m, m.duration, Path::new("/elsewhere/other.mp4")).is_err());
+        let off = m.duration.checked_add(Rational::new(2, 1)).unwrap();
+        assert!(relocation_matches(&m, off, Path::new("/elsewhere/clip.mp4")).is_err());
+    }
+
+    #[test]
+    fn relocation_tolerates_one_frame_of_duration_drift() {
+        let m = manifest_25fps("clip.mp4");
+        let one_frame_less = m.duration.checked_sub(Rational::new(1, 25)).unwrap();
+        assert!(relocation_matches(&m, one_frame_less, Path::new("/e/clip.mp4")).is_ok());
+        let two_frames_less = m.duration.checked_sub(Rational::new(2, 25)).unwrap();
+        assert!(relocation_matches(&m, two_frames_less, Path::new("/e/clip.mp4")).is_err());
+    }
+
+    #[test]
+    fn apply_relocation_rewrites_only_the_source_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("clip.kruproj");
+        std::fs::create_dir(&root).unwrap();
+        let m = manifest_25fps("clip.mp4");
+        write_json_atomic(&root.join(PROJECT_JSON), &m).unwrap();
+
+        apply_relocation(&root, m.duration, PathBuf::from("/elsewhere/clip.mp4")).unwrap();
+        let raw = std::fs::read_to_string(root.join(PROJECT_JSON)).unwrap();
+        let rewritten: ProjectManifest = serde_json::from_str(&raw).unwrap();
+        assert_eq!(
+            rewritten.source_video_absolute_path,
+            PathBuf::from("/elsewhere/clip.mp4")
+        );
+        assert_eq!(rewritten.duration, m.duration);
+        assert_eq!(rewritten.frame_rate, m.frame_rate);
+
+        let err = apply_relocation(&root, m.duration, PathBuf::from("/x/other.mp4"));
+        assert!(matches!(err, Err(Error::Relocate(_))));
     }
 }

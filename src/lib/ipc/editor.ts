@@ -10,12 +10,15 @@ import type {
 import { commands } from "@/lib/ipc/bindings.gen";
 import { unwrap } from "@/lib/ipc/result";
 
+// Feature code never imports the bindings file directly; the editor-domain
+// types it needs are re-exported here.
+export type {
+	EditHistory,
+	EditSnapshot,
+	Edits_Deserialize,
+	Rational,
+} from "@/lib/ipc/bindings.gen";
 export type { ExportPreview, ExportResult, JobProgress, NleTarget };
-
-export const editorKeys = {
-	all: ["editor"] as const,
-	preview: (path: string) => [...editorKeys.all, "preview", path] as const,
-};
 
 /** THE debounced auto-save target — the only interactive-path IPC call. */
 export const saveEdits = (
@@ -35,15 +38,14 @@ export const exportTimeline = (
 ): Promise<ExportResult> =>
 	unwrap(commands.exportTimeline(bundlePath, nleTarget, openAfter));
 
-/** Spawn the kept-only MP4 render job; progress streams over the channel. */
+/** Spawn the kept-only MP4 render job; the backend versions the output path. */
 export const renderMp4 = (
 	bundlePath: string,
-	out: string | null,
 	onProgress: (p: JobProgress) => void,
 ): Promise<Job> => {
 	const channel = new Channel<JobProgress>();
 	channel.onmessage = onProgress;
-	return unwrap(commands.renderMp4(bundlePath, out, channel));
+	return unwrap(commands.renderMp4(bundlePath, channel));
 };
 
 /** Spawn the thumbnail regeneration job. */

@@ -45,7 +45,7 @@ export const commands = {
 	saveEdits: (bundlePath: string, edits: Edits_Deserialize) => typedError<null, Error>(__TAURI_INVOKE("save_edits", { bundlePath, edits })),
 	previewExport: (bundlePath: string) => typedError<ExportPreview, Error>(__TAURI_INVOKE("preview_export", { bundlePath })),
 	exportTimeline: (bundlePath: string, nleTarget: NleTarget, openAfter: boolean) => typedError<ExportResult, Error>(__TAURI_INVOKE("export_timeline", { bundlePath, nleTarget, openAfter })),
-	renderMp4: (bundlePath: string, out: string | null, onProgress: Channel<JobProgress>) => typedError<Job, Error>(__TAURI_INVOKE("render_mp4", { bundlePath, out, onProgress })),
+	renderMp4: (bundlePath: string, onProgress: Channel<JobProgress>) => typedError<Job, Error>(__TAURI_INVOKE("render_mp4", { bundlePath, onProgress })),
 	generateThumbs: (bundlePath: string, onProgress: Channel<JobProgress>) => typedError<Job, Error>(__TAURI_INVOKE("generate_thumbs", { bundlePath, onProgress })),
 	relocateSource: (bundlePath: string, newPath: string) => typedError<null, Error>(__TAURI_INVOKE("relocate_source", { bundlePath, newPath })),
 	/**

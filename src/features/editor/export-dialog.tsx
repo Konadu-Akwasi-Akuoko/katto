@@ -90,7 +90,7 @@ export function ExportDialog({
 			onExported(result);
 			if (alsoRender) {
 				// Progress lives in the jobs surface, not the dialog.
-				void renderMp4(bundlePath, null, () => {}).catch(() => {});
+				void renderMp4(bundlePath, () => {}).catch(() => {});
 			}
 		} catch (e) {
 			if (e instanceof IpcError && e.sourceMissing && onSourceMissing) {

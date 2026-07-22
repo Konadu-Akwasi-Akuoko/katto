@@ -50,6 +50,9 @@ pub enum Error {
         /// The manifest's recorded duration, for UI copy.
         duration: Rational,
     },
+    /// A picked relocation file does not match the manifest's recording.
+    #[error("relocate: {0}")]
+    Relocate(String),
 }
 
 impl From<std::io::Error> for Error {

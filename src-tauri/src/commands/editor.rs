@@ -9,9 +9,6 @@ use tauri::State;
 use tauri::ipc::Channel;
 use tauri_plugin_opener::OpenerExt;
 
-use katto_engine::Rational;
-use katto_engine::schema::manifest::ProjectManifest;
-
 use crate::commands::pipeline::validate_bundle_path;
 use crate::db::{jobs as jobs_repo, settings as settings_repo};
 use crate::error::{Error, Result};
@@ -69,45 +66,6 @@ pub struct ExportResult {
     pub revealed: bool,
 }
 
-/// The manifest's source can only be swapped for the same recording: same
-/// file name, duration within one frame. Pure; unit-tested.
-fn relocation_matches(
-    manifest: &ProjectManifest,
-    probed_duration: Rational,
-    new_path: &Path,
-) -> Result<()> {
-    let expected = manifest
-        .source_video_absolute_path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let got = new_path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    if expected != got {
-        return Err(Error::Relocate(format!(
-            "file name mismatch: expected {expected}, picked {got}"
-        )));
-    }
-    let fps = manifest.frame_rate;
-    let diff = manifest
-        .duration
-        .checked_sub(probed_duration)
-        .ok_or_else(|| Error::Relocate("duration comparison overflowed".to_string()))?;
-    // |diff| <= one frame (fps.den/fps.num seconds), cross-multiplied exactly.
-    let abs = i128::from(diff.num).unsigned_abs() * u128::from(fps.num.unsigned_abs());
-    let one_frame = u128::from(fps.den) * u128::from(diff.den);
-    if abs > one_frame {
-        return Err(Error::Relocate(format!(
-            "duration mismatch: manifest {:.3}s, picked file {:.3}s",
-            manifest.duration.to_secs_f64(),
-            probed_duration.to_secs_f64()
-        )));
-    }
-    Ok(())
-}
-
 /// The configured studio root, or a typed onboarding error.
 async fn studio_root(state: &State<'_, AppState>) -> Result<PathBuf> {
     state
@@ -120,14 +78,14 @@ async fn studio_root(state: &State<'_, AppState>) -> Result<PathBuf> {
         .await
 }
 
-/// Containment-check `bundle_path` against the studio root (blocking-safe).
-async fn checked_bundle_path(state: &State<'_, AppState>, bundle_path: String) -> Result<PathBuf> {
+/// Containment-check any frontend-supplied path against the studio root
+/// (blocking-safe). Used for bundle roots and timeline artifacts alike — no
+/// path from the webview reaches the filesystem without it.
+async fn checked_studio_path(state: &State<'_, AppState>, path: String) -> Result<PathBuf> {
     let root = studio_root(state).await?;
-    tauri::async_runtime::spawn_blocking(move || {
-        validate_bundle_path(&root, Path::new(&bundle_path))
-    })
-    .await
-    .map_err(|e| Error::Io(e.to_string()))?
+    tauri::async_runtime::spawn_blocking(move || validate_bundle_path(&root, Path::new(&path)))
+        .await
+        .map_err(|e| Error::Io(e.to_string()))?
 }
 
 #[tauri::command]
@@ -137,7 +95,7 @@ pub async fn save_edits(
     bundle_path: String,
     edits: katto_engine::schema::Edits,
 ) -> Result<()> {
-    let canonical = checked_bundle_path(&state, bundle_path).await?;
+    let canonical = checked_studio_path(&state, bundle_path).await?;
     tauri::async_runtime::spawn_blocking(move || {
         katto_engine::bundle::save_edits(&canonical, &edits).map_err(Error::from)
     })
@@ -151,7 +109,7 @@ pub async fn preview_export(
     state: State<'_, AppState>,
     bundle_path: String,
 ) -> Result<ExportPreview> {
-    let canonical = checked_bundle_path(&state, bundle_path).await?;
+    let canonical = checked_studio_path(&state, bundle_path).await?;
     let default_nle = state
         .db
         .call(|conn| settings_repo::get(conn, "default_nle"))
@@ -179,7 +137,7 @@ pub async fn export_timeline(
     nle_target: NleTarget,
     open_after: bool,
 ) -> Result<ExportResult> {
-    let canonical = checked_bundle_path(&state, bundle_path).await?;
+    let canonical = checked_studio_path(&state, bundle_path).await?;
 
     let (paths, slug) = tauri::async_runtime::spawn_blocking(move || {
         // Checked open: a moved source surfaces as the typed SourceMissing
@@ -253,30 +211,42 @@ async fn open_in_fcp_blocking(path: &Path) -> bool {
 pub async fn render_mp4(
     state: State<'_, AppState>,
     bundle_path: String,
-    out: Option<String>,
     on_progress: Channel<JobProgress>,
 ) -> Result<jobs_repo::Job> {
-    let canonical = checked_bundle_path(&state, bundle_path).await?;
+    let canonical = checked_studio_path(&state, bundle_path).await?;
     let name = canonical
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "bundle".into());
 
-    let out_path = match out {
-        Some(out) => PathBuf::from(out),
-        None => {
-            let target = canonical.clone();
-            tauri::async_runtime::spawn_blocking(move || {
-                let (timelines_dir, slug) = katto_engine::timelines::project_context(&target);
-                let exports = timelines_dir.with_file_name("exports");
-                std::fs::create_dir_all(&exports)?;
-                let render_slug = format!("{slug}-render");
-                let version = katto_engine::timelines::next_version(&exports, &render_slug);
-                Ok::<_, Error>(exports.join(format!("{render_slug}-v{version}.mp4")))
-            })
-            .await
-            .map_err(|e| Error::Io(e.to_string()))??
-        }
+    // The output path is always allocated here, never supplied by the
+    // frontend — a webview-chosen path could escape the studio root or
+    // clobber an existing render. One-run-per-bundle guard: the version is
+    // claimed before the file exists, so a concurrent render of the same
+    // bundle would land on the same -vN.
+    let bundle_needle = canonical.to_string_lossy().into_owned();
+    let busy = state
+        .db
+        .call(move |conn| jobs_repo::active_with_payload(conn, "render_mp4", &bundle_needle))
+        .await?;
+    if busy {
+        return Err(Error::PipelineBusy(format!(
+            "a render for {name} is already in progress"
+        )));
+    }
+
+    let out_path = {
+        let target = canonical.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let (timelines_dir, slug) = katto_engine::timelines::project_context(&target);
+            let exports = timelines_dir.with_file_name("exports");
+            std::fs::create_dir_all(&exports)?;
+            let render_slug = format!("{slug}-render");
+            let version = katto_engine::timelines::next_version(&exports, &render_slug);
+            Ok::<_, Error>(exports.join(format!("{render_slug}-v{version}.mp4")))
+        })
+        .await
+        .map_err(|e| Error::Io(e.to_string()))??
     };
 
     let payload = serde_json::json!({
@@ -329,7 +299,7 @@ pub async fn generate_thumbs(
     bundle_path: String,
     on_progress: Channel<JobProgress>,
 ) -> Result<jobs_repo::Job> {
-    let canonical = checked_bundle_path(&state, bundle_path).await?;
+    let canonical = checked_studio_path(&state, bundle_path).await?;
     let name = canonical
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -381,7 +351,7 @@ pub async fn relocate_source(
     bundle_path: String,
     new_path: String,
 ) -> Result<()> {
-    let canonical = checked_bundle_path(&state, bundle_path).await?;
+    let canonical = checked_studio_path(&state, bundle_path).await?;
     let new_path = PathBuf::from(new_path);
 
     // Probe the picked file's exact timing with the engine's pinned argv.
@@ -406,14 +376,8 @@ pub async fn relocate_source(
         .ok_or_else(|| Error::Relocate("picked file has no video duration".to_string()))?;
 
     tauri::async_runtime::spawn_blocking(move || {
-        let manifest_path = canonical.join(katto_engine::bundle::PROJECT_JSON);
-        let raw = std::fs::read_to_string(&manifest_path)
-            .map_err(|e| Error::Io(format!("{}: {e}", manifest_path.display())))?;
-        let mut manifest: ProjectManifest = serde_json::from_str(&raw)
-            .map_err(|e| Error::Engine(format!("{}: {e}", manifest_path.display())))?;
-        relocation_matches(&manifest, probed_duration, &new_path)?;
-        manifest.source_video_absolute_path = new_path;
-        katto_engine::bundle::write_json_atomic(&manifest_path, &manifest).map_err(Error::from)
+        katto_engine::bundle::apply_relocation(&canonical, probed_duration, new_path)
+            .map_err(Error::from)
     })
     .await
     .map_err(|e| Error::Io(e.to_string()))?
@@ -448,8 +412,12 @@ pub async fn pick_relocation_file(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn open_in_fcp(app: tauri::AppHandle, path: String) -> Result<bool> {
-    let target = PathBuf::from(&path);
+pub async fn open_in_fcp(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<bool> {
+    let target = checked_studio_path(&state, path).await?;
     if open_in_fcp_blocking(&target).await {
         return Ok(true);
     }
@@ -461,42 +429,20 @@ pub async fn open_in_fcp(app: tauri::AppHandle, path: String) -> Result<bool> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn reveal_timeline(app: tauri::AppHandle, path: String) -> Result<()> {
+pub async fn reveal_timeline(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<()> {
+    let target = checked_studio_path(&state, path).await?;
     app.opener()
-        .reveal_item_in_dir(PathBuf::from(path))
+        .reveal_item_in_dir(target)
         .map_err(|e| Error::Io(e.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn manifest_25fps(name: &str) -> ProjectManifest {
-        ProjectManifest {
-            schema_version: 1,
-            source_video_absolute_path: PathBuf::from("/media").join(name),
-            frame_rate: Rational::new(25, 1),
-            duration: Rational::new(250, 25),
-        }
-    }
-
-    #[test]
-    fn relocation_requires_same_filename_and_duration() {
-        let m = manifest_25fps("clip.mp4");
-        assert!(relocation_matches(&m, m.duration, Path::new("/elsewhere/clip.mp4")).is_ok());
-        assert!(relocation_matches(&m, m.duration, Path::new("/elsewhere/other.mp4")).is_err());
-        let off = m.duration.checked_add(Rational::new(2, 1)).unwrap();
-        assert!(relocation_matches(&m, off, Path::new("/elsewhere/clip.mp4")).is_err());
-    }
-
-    #[test]
-    fn relocation_tolerates_one_frame_of_duration_drift() {
-        let m = manifest_25fps("clip.mp4");
-        let one_frame_less = m.duration.checked_sub(Rational::new(1, 25)).unwrap();
-        assert!(relocation_matches(&m, one_frame_less, Path::new("/e/clip.mp4")).is_ok());
-        let two_frames_less = m.duration.checked_sub(Rational::new(2, 25)).unwrap();
-        assert!(relocation_matches(&m, two_frames_less, Path::new("/e/clip.mp4")).is_err());
-    }
 
     #[test]
     fn nle_target_round_trips_snake_case() {

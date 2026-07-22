@@ -149,6 +149,8 @@ impl From<katto_engine::Error> for Error {
                 filename,
                 duration_secs: duration.to_secs_f64(),
             },
+            // Keeps its wire kind: the relocate dialog renders it inline.
+            katto_engine::Error::Relocate(msg) => Error::Relocate(msg),
             other => Error::Engine(other.to_string()),
         }
     }
