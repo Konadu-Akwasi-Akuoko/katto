@@ -264,6 +264,28 @@ export const commands = {
 	createVfxEffect: (projectSlug: string, name: string) => typedError<string, Error>(__TAURI_INVOKE("create_vfx_effect", { projectSlug, name })),
 	/**  Every effect folder of a project with its renders (folders are truth). */
 	listVfxEffects: (projectSlug: string) => typedError<VfxEffect[], Error>(__TAURI_INVOKE("list_vfx_effects", { projectSlug })),
+	browserOpenTab: (url: string | null) => typedError<number, Error>(__TAURI_INVOKE("browser_open_tab", { url })),
+	browserCloseTab: (tabId: number) => typedError<null, Error>(__TAURI_INVOKE("browser_close_tab", { tabId })),
+	browserSelectTab: (tabId: number) => typedError<null, Error>(__TAURI_INVOKE("browser_select_tab", { tabId })),
+	browserNavigate: (tabId: number, url: string) => typedError<null, Error>(__TAURI_INVOKE("browser_navigate", { tabId, url })),
+	browserGo: (tabId: number, delta: number) => typedError<null, Error>(__TAURI_INVOKE("browser_go", { tabId, delta })),
+	browserState: () => typedError<BrowserState, Error>(__TAURI_INVOKE("browser_state")),
+	browserSetBounds: (rect: BrowserRect) => typedError<null, Error>(__TAURI_INVOKE("browser_set_bounds", { rect })),
+	browserSetVisible: (visible: boolean) => typedError<null, Error>(__TAURI_INVOKE("browser_set_visible", { visible })),
+	setActiveAssetProject: (slug: string | null) => typedError<null, Error>(__TAURI_INVOKE("set_active_asset_project", { slug })),
+	/**
+	 *  The current filing target: the explicit override, else the most recently
+	 *  touched project.
+	 */
+	activeAssetProject: () => typedError<string | null, Error>(__TAURI_INVOKE("active_asset_project")),
+	parkedDownloads: () => typedError<ParkedDownload[], Error>(__TAURI_INVOKE("parked_downloads")),
+	fileParkedDownload: (downloadId: string, slug: string) => typedError<null, Error>(__TAURI_INVOKE("file_parked_download", { downloadId, slug })),
+	/**
+	 *  Reveal a filed asset in Finder. `rel_path` is project-relative; the join
+	 *  is containment-checked against the project folder so a crafted path can
+	 *  never escape the studio root.
+	 */
+	revealInProject: (slug: string, relPath: string) => typedError<null, Error>(__TAURI_INVOKE("reveal_in_project", { slug, relPath })),
 	/**
 	 *  Enable or disable launch-at-login, recording the change in the activity
 	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
@@ -288,9 +310,14 @@ export const commands = {
 
 /** Events */
 export const events = {
+	browserStateChanged: makeEvent<BrowserStateChanged>("browser-state-changed"),
 	cardDetected: makeEvent<CardDetected>("card-detected"),
 	cardRemoved: makeEvent<CardRemoved>("card-removed"),
 	deepLinkOpened: makeEvent<DeepLinkOpened>("deep-link-opened"),
+	downloadFailed: makeEvent<DownloadFailed>("download-failed"),
+	downloadFallback: makeEvent<DownloadFallback>("download-fallback"),
+	downloadFiled: makeEvent<DownloadFiled>("download-filed"),
+	downloadNeedsProject: makeEvent<DownloadNeedsProject>("download-needs-project"),
 	driveStatusChanged: makeEvent<DriveStatusChanged>("drive-status-changed"),
 	eventsAppended: makeEvent<EventsAppended>("events-appended"),
 	ideasChanged: makeEvent<IdeasChanged>("ideas-changed"),
@@ -312,6 +339,30 @@ export type BoundaryAdjustment = {
 	/**  The new edge time (any timebase; rescaled to the plan's on merge). */
 	new_time: Rational,
 };
+
+/**
+ *  CSS-pixel rect of the browser surface's content area, reported by React.
+ *  Child webview bounds are relative to the window content area the main
+ *  webview also fills, so these map 1:1 to logical position/size.
+ */
+export type BrowserRect = {
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+};
+
+/**  Wire snapshot of the whole browser for the frontend. */
+export type BrowserState = {
+	tabs: TabSnapshot[],
+	active: number | null,
+};
+
+/**
+ *  Broadcast after any tab/history mutation in the browser host; the browser
+ *  surface refetches its `browser_state` query.
+ */
+export type BrowserStateChanged = null;
 
 /**
  *  The full bundle payload for the editor — one `open_bundle` call, JSON only
@@ -483,6 +534,35 @@ export type Discretionary = {
 /**  Why a span is a discretionary (human-decided) cut candidate. */
 export type DiscretionaryReason = "filler" | "stutter" | "false_start" | "self_correction" | "long_silence" | "audio_event" | "other";
 
+/**  Broadcast when a download errored before filing. */
+export type DownloadFailed = {
+	filename: string,
+};
+
+/**
+ *  Broadcast when interception had a blind spot (blob:/data: downloads) and
+ *  the file went to ~/Downloads; the frontend shows a persistent notice.
+ */
+export type DownloadFallback = {
+	filename: string,
+};
+
+/**  Broadcast when a download filed into a project's assets folder. */
+export type DownloadFiled = {
+	project: string,
+	filename: string,
+	dest_rel: string,
+};
+
+/**
+ *  Broadcast when a download finished but no project could be resolved to
+ *  file into; the browser surface opens the pick-a-project sheet.
+ */
+export type DownloadNeedsProject = {
+	download_id: string,
+	filename: string,
+};
+
 /**
  *  Snapshot of the studio root's reachability. `path: None` means no root is
  *  configured yet (pre-onboarding) — reported as mounted so no banner shows.
@@ -569,7 +649,7 @@ export type Edits_Serialize = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | { kind: "invalid_name"; message: string } | { kind: "no_such_scheduled_job"; message: string } | { kind: "invalid_schedule"; message: string } | 
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | { kind: "invalid_name"; message: string } | { kind: "no_such_scheduled_job"; message: string } | { kind: "invalid_schedule"; message: string } | { kind: "unzip_failed"; message: string } | { kind: "browser_unavailable"; message: string } | { kind: "download_missing"; message: string } | 
 /**
  *  The one structured variant: the relocation surface needs the fields
  *  (name a file, show its duration), not a flattened string. On the wire
@@ -786,6 +866,12 @@ export type NewSession = {
  *  export identically and fall back to reveal.
  */
 export type NleTarget = "final_cut" | "resolve" | "premiere";
+
+/**  A parked download, listed for the pick-a-project sheet. */
+export type ParkedDownload = {
+	id: string,
+	filename: string,
+};
 
 /**  Streamed pipeline progress for the footage-card step indicator. */
 export type PipelineEvent = 
@@ -1006,6 +1092,18 @@ export type SettingsPatch = {
 
 /**  One pipeline step, as the step indicator renders it. */
 export type StageName = "extracting_audio" | "transcribing" | "detecting_cuts";
+
+/**
+ *  Wire snapshot of one tab; `title` is URL-derived (the webview API exposes
+ *  no page title).
+ */
+export type TabSnapshot = {
+	id: number,
+	title: string,
+	url: string,
+	can_go_back: boolean,
+	can_go_forward: boolean,
+};
 
 /**  A parsed Scribe v2 transcription response. */
 export type Transcript = {

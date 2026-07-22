@@ -1,3 +1,4 @@
+pub mod browser;
 pub mod drive;
 pub mod editor;
 pub mod events;
