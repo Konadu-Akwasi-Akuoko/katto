@@ -213,7 +213,7 @@ export const commands = {
 
 /** Events */
 export const events = {
-	cardDetected: makeEvent<CardDetected>("card-detected", (v) => ({...v,offer:({...v.offer,groups:v.offer.groups.map(i=>({...i,clips:i.clips.map(i=>({...i,duration_s:i.duration_s==null?i.duration_s:i.duration_s}))}))})}), (v) => ({...v,offer:({...v.offer,groups:v.offer.groups.map(i=>({...i,clips:i.clips.map(i=>({...i,duration_s:i.duration_s==null?i.duration_s:i.duration_s}))}))})})),
+	cardDetected: makeEvent<CardDetected>("card-detected"),
 	cardRemoved: makeEvent<CardRemoved>("card-removed"),
 	deepLinkOpened: makeEvent<DeepLinkOpened>("deep-link-opened"),
 	driveStatusChanged: makeEvent<DriveStatusChanged>("drive-status-changed"),
@@ -225,10 +225,12 @@ export const events = {
 };
 
 /* Types */
-/**  Broadcast when a camera card is detected and enumerated. */
-export type CardDetected = {
-	offer: CardOffer,
-};
+/**
+ *  Broadcast when a camera card is detected and enumerated. Carries no payload:
+ *  the frontend refetches the `card_offer` query, so the offer crosses IPC once
+ *  (and the generated event bindings stay free of nested semantic mappers).
+ */
+export type CardDetected = null;
 
 /**  The current detected card, offered to the import sheet. */
 export type CardOffer = {

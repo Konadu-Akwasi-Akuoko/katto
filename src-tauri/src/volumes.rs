@@ -93,9 +93,9 @@ fn handle_mount(app: &AppHandle, mount: &Path) {
         if is_card_ready(&tree) {
             if let Some(offer) = build_offer(mount, &tree, &files) {
                 if let Ok(mut guard) = app.state::<IngestState>().current.lock() {
-                    *guard = Some(offer.clone());
+                    *guard = Some(offer);
                 }
-                broadcast::card_detected(app, offer);
+                broadcast::card_detected(app);
                 let _ = crate::notify::notify(
                     app,
                     "Camera card ready",
