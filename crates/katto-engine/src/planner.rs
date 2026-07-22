@@ -2,6 +2,7 @@
 //! [`CutPlanner`] trait (D14: no agent loop), and tolerant reply parsers.
 
 pub mod partial;
+pub mod subprocess;
 
 use crate::schema::Cuts;
 use crate::validate::ValidationError;
