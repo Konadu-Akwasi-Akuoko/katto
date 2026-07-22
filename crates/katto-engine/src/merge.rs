@@ -90,7 +90,11 @@ pub fn effective_cuts(plan: &CutPlan, edits: &Edits) -> Vec<EffectiveCut> {
             if adj.cut_index != index {
                 continue;
             }
-            let t = adj.new_time.rescale(plan.timebase);
+            // Overflowing adjustments are ignored like out-of-range indices:
+            // edits.json tolerance, not an error path.
+            let Some(t) = adj.new_time.checked_rescale(plan.timebase) else {
+                continue;
+            };
             match adj.edge {
                 CutEdge::Start => start = t,
                 CutEdge::End => end = t,
@@ -117,8 +121,12 @@ pub fn effective_cuts(plan: &CutPlan, edits: &Edits) -> Vec<EffectiveCut> {
     }
 
     for (index, m) in edits.manual_cuts.iter().enumerate() {
-        let start = m.start.rescale(plan.timebase);
-        let end = m.end.rescale(plan.timebase);
+        let (Some(start), Some(end)) = (
+            m.start.checked_rescale(plan.timebase),
+            m.end.checked_rescale(plan.timebase),
+        ) else {
+            continue;
+        };
         if end <= start {
             continue;
         }

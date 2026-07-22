@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// An exact `num/den` ratio (e.g. a `30000/1001` frame rate or a timestamp in
 /// a media timebase). Floats appear only at UI and model boundaries.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Rational {
     /// Numerator (signed: timestamps can be negative in some containers).
@@ -40,13 +40,15 @@ impl Rational {
         self.num as f64 / f64::from(self.den)
     }
 
-    /// Convert to a new timebase, rounding to the nearest tick (exact integer math).
-    pub fn rescale(self, den: u32) -> Self {
+    /// Convert to a new timebase, rounding to the nearest tick (exact integer
+    /// math). `None` when the rescaled tick count overflows `i64` — corrupt or
+    /// hostile inputs must surface as an error upstream, never wrap.
+    pub fn checked_rescale(self, den: u32) -> Option<Self> {
         let num = div_round_nearest(i128::from(self.num) * i128::from(den), i128::from(self.den));
-        Self {
-            num: num as i64,
+        Some(Self {
+            num: i64::try_from(num).ok()?,
             den,
-        }
+        })
     }
 
     /// `self + rhs`; same-den fast path preserves the den, mixed dens use the lcm.
@@ -65,21 +67,46 @@ impl Rational {
         Some(Self { num, den: self.den })
     }
 
-    /// Snap to the nearest integer frame of `fps`, returned in `self`'s timebase.
-    pub fn snap_to_frame(self, fps: Rational) -> Self {
+    /// Snap to the nearest integer frame of `fps`, returned in `self`'s
+    /// timebase. `None` on `i64` overflow, same policy as
+    /// [`Rational::checked_rescale`].
+    pub fn checked_snap_to_frame(self, fps: Rational) -> Option<Self> {
         let frame = div_round_nearest(
             i128::from(self.num) * i128::from(fps.num),
             i128::from(self.den) * i128::from(fps.den),
         );
         // frame * fps.den / fps.num seconds, back in self.den ticks:
         let num = div_round_nearest(
-            frame * i128::from(fps.den) * i128::from(self.den),
+            frame
+                .checked_mul(i128::from(fps.den))?
+                .checked_mul(i128::from(self.den))?,
             i128::from(fps.num),
         );
-        Self {
-            num: num as i64,
+        Some(Self {
+            num: i64::try_from(num).ok()?,
             den: self.den,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for Rational {
+    /// Validating deserializer: wire data (project.json, edits.json, cuts.json)
+    /// can be hand-edited or corrupt, and a zero den would panic downstream
+    /// integer division. Rejecting here keeps every constructed value usable.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Wire {
+            num: i64,
+            den: u32,
         }
+        let wire = Wire::deserialize(deserializer)?;
+        if wire.den == 0 {
+            return Err(serde::de::Error::custom("Rational den must be non-zero"));
+        }
+        Ok(Self {
+            num: wire.num,
+            den: wire.den,
+        })
     }
 }
 
@@ -189,8 +216,8 @@ mod tests {
         // same instant, different timebase: not Equal (structural PartialEq
         // consistency) — compare instants via rescale instead
         assert_eq!(
-            Rational::new(30000, 30000).rescale(1000),
-            Rational::new(1000, 1000)
+            Rational::new(30000, 30000).checked_rescale(1000),
+            Some(Rational::new(1000, 1000))
         );
         assert_eq!(
             Rational::new(30000, 30000).cmp(&Rational::new(1000, 1000)),
@@ -210,9 +237,20 @@ mod tests {
     #[test]
     fn rescale_rounds_to_nearest() {
         // 1/3 s at den 1000 = 333.33 ticks -> 333
-        assert_eq!(Rational::new(1, 3).rescale(1000), Rational::new(333, 1000));
+        assert_eq!(
+            Rational::new(1, 3).checked_rescale(1000),
+            Some(Rational::new(333, 1000))
+        );
         // 2/3 s -> 666.67 -> 667
-        assert_eq!(Rational::new(2, 3).rescale(1000), Rational::new(667, 1000));
+        assert_eq!(
+            Rational::new(2, 3).checked_rescale(1000),
+            Some(Rational::new(667, 1000))
+        );
+    }
+
+    #[test]
+    fn rescale_overflow_is_none_not_wrap() {
+        assert_eq!(Rational::new(i64::MAX, 1).checked_rescale(1000), None);
     }
 
     #[test]
@@ -220,7 +258,31 @@ mod tests {
         // 0.5s at 30000/1001 fps: 0.5*30000/1001 = 14.985 frames -> frame 15
         // -> 15*1001/30000 s = 0.5005 s; in den 1000 that's 500.5 -> 501 ticks
         let t = Rational::new(500, 1000);
-        assert_eq!(t.snap_to_frame(NTSC), Rational::new(501, 1000));
+        assert_eq!(
+            t.checked_snap_to_frame(NTSC),
+            Some(Rational::new(501, 1000))
+        );
+    }
+
+    #[test]
+    fn snap_to_frame_overflow_is_none() {
+        assert_eq!(
+            Rational::new(i64::MAX, 1).checked_snap_to_frame(Rational::new(1, 30000)),
+            None
+        );
+    }
+
+    #[test]
+    fn deserialize_rejects_zero_den() {
+        let err = serde_json::from_str::<Rational>(r#"{"num":1,"den":0}"#);
+        assert!(err.is_err());
+        assert!(err.unwrap_err().to_string().contains("den"));
+    }
+
+    #[test]
+    fn deserialize_round_trips_valid_values() {
+        let r: Rational = serde_json::from_str(r#"{"num":-42,"den":1001}"#).unwrap();
+        assert_eq!(r, Rational::new(-42, 1001));
     }
 
     #[test]

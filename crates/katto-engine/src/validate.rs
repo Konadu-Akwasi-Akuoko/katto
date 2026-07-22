@@ -6,6 +6,10 @@ use crate::schema::{Cuts, Transcript, WordEntry};
 /// Tolerance for all float comparisons at the model boundary.
 pub const FLOAT_TOLERANCE: f64 = 1e-3;
 
+/// How far the model's stated source duration may drift from the transcript's
+/// measured audio duration (container padding, rounding) before we reject it.
+pub const DURATION_TOLERANCE: f64 = 1.0;
+
 /// Which span list a validation error points into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpanList {
@@ -96,6 +100,15 @@ pub enum ValidationError {
         /// The misaligned boundary value.
         value: f64,
     },
+    /// The stated source duration disagrees with the transcript's measured
+    /// audio duration — bounds checks against it would be meaningless.
+    #[error("source_duration_secs {stated} disagrees with transcript audio duration {transcript}")]
+    DurationMismatch {
+        /// The cuts.json stated duration.
+        stated: f64,
+        /// The transcript's measured audio duration.
+        transcript: f64,
+    },
     /// A boundary falls strictly inside a word token.
     #[error("{list:?}[{index}]: boundary {value} falls inside word token {token:?}")]
     InsideWordToken {
@@ -114,6 +127,17 @@ pub enum ValidationError {
 pub fn validate_cuts(cuts: &Cuts, transcript: &Transcript) -> Vec<ValidationError> {
     let mut errors = Vec::new();
     let dur = cuts.source_duration_secs;
+
+    // 0. the stated duration itself is model output — cross-check it against
+    // the transcript's measured audio duration before trusting it for bounds
+    if let Some(audio) = transcript.audio_duration_secs
+        && (dur - audio).abs() > DURATION_TOLERANCE
+    {
+        errors.push(ValidationError::DurationMismatch {
+            stated: dur,
+            transcript: audio,
+        });
+    }
 
     check_bounds(
         &mut errors,
@@ -371,6 +395,26 @@ mod tests {
             errors
                 .iter()
                 .any(|e| matches!(e, ValidationError::TotalMismatch { .. }))
+        );
+    }
+
+    #[test]
+    fn stated_duration_must_match_transcript_audio_duration() {
+        let mut cuts = load("cuts.valid.json");
+        let t = transcript();
+        let audio = t.audio_duration_secs.unwrap();
+        // A model inflating the duration would let spans point past real media.
+        cuts.source_duration_secs = audio + DURATION_TOLERANCE + 1.0;
+        assert!(
+            validate_cuts(&cuts, &t)
+                .iter()
+                .any(|e| matches!(e, ValidationError::DurationMismatch { .. }))
+        );
+        cuts.source_duration_secs = audio + DURATION_TOLERANCE / 2.0;
+        assert!(
+            !validate_cuts(&cuts, &t)
+                .iter()
+                .any(|e| matches!(e, ValidationError::DurationMismatch { .. }))
         );
     }
 
