@@ -99,6 +99,6 @@ Update the table as phases land (link the PR that closed each).
 | 2 | Projects & Planner | done (exit criteria signed off 2026-07-17) | [#9](https://github.com/Konadu-Akwasi-Akuoko/katto/pull/9) |
 | 3 | SD Ingest | implemented 2026-07-22 (overnight run); pending owner hardware verification | — |
 | 4 | Cut Pipeline | implemented 2026-07-22 (overnight run); pending owner verification | — |
-| 5 | Cut Editor & Export | not started | — |
+| 5 | Cut Editor & Export | implemented 2026-07-22 (overnight run); pending owner verification | — |
 | 6 | Claude Dock & Automations | not started | — |
 | 7 | Browser, Thumbnails, Resolve, Import & Ship | not started | — |
