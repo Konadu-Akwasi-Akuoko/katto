@@ -57,6 +57,11 @@
 		0 1px 2px oklch(0.245 0.018 60 / 0.08),
 		0 4px 16px oklch(0.245 0.018 60 / 0.06);
 
+	/* ---- dock terminal viewport — machine region, dark in BOTH themes ---- */
+	/* warm-neutral near-black (hue family of the dark surfaces); no grain */
+	--term-bg: oklch(0.16 0.005 74);
+	--term-fg: oklch(0.87 0.01 78);
+
 	--serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
 	--sans: -apple-system, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
 	--mono: ui-monospace, "SF Mono", "Menlo", monospace;
@@ -162,6 +167,8 @@
 	--color-failed: var(--failed);
 	--color-queued: var(--queued);
 	--color-warn: var(--warn);
+	--color-term-bg: var(--term-bg);
+	--color-term-fg: var(--term-fg);
 
 	--color-status-idea: var(--status-idea);
 	--color-status-idea-tint: var(--status-idea-tint);
