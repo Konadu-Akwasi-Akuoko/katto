@@ -1,7 +1,7 @@
 import { FilmStripIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,11 @@ export function FootageCard({ slug }: { slug: string }) {
 		onError: (err) => toast.error(err.message),
 	});
 
+	// Subscribe once: depending on drop.isPending would tear down and re-create
+	// the listener on every mutation flip, leaving brief unsubscribed windows
+	// where a drop is silently lost. The ref keeps the handler current instead.
+	const dropRef = useRef(drop);
+	dropRef.current = drop;
 	useEffect(() => {
 		let cancelled = false;
 		let webview: ReturnType<typeof getCurrentWebview>;
@@ -58,20 +63,20 @@ export function FootageCard({ slug }: { slug: string }) {
 			else if (event.payload.type === "leave") setOver(false);
 			else if (event.payload.type === "drop") {
 				setOver(false);
-				if (drop.isPending) return;
+				if (dropRef.current.isPending) return;
 				const videos = videoPaths(event.payload.paths);
 				if (videos.length === 0) {
 					toast.error("No video files in that drop");
 					return;
 				}
-				drop.mutate(videos);
+				dropRef.current.mutate(videos);
 			}
 		});
 		return () => {
 			cancelled = true;
 			void unlisten.then((un) => un());
 		};
-	}, [drop.isPending, drop.mutate]);
+	}, []);
 
 	return (
 		<Card className={over ? "border-ember" : undefined}>
