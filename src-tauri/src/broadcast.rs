@@ -86,8 +86,11 @@ pub struct DownloadNeedsProject {
 }
 
 /// Broadcast when a download filed into a project's assets folder.
+/// `download_id` matches the id `DownloadNeedsProject` carried, so the
+/// frontend's filing row resolves instead of sticking at "filing…".
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
 pub struct DownloadFiled {
+    pub download_id: String,
     pub project: String,
     pub filename: String,
     pub dest_rel: String,
@@ -216,8 +219,15 @@ pub fn download_needs_project(app: &AppHandle, download_id: &str, filename: &str
 }
 
 /// Best-effort, same contract as [`events_appended`].
-pub fn download_filed(app: &AppHandle, project: &str, filename: &str, dest_rel: &str) {
+pub fn download_filed(
+    app: &AppHandle,
+    download_id: &str,
+    project: &str,
+    filename: &str,
+    dest_rel: &str,
+) {
     let _ = DownloadFiled {
+        download_id: download_id.to_string(),
         project: project.to_string(),
         filename: filename.to_string(),
         dest_rel: dest_rel.to_string(),

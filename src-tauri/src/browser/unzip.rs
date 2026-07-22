@@ -5,11 +5,17 @@
 use std::path::Path;
 
 /// The single top-level directory every entry lives under, if there is one.
-/// Envato zips wrap one folder; filing flattens it away.
+/// Envato zips wrap one folder; filing flattens it away. `.`/`..` tops are
+/// rejected here so the flatten rename can never point outside the tempdir —
+/// zip's `extract` also refuses traversal entries, but the invariant is
+/// load-bearing for this module and must hold locally.
 pub fn single_root(names: &[String]) -> Option<String> {
     let mut root: Option<&str> = None;
     for name in names {
-        let top = name.split('/').next().filter(|t| !t.is_empty())?;
+        let top = name
+            .split('/')
+            .next()
+            .filter(|t| !t.is_empty() && *t != "." && *t != "..")?;
         // a bare top-level file (no '/') means the archive is flat
         if !name.contains('/') {
             return None;
@@ -87,6 +93,25 @@ mod tests {
         assert_eq!(single_root(&flat), None);
         let mixed = vec!["pack/a.mov".into(), "other/b.png".into()];
         assert_eq!(single_root(&mixed), None);
+    }
+
+    #[test]
+    fn single_root_rejects_traversal_tops() {
+        // a ".." root would make the flatten rename target the tempdir's
+        // PARENT — the assets dir itself
+        assert_eq!(single_root(&["../evil/a.txt".to_string()]), None);
+        assert_eq!(single_root(&["./x/a.txt".to_string()]), None);
+    }
+
+    #[test]
+    fn traversal_archive_never_renames_over_the_dest_parent() {
+        let z = make_zip(&[("../evil/a.txt", b"x")]);
+        let outer = tempfile::tempdir().unwrap();
+        let target = outer.path().join("inner");
+        std::fs::write(outer.path().join("sentinel"), b"s").unwrap();
+        let _ = extract_archive(z.path(), &target);
+        // the flatten branch must not have renamed anything over `outer`
+        assert!(outer.path().join("sentinel").is_file());
     }
 
     #[test]

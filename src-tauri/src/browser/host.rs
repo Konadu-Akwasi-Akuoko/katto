@@ -50,21 +50,35 @@ pub trait BrowserTabHost: Send + Sync {
 
 /// Registry of downloads between `Requested` (destination assigned) and
 /// `Finished` (filing spawned), plus downloads parked for a project pick.
+/// `Finished` only carries the URL (macOS never reports the path), so
+/// duplicate concurrent downloads of one URL queue FIFO: each begin pushes,
+/// each finish pops the oldest — never overwriting a still-downloading
+/// entry with a later one (that filed partial files into projects).
 #[derive(Default)]
 pub struct DownloadRegistry {
-    in_flight: Mutex<HashMap<String, PendingDownload>>,
+    in_flight: Mutex<HashMap<String, Vec<PendingDownload>>>,
     parked: Mutex<Vec<PendingDownload>>,
 }
 
 impl DownloadRegistry {
     pub fn begin(&self, pending: PendingDownload) {
         if let Ok(mut map) = self.in_flight.lock() {
-            map.insert(pending.url.clone(), pending);
+            map.entry(pending.url.clone()).or_default().push(pending);
         }
     }
 
     pub fn finish(&self, url: &str) -> Option<PendingDownload> {
-        self.in_flight.lock().ok()?.remove(url)
+        let mut map = self.in_flight.lock().ok()?;
+        let list = map.get_mut(url)?;
+        let pending = if list.is_empty() {
+            None
+        } else {
+            Some(list.remove(0))
+        };
+        if list.is_empty() {
+            map.remove(url);
+        }
+        pending
     }
 
     pub fn park(&self, pending: PendingDownload) {
@@ -81,6 +95,40 @@ impl DownloadRegistry {
 
     pub fn parked(&self) -> Vec<PendingDownload> {
         self.parked.lock().map(|p| p.clone()).unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+
+    fn pending(id: &str, url: &str) -> PendingDownload {
+        PendingDownload {
+            id: id.into(),
+            url: url.into(),
+            page_url: String::new(),
+            filename: "f.zip".into(),
+            staging_path: PathBuf::from(format!("/staging/{id}/f.zip")),
+            started_at: String::new(),
+        }
+    }
+
+    #[test]
+    fn duplicate_url_downloads_finish_fifo_without_loss() {
+        let registry = DownloadRegistry::default();
+        registry.begin(pending("a", "https://x.test/f.zip"));
+        registry.begin(pending("b", "https://x.test/f.zip"));
+        let first = registry.finish("https://x.test/f.zip").unwrap();
+        let second = registry.finish("https://x.test/f.zip").unwrap();
+        assert_eq!(first.id, "a");
+        assert_eq!(second.id, "b");
+        assert!(registry.finish("https://x.test/f.zip").is_none());
+    }
+
+    #[test]
+    fn unknown_url_is_a_miss() {
+        let registry = DownloadRegistry::default();
+        assert!(registry.finish("https://never.test/").is_none());
     }
 }
 

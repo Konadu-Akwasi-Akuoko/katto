@@ -184,7 +184,13 @@ async fn run_filing(
         })
         .await;
     crate::broadcast::events_appended(&app);
-    crate::broadcast::download_filed(&app, &slug, &pending.filename, &outcome.dest_rel);
+    crate::broadcast::download_filed(
+        &app,
+        &pending.id,
+        &slug,
+        &pending.filename,
+        &outcome.dest_rel,
+    );
     Ok(())
 }
 
