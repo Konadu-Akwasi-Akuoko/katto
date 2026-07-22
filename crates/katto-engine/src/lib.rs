@@ -14,6 +14,7 @@ pub mod planner;
 pub mod rational;
 pub mod render;
 pub mod schema;
+pub mod thumbs;
 pub mod transcribe;
 pub mod validate;
 
