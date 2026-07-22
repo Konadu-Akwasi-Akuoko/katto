@@ -10,6 +10,7 @@ import {
 	createThumbnail,
 	latestThumbnail,
 	thumbKeys,
+	thumbSrc,
 	unwatchThumbnails,
 	watchThumbnails,
 } from "@/lib/ipc/thumbnails";
@@ -49,8 +50,8 @@ export function ThumbnailsCard({ slug }: { slug: string }) {
 		},
 	});
 
-	const path = latest.data ?? null;
-	const filename = path?.split("/").pop() ?? null;
+	const thumb = latest.data ?? null;
+	const filename = thumb?.path.split("/").pop() ?? null;
 
 	return (
 		<Card>
@@ -65,7 +66,7 @@ export function ThumbnailsCard({ slug }: { slug: string }) {
 				</Button>
 			</CardHeader>
 			<CardContent>
-				{path === null ? (
+				{thumb === null ? (
 					<p className="text-sm text-fg-muted">
 						No thumbnail yet. Scaffold a guide-lined PSD and katto will show the
 						PNG you export.
@@ -83,7 +84,7 @@ export function ThumbnailsCard({ slug }: { slug: string }) {
 							className="overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 						>
 							<img
-								src={convertFileSrc(path)}
+								src={thumbSrc(thumb, convertFileSrc)}
 								alt={`Newest thumbnail for ${slug}`}
 								className="aspect-video w-full object-cover"
 							/>

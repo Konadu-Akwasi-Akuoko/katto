@@ -11,7 +11,7 @@ vi.mock("sonner", () => ({
 }));
 
 function renderCard(options: {
-	latest: string | null;
+	latest: { slug: string; path: string; mtime_ms: number } | null;
 	opened?: "photoshop" | "revealed_in_finder";
 }) {
 	const calls = vi.fn();
@@ -76,7 +76,11 @@ describe("ThumbnailsCard", () => {
 
 	it("renders the newest PNG when one exists", async () => {
 		renderCard({
-			latest: "/studio/Projects/sprint-recap/thumbnails/final.png",
+			latest: {
+				slug: "sprint-recap",
+				path: "/studio/Projects/sprint-recap/thumbnails/final.png",
+				mtime_ms: 1_753_000_000_000,
+			},
 		});
 		const image = await screen.findByAltText(
 			"Newest thumbnail for sprint-recap",

@@ -20,9 +20,15 @@ export const createThumbnail = (
 ): Promise<CreateThumbnailResult> =>
 	unwrap(commands.createThumbnail(slug, format));
 
-/** Absolute path of the newest exported PNG, for convertFileSrc. */
-export const latestThumbnail = (slug: string): Promise<string | null> =>
+/** Newest exported PNG (path + mtime for cache-busting convertFileSrc). */
+export const latestThumbnail = (slug: string): Promise<LatestThumb | null> =>
 	unwrap(commands.latestThumbnail(slug));
+
+/** Asset URL for a thumb, keyed by mtime so re-exports repaint. */
+export const thumbSrc = (
+	thumb: Pick<LatestThumb, "path" | "mtime_ms">,
+	convert: (path: string) => string,
+): string => `${convert(thumb.path)}?v=${thumb.mtime_ms}`;
 
 /** Newest PNG per project (one readdir each) for the projects grid. */
 export const listLatestThumbnails = (): Promise<LatestThumb[]> =>

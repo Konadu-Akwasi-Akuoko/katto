@@ -4,7 +4,11 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { formatDate } from "@/features/projects/model/format";
 import type { Project } from "@/lib/ipc/projects";
 import { listProjects, projectsKeys } from "@/lib/ipc/projects";
-import { listLatestThumbnails, thumbKeys } from "@/lib/ipc/thumbnails";
+import {
+	listLatestThumbnails,
+	thumbKeys,
+	thumbSrc,
+} from "@/lib/ipc/thumbnails";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
 
@@ -21,7 +25,7 @@ export function ProjectsList() {
 		queryFn: listLatestThumbnails,
 	});
 	const thumbBySlug = new Map(
-		(thumbs ?? []).map((thumb) => [thumb.slug, thumb.path]),
+		(thumbs ?? []).map((thumb) => [thumb.slug, thumb]),
 	);
 
 	return (
@@ -34,37 +38,40 @@ export function ProjectsList() {
 				</p>
 			) : (
 				<ul className="flex flex-col gap-2">
-					{projects.map((project) => (
-						<li key={project.slug}>
-							<button
-								type="button"
-								onClick={() => openDetail(project.slug)}
-								onAnimationEnd={(event) => {
-									if (event.animationName === "promote-arrival") {
-										clearJustPromoted(null);
-									}
-								}}
-								className={cn(
-									"grain flex w-full items-center gap-3 rounded-lg border bg-surface px-3 py-2 text-left transition-colors hover:bg-surface-2",
-									justPromotedSlug === project.slug &&
-										"animate-promote-arrival",
-								)}
-							>
-								{thumbBySlug.has(project.slug) && (
-									<img
-										src={convertFileSrc(thumbBySlug.get(project.slug) ?? "")}
-										alt=""
-										className="h-7 w-12 shrink-0 rounded-sm border object-cover"
-									/>
-								)}
-								<span className="min-w-0 flex-1 truncate text-sm text-fg">
-									{project.title}
-								</span>
-								<ProjectDates project={project} />
-								<StatusChip status={project.status} />
-							</button>
-						</li>
-					))}
+					{projects.map((project) => {
+						const thumb = thumbBySlug.get(project.slug);
+						return (
+							<li key={project.slug}>
+								<button
+									type="button"
+									onClick={() => openDetail(project.slug)}
+									onAnimationEnd={(event) => {
+										if (event.animationName === "promote-arrival") {
+											clearJustPromoted(null);
+										}
+									}}
+									className={cn(
+										"grain flex w-full items-center gap-3 rounded-lg border bg-surface px-3 py-2 text-left transition-colors hover:bg-surface-2",
+										justPromotedSlug === project.slug &&
+											"animate-promote-arrival",
+									)}
+								>
+									{thumb !== undefined && (
+										<img
+											src={thumbSrc(thumb, convertFileSrc)}
+											alt=""
+											className="h-7 w-12 shrink-0 rounded-sm border object-cover"
+										/>
+									)}
+									<span className="min-w-0 flex-1 truncate text-sm text-fg">
+										{project.title}
+									</span>
+									<ProjectDates project={project} />
+									<StatusChip status={project.status} />
+								</button>
+							</li>
+						);
+					})}
 				</ul>
 			)}
 		</div>
