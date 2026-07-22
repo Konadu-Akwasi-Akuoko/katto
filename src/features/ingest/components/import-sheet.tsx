@@ -20,6 +20,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { ClipGroupList } from "@/features/ingest/components/clip-group-list";
+import { IngestProgress } from "@/features/ingest/components/ingest-progress";
 import { useCardOffer } from "@/features/ingest/hooks/use-card-offer";
 import {
 	defaultProjectSlug,
@@ -30,6 +31,7 @@ import {
 import { useIngestSheetStore } from "@/features/ingest/store/ingest-sheet";
 import { useDriveStatus } from "@/hooks/use-drive-status";
 import { startIngest } from "@/lib/ipc/ingest";
+import { jobsKeys } from "@/lib/ipc/jobs";
 import { createProject, listProjects, projectsKeys } from "@/lib/ipc/projects";
 
 const GIB = 1024 ** 3;
@@ -89,20 +91,61 @@ export function ImportSheet() {
 	const spaceShort =
 		freeBytes !== null && !hasEnoughFreeSpace(totals.bytes, freeBytes);
 
+	// Set when an import has been started from this sheet: the body swaps from
+	// the clip list to the copy-progress panel (which offers Eject on finish).
+	const [activeJob, setActiveJob] = useState<{
+		id: string;
+		count: number;
+	} | null>(null);
+
 	const importMutation = useMutation({
 		mutationFn: () => {
 			if (!offer || !activeSlug) throw new Error("no card or project");
 			return startIngest(offer.volume, activeSlug, [...selected]);
 		},
-		onSuccess: () => {
-			void queryClient.invalidateQueries({ queryKey: ["jobs"] });
-			setOpen(false);
-			toast.success(`Importing ${totals.count} clips`);
+		onSuccess: (job) => {
+			void queryClient.invalidateQueries({ queryKey: jobsKeys.all });
+			setActiveJob({ id: job.id, count: totals.count });
 		},
 		onError: (err) => toast.error(err.message),
 	});
 
 	if (!offer) return null;
+
+	if (activeJob) {
+		return (
+			<Dialog
+				open={open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) setActiveJob(null);
+				}}
+			>
+				<DialogContent className="max-w-lg">
+					<DialogHeader>
+						<DialogTitle>Importing footage</DialogTitle>
+					</DialogHeader>
+					<IngestProgress
+						jobId={activeJob.id}
+						volume={offer.volume}
+						projectTitle={activeProject?.title ?? "project"}
+						clipCount={activeJob.count}
+					/>
+					<div className="flex justify-end">
+						<Button
+							variant="secondary"
+							onClick={() => {
+								setOpen(false);
+								setActiveJob(null);
+							}}
+						>
+							Close
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
+		);
+	}
 
 	const toggle = (path: string, on: boolean) =>
 		setSelected((prev) => {

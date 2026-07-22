@@ -86,6 +86,7 @@ function renderSheet() {
 				started_at: null,
 				finished_at: null,
 			};
+		if (cmd === "subscribe_job_progress") return null;
 		if (typeof cmd === "string" && cmd.startsWith("plugin:event|")) return 1;
 		throw new Error(`unexpected command: ${cmd}`);
 	});
@@ -141,5 +142,9 @@ describe("ImportSheet", () => {
 				selectedPaths: ["PRIVATE/M4ROOT/CLIP/C0002.MP4"],
 			}),
 		);
+		// The sheet swaps to the copy-progress panel for the started job.
+		expect(
+			await screen.findByText("Copying 1 clips → NVMe deep dive"),
+		).toBeInTheDocument();
 	});
 });
