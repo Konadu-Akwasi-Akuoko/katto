@@ -8,6 +8,7 @@ use std::path::PathBuf;
 pub mod enumerate;
 pub mod naming;
 pub mod recognize;
+pub mod verify;
 
 /// The kind of camera card recognized, by on-card layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +71,32 @@ pub struct Rename {
     pub source: PathBuf,
     /// Destination file name inside the project's `footage/`.
     pub dest_name: String,
+}
+
+/// A verification failure between the expected copy set and what landed on disk.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VerifyError {
+    /// The number of copied files differs from the selection.
+    CountMismatch {
+        /// Files that should have been copied.
+        expected: usize,
+        /// Files actually present.
+        actual: usize,
+    },
+    /// A copied file's byte size differs from its source.
+    SizeMismatch {
+        /// Destination file name.
+        name: String,
+        /// Source byte count.
+        expected: u64,
+        /// Copied byte count.
+        actual: u64,
+    },
+    /// An expected file is missing from the destination entirely.
+    Missing {
+        /// Destination file name.
+        name: String,
+    },
 }
 
 /// A group of clips sharing card substructure (e.g. `CLIP`, `SUB`, `100APPLE`).
