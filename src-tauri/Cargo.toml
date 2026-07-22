@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [
+tauri = { version = "~2.11", features = [
   "tray-icon",
   "image-png",
   "specta",
@@ -26,6 +26,8 @@ tauri = { version = "2", features = [
   "protocol-asset",
   # transparent capture window; pairs with `app.macOSPrivateApi` in tauri.conf.json
   "macos-private-api",
+  # Phase 7 in-app browser: Window::add_child / WebviewBuilder (multi-webview)
+  "unstable",
 ] }
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
@@ -56,6 +58,11 @@ time = { version = "0.3", features = ["formatting"] }
 # the Phase 6 scheduler's local-time due-math; everything else passes dates in.
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 notify = "8.2"
+# Phase 7 browser downloads: Envato Elements delivers deflate zips; bzip2/zstd/
+# lzma stay off. An exotic method surfaces as an unzip error in the sidecar.
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
+# Already in the graph via tauri; direct dep because browser code names its types.
+url = "2"
 # Phase 6 dock sessions: PTY spawn/stream for claude sessions and the
 # localhost hooks endpoint (synchronous, own thread, mirrors the DB writer).
 portable-pty = "0.9"

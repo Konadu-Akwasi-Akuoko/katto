@@ -1,5 +1,6 @@
 mod assets;
 pub mod broadcast;
+pub mod browser;
 pub mod capture;
 pub mod commands;
 pub mod curation;
