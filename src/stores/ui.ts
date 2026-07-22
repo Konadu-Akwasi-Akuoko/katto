@@ -50,8 +50,13 @@ export const useUiStore = create<UiState>((set) => ({
 	setSurface: (surface) =>
 		set({ surface, selectedProjectSlug: null, editorBundlePath: null }),
 	openProject: (slug) =>
-		set({ surface: "projects", selectedProjectSlug: slug }),
-	setSelectedProjectSlug: (slug) => set({ selectedProjectSlug: slug }),
+		set({
+			surface: "projects",
+			selectedProjectSlug: slug,
+			editorBundlePath: null,
+		}),
+	setSelectedProjectSlug: (slug) =>
+		set({ selectedProjectSlug: slug, editorBundlePath: null }),
 	openPeek: (slug) => set({ peekSlug: slug }),
 	closePeek: () => set({ peekSlug: null }),
 	setPaletteOpen: (open) => set({ paletteOpen: open }),
