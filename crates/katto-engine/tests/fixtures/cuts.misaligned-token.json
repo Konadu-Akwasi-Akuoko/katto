@@ -1,0 +1,8 @@
+{
+  "source_duration_secs": 8.0,
+  "cuts": [
+    { "start": 4.52, "end": 5.1, "reason": "filler", "excerpt": "Motion" }
+  ],
+  "flags": [],
+  "total_cut_secs": 0.58
+}

@@ -7,6 +7,7 @@ pub mod ffprobe;
 pub mod ingest;
 pub mod rational;
 pub mod schema;
+pub mod validate;
 
 pub use error::{Error, Result};
 pub use rational::Rational;
