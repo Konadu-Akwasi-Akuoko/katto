@@ -63,10 +63,20 @@ pub async fn generate_thumbs(bundle_root: &Path, src: &Path) -> Result<u32> {
         )));
     }
 
-    if final_dir.exists() {
-        tokio::fs::remove_dir_all(&final_dir).await?;
+    // Swap, don't remove-then-rename: the old strip stays in place until the
+    // new one is ready, so a crash between steps never leaves zero thumbs.
+    let old_dir = bundle_root.join(format!(
+        "{THUMBS_DIR}.old-{pid}-{run}",
+        pid = std::process::id()
+    ));
+    let had_previous = final_dir.exists();
+    if had_previous {
+        tokio::fs::rename(&final_dir, &old_dir).await?;
     }
     tokio::fs::rename(&tmp_dir, &final_dir).await?;
+    if had_previous {
+        let _ = tokio::fs::remove_dir_all(&old_dir).await;
+    }
 
     let mut count = 0;
     let mut entries = tokio::fs::read_dir(&final_dir).await?;
@@ -118,7 +128,11 @@ mod tests {
         let leftover_scratch = std::fs::read_dir(dir.path())
             .unwrap()
             .filter_map(|e| e.ok())
-            .any(|e| e.file_name().to_string_lossy().starts_with("thumbs.tmp"));
+            .any(|e| {
+                let name = e.file_name();
+                let name = name.to_string_lossy();
+                name.starts_with("thumbs.tmp") || name.starts_with("thumbs.old")
+            });
         assert!(!leftover_scratch);
     }
 }

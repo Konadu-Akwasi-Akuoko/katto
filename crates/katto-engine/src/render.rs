@@ -143,6 +143,7 @@ pub async fn render_mp4(
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
         .spawn();
     let mut child = match spawn {
         Ok(child) => child,
@@ -163,11 +164,32 @@ pub async fn render_mp4(
         })
     });
 
+    // Stall watchdog: `-progress` writes every ~0.5s of wall clock regardless
+    // of encode speed, so a long silence means ffmpeg is hung, not slow. A
+    // hung child would otherwise pin the job (and its busy guard) forever.
+    const STALL_LIMIT: std::time::Duration = std::time::Duration::from_secs(120);
     if let Some(stdout) = child.stdout.take() {
         let mut lines = tokio::io::BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            if let Some(secs) = parse_progress_line(&line) {
-                on_progress((secs / total).min(1.0));
+        loop {
+            match tokio::time::timeout(STALL_LIMIT, lines.next_line()).await {
+                Ok(Ok(Some(line))) => {
+                    if let Some(secs) = parse_progress_line(&line) {
+                        on_progress((secs / total).min(1.0));
+                    }
+                }
+                Ok(_) => break, // EOF or read error: fall through to wait()
+                Err(_) => {
+                    let _ = child.start_kill();
+                    let _ = child.wait().await;
+                    if let Some(task) = stderr_task {
+                        let _ = task.await;
+                    }
+                    let _ = tokio::fs::remove_file(&out_tmp).await;
+                    return Err(Error::Render(format!(
+                        "ffmpeg produced no progress for {}s; killed",
+                        STALL_LIMIT.as_secs()
+                    )));
+                }
             }
         }
     }

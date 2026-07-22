@@ -65,15 +65,21 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
         }
         Command::Render { bundle, out } => {
             let opened = katto_engine::bundle::open(&bundle)?;
-            let out_path = match out {
-                Some(out) => out,
+            let (out_path, claimed) = match out {
+                Some(out) => (out, false),
                 None => {
                     let (timelines_dir, slug) = cli::project_context(&bundle);
                     let exports = timelines_dir.with_file_name("exports");
-                    std::fs::create_dir_all(&exports)?;
-                    let render_slug = format!("{slug}-render");
-                    let version = katto_engine::timelines::next_version(&exports, &render_slug);
-                    exports.join(format!("{render_slug}-v{version}.mp4"))
+                    let stem = bundle
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "bundle".into());
+                    // Per-bundle slug + create_new claim: versions are
+                    // reserved, never re-derived by a racy directory scan.
+                    let render_slug = format!("{slug}-{stem}-render");
+                    let (_, path) =
+                        katto_engine::timelines::claim_next_version(&exports, &render_slug, "mp4")?;
+                    (path, true)
                 }
             };
             let on_progress = move |p: f64| {
@@ -83,7 +89,13 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
                     let _ = std::io::stdout().flush();
                 }
             };
-            katto_engine::render::render_mp4(&opened, &out_path, &on_progress).await?;
+            if let Err(e) = katto_engine::render::render_mp4(&opened, &out_path, &on_progress).await
+            {
+                if claimed {
+                    let _ = std::fs::remove_file(&out_path);
+                }
+                return Err(e.into());
+            }
             if !json {
                 println!();
             }

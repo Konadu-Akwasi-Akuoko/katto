@@ -35,7 +35,7 @@ pub fn retime_kept_words(
     timebase: u32,
 ) -> Vec<Caption> {
     let zero = Rational::new(0, timebase);
-    let mut out = Vec::new();
+    let mut out: Vec<Caption> = Vec::new();
     for word in words {
         let WordEntry::Word {
             text, start, end, ..
@@ -45,13 +45,25 @@ pub fn retime_kept_words(
         };
         let s = Rational::from_seconds(*start, timebase);
         let e = Rational::from_seconds(*end, timebase);
-        let mid = Rational::from_seconds((*start + *end) / 2.0, timebase);
-        if cuts.iter().any(|&(cs, ce)| cs <= mid && mid < ce) {
+        // Exact rational midpoint of the CONVERTED endpoints — an f64
+        // (start+end)/2 can round across a cut edge and flip kept<->dropped.
+        let Some(mid_den) = timebase.checked_mul(2) else {
+            continue;
+        };
+        let mid = match s.num.checked_add(e.num) {
+            Some(sum) => Rational::new(sum, mid_den),
+            None => continue,
+        };
+        // cs <= mid && mid < ce, via exact cross-multiplication (mid's
+        // timebase differs, so Ord's den-tiebreak would misorder equals).
+        let inside =
+            |cs: Rational, ce: Rational| !strictly_after(cs, mid) && strictly_after(ce, mid);
+        if cuts.iter().any(|&(cs, ce)| inside(cs, ce)) {
             continue;
         }
         let mut removed = zero;
         for &(cs, ce) in cuts {
-            if strictly_after(mid, ce) || ce == mid {
+            if !strictly_after(ce, mid) {
                 let Some(d) = ce.checked_sub(cs) else {
                     continue;
                 };
@@ -63,9 +75,15 @@ pub fn retime_kept_words(
         }
         let shifted_start = s.checked_sub(removed).unwrap_or(zero).max(zero);
         let shifted_end = e.checked_sub(removed).unwrap_or(zero).max(zero);
+        // A cue may never reach back into its predecessor: a word straddling
+        // a cut start keeps its end while the next word shifts onto the cut
+        // start — clamp forward so cue ranges stay monotonic.
+        let floor = out.last().map_or(zero, |prev| prev.end);
+        let clamped_start = shifted_start.max(floor);
+        let clamped_end = shifted_end.max(clamped_start);
         out.push(Caption {
-            start: shifted_start,
-            end: shifted_end,
+            start: clamped_start,
+            end: clamped_end,
             text: text.clone(),
         });
     }
@@ -187,6 +205,22 @@ mod tests {
         assert_eq!(out.len(), 2);
         assert_eq!(out[0].text, "keep");
         assert_eq!(out[1].start, r(1000)); // 2.0 - 1.0s removed
+    }
+
+    #[test]
+    fn retimed_cues_never_overlap_the_previous_cue() {
+        // A straddles the cut start and keeps its end (1.1); B sits past the
+        // cut and shifts left to 1.05 — without the clamp B starts inside A.
+        let words = vec![w("a", 0.9, 1.1), w("b", 2.0, 2.5)];
+        let out = retime_kept_words(&words, &[(r(1050), r(2000))], TB);
+        assert_eq!(out.len(), 2);
+        assert!(
+            out[1].start >= out[0].end,
+            "cue b {:?} starts before cue a ends {:?}",
+            out[1].start,
+            out[0].end
+        );
+        assert!(out[1].end >= out[1].start);
     }
 
     #[test]
