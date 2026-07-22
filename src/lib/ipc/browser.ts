@@ -1,17 +1,15 @@
 import type {
 	BrowserRect,
 	BrowserState,
-	ParkedDownload,
 	TabSnapshot,
 } from "@/lib/ipc/bindings.gen";
 import { commands } from "@/lib/ipc/bindings.gen";
 import { unwrap } from "@/lib/ipc/result";
 
-export type { BrowserRect, BrowserState, ParkedDownload, TabSnapshot };
+export type { BrowserRect, BrowserState, TabSnapshot };
 
 export const browserKeys = {
 	state: ["browser", "state"] as const,
-	parked: ["browser", "parked"] as const,
 	activeProject: ["browser", "active-project"] as const,
 };
 
@@ -50,9 +48,6 @@ export const setActiveAssetProject = (slug: string | null): Promise<null> =>
 /** The current filing target: override, else most recently touched. */
 export const activeAssetProject = (): Promise<string | null> =>
 	unwrap(commands.activeAssetProject());
-
-export const parkedDownloads = (): Promise<ParkedDownload[]> =>
-	unwrap(commands.parkedDownloads());
 
 /** File a parked download into the picked project. */
 export const fileParkedDownload = (

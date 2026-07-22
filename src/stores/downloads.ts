@@ -17,11 +17,10 @@ export type DownloadRow = {
 
 type DownloadsState = {
 	rows: DownloadRow[];
-	/** The download waiting on a project pick (opens the sheet), if any. */
+	/** The download the sheet is currently asking a project for, if any. */
 	needsProject: { id: string; filename: string } | null;
 	upsert: (row: DownloadRow) => void;
 	dismiss: (id: string) => void;
-	clearFinished: () => void;
 	setNeedsProject: (value: { id: string; filename: string } | null) => void;
 };
 
@@ -42,11 +41,5 @@ export const useDownloadsStore = create<DownloadsState>((set) => ({
 			return { rows };
 		}),
 	dismiss: (id) => set((s) => ({ rows: s.rows.filter((r) => r.id !== id) })),
-	clearFinished: () =>
-		set((s) => ({
-			rows: s.rows.filter(
-				(r) => r.status === "filing" || r.status === "needs-project",
-			),
-		})),
 	setNeedsProject: (value) => set({ needsProject: value }),
 }));

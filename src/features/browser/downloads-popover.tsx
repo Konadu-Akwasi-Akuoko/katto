@@ -26,11 +26,11 @@ import { useDownloadsStore } from "@/stores/downloads";
 function rowMeta(row: DownloadRow): string {
 	switch (row.status) {
 		case "filed":
-			return `→ ${row.project} · ${row.destRel}`;
+			return `→ ${row.project}/${row.destRel}`;
 		case "filing":
 			return "filing…";
 		case "needs-project":
-			return "choosing project…";
+			return "waiting for a project pick";
 		case "fallback":
 			return "saved to Downloads";
 		case "failed":
@@ -40,8 +40,14 @@ function rowMeta(row: DownloadRow): string {
 
 function DownloadRowItem({ row }: { row: DownloadRow }) {
 	const dismiss = useDownloadsStore((s) => s.dismiss);
+	const setNeedsProject = useDownloadsStore((s) => s.setNeedsProject);
+	const filed =
+		row.status === "filed" &&
+		row.project !== undefined &&
+		row.destRel !== undefined;
 	const reveal = useMutation({
-		mutationFn: () => revealInProject(row.project ?? "", row.destRel ?? ""),
+		mutationFn: (target: { project: string; destRel: string }) =>
+			revealInProject(target.project, target.destRel),
 	});
 	return (
 		<div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2">
@@ -54,12 +60,34 @@ function DownloadRowItem({ row }: { row: DownloadRow }) {
 				>
 					{row.filename}
 				</div>
-				<div className="truncate text-[11px] text-fg-faint">{rowMeta(row)}</div>
+				<div
+					className={cn(
+						"truncate text-[11px] text-fg-faint",
+						row.status === "filed" && "font-mono",
+					)}
+				>
+					{rowMeta(row)}
+				</div>
 			</div>
-			{row.status === "filed" && (
+			{row.status === "needs-project" && (
 				<button
 					type="button"
-					onClick={() => reveal.mutate()}
+					onClick={() =>
+						setNeedsProject({ id: row.id, filename: row.filename })
+					}
+					className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-fg-muted hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
+				>
+					Choose project
+				</button>
+			)}
+			{filed && (
+				<button
+					type="button"
+					onClick={() => {
+						if (row.project !== undefined && row.destRel !== undefined) {
+							reveal.mutate({ project: row.project, destRel: row.destRel });
+						}
+					}}
 					className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-fg-muted hover:bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
 				>
 					Reveal

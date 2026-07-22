@@ -8,6 +8,11 @@ import {
 	onDownloadNeedsProject,
 } from "@/lib/ipc/broadcast";
 import { useDownloadsStore } from "@/stores/downloads";
+import { useUiStore } from "@/stores/ui";
+
+// fallback/failed broadcasts carry no id, only a filename; a counter keeps
+// re-downloads of the same file from silently overwriting the prior row
+let rowSeq = 0;
 
 /**
  * Bridges download broadcasts into the downloads store + toasts. Mounted in
@@ -21,19 +26,20 @@ export function DownloadsBridge() {
 		const subscriptions = [
 			onDownloadFiled((payload) => {
 				upsert({
-					id: `${payload.project}/${payload.dest_rel}`,
+					id: payload.download_id,
 					filename: payload.filename,
 					status: "filed",
 					project: payload.project,
 					destRel: payload.dest_rel,
 				});
 				toast.success(
-					`Filed ${payload.filename} → ${payload.project} · ${payload.dest_rel}`,
+					`Filed ${payload.filename} → ${payload.project}/${payload.dest_rel}`,
 				);
 			}),
 			onDownloadFallback((payload) => {
+				rowSeq += 1;
 				upsert({
-					id: `fallback-${payload.filename}`,
+					id: `fallback-${rowSeq}-${payload.filename}`,
 					filename: payload.filename,
 					status: "fallback",
 				});
@@ -47,8 +53,9 @@ export function DownloadsBridge() {
 				);
 			}),
 			onDownloadFailed((payload) => {
+				rowSeq += 1;
 				upsert({
-					id: `failed-${payload.filename}`,
+					id: `failed-${rowSeq}-${payload.filename}`,
 					filename: payload.filename,
 					status: "failed",
 				});
@@ -60,10 +67,26 @@ export function DownloadsBridge() {
 					filename: payload.filename,
 					status: "needs-project",
 				});
-				setNeedsProject({
-					id: payload.download_id,
-					filename: payload.filename,
-				});
+				// never steal the sheet from a pick in progress — later parks
+				// stay reachable from their popover rows
+				const { needsProject } = useDownloadsStore.getState();
+				if (needsProject === null) {
+					setNeedsProject({
+						id: payload.download_id,
+						filename: payload.filename,
+					});
+				}
+				// the sheet only renders inside the browser surface — from any
+				// other surface the pick must announce itself
+				if (useUiStore.getState().surface !== "browser") {
+					toast.info("Download waiting for a project pick", {
+						description: payload.filename,
+						action: {
+							label: "Choose",
+							onClick: () => useUiStore.getState().setSurface("browser"),
+						},
+					});
+				}
 			}),
 		];
 		return () => {
