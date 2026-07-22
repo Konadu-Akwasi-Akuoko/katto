@@ -2,6 +2,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { registerCommand } from "@/features/palette/registry";
 import { detectClaude } from "@/lib/ipc/onboarding";
+import { runScheduledJobNow } from "@/lib/ipc/scheduler";
+import { sessionsKeys, spawnSession } from "@/lib/ipc/sessions";
 import { getSettings, settingsKeys } from "@/lib/ipc/settings";
 import { quitApp, sleepToTray } from "@/lib/ipc/shell";
 import { useIngestSheetStore } from "@/stores/ingest-sheet";
@@ -109,6 +111,39 @@ export function registerAppCommands(queryClient: QueryClient): void {
 			const { studio_root } = await getSettings();
 			if (!studio_root) throw new Error("No studio root configured.");
 			await revealItemInDir(studio_root);
+		},
+	});
+	registerCommand({
+		id: "ai.open-dock",
+		title: "Open Claude dock",
+		keywords: ["dock", "session", "terminal", "panel"],
+		group: "AI",
+		run: () => useUiStore.getState().openDock(),
+	});
+	registerCommand({
+		id: "ai.new-session",
+		title: "New Claude session",
+		keywords: ["dock", "session", "terminal", "spawn", "claude"],
+		group: "AI",
+		run: async () => {
+			const { studio_root } = await getSettings();
+			const id = await spawnSession({
+				label: "session",
+				cwd: studio_root ?? "/",
+				initial_prompt: null,
+			});
+			useUiStore.getState().openDock(id);
+			await queryClient.invalidateQueries({ queryKey: sessionsKeys.all });
+		},
+	});
+	registerCommand({
+		id: "ai.run-curation",
+		title: "Run nightly curation now",
+		keywords: ["curation", "ideas", "nightly", "discovery", "backlog"],
+		group: "AI",
+		run: async () => {
+			await runScheduledJobNow("nightly-curation");
+			useUiStore.getState().openDock();
 		},
 	});
 }

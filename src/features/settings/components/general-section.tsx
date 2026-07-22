@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -33,26 +32,6 @@ export function GeneralSection({ settings }: { settings: Settings }) {
 					checked={autostart.state.data ?? false}
 					onCheckedChange={(v) => autostart.toggle.mutate(v)}
 					disabled={autostart.state.isPending || autostart.toggle.isPending}
-				/>
-			</div>
-			<div className="flex items-center justify-between gap-4 text-sm">
-				<Label htmlFor="idle-reap">Idle session reap (minutes)</Label>
-				<Input
-					id="idle-reap"
-					type="number"
-					min={1}
-					className="w-24 text-right tabular-nums"
-					defaultValue={settings.idle_reap_minutes}
-					onBlur={(e) => {
-						const minutes = Number(e.target.value);
-						if (
-							Number.isInteger(minutes) &&
-							minutes >= 1 &&
-							minutes !== settings.idle_reap_minutes
-						) {
-							patch.mutate({ idle_reap_minutes: minutes });
-						}
-					}}
 				/>
 			</div>
 			<div className="flex items-center justify-between gap-4 text-sm">
