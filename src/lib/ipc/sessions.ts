@@ -10,6 +10,10 @@ export const sessionsKeys = {
 };
 
 /** Every session the pool knows about, oldest-first. */
+/** Drop a session's output sink (terminal unmounted / dock hidden). */
+export const detachSession = (id: string): Promise<null> =>
+	unwrap(commands.detachSession(id));
+
 export const listSessions = (): Promise<SessionInfo[]> =>
 	unwrap(commands.listSessions());
 

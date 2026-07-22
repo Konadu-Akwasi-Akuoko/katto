@@ -2,7 +2,12 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
-import { attachSession, resizeSession, writeSession } from "@/lib/ipc/sessions";
+import {
+	attachSession,
+	detachSession,
+	resizeSession,
+	writeSession,
+} from "@/lib/ipc/sessions";
 import "@xterm/xterm/css/xterm.css";
 
 function cssVar(name: string, fallback: string): string {
@@ -48,11 +53,32 @@ export function Terminal({ sessionId }: { sessionId: string }) {
 		term.open(container);
 		fit.fit();
 
-		void attachSession(sessionId, (bytes) => term.write(bytes)).catch(() => {
-			term.write(`\r\nkatto: could not attach to session ${sessionId}\r\n`);
+		// The attach callback is registered webview-wide and outlives this
+		// mount; the guard keeps a stale channel from writing into (and
+		// pinning) a disposed xterm.
+		let disposed = false;
+		void attachSession(sessionId, (bytes) => {
+			if (!disposed) term.write(bytes);
+		}).catch(() => {
+			if (!disposed)
+				term.write(`\r\nkatto: could not attach to session ${sessionId}\r\n`);
 		});
+		let reportedWriteError = false;
 		const dataListener = term.onData((data) => {
-			void writeSession(sessionId, data).catch(() => {});
+			void writeSession(sessionId, data)
+				.then(() => {
+					reportedWriteError = false;
+				})
+				.catch(() => {
+					// Surfaced inline where the owner is typing; once per
+					// failure streak so a held key doesn't spam the viewport.
+					if (!disposed && !reportedWriteError) {
+						reportedWriteError = true;
+						term.write(
+							"\r\nkatto: input not delivered — the session may have closed\r\n",
+						);
+					}
+				});
 		});
 		const resizeListener = term.onResize(({ cols, rows }) => {
 			void resizeSession(sessionId, cols, rows).catch(() => {});
@@ -66,11 +92,15 @@ export function Terminal({ sessionId }: { sessionId: string }) {
 		observer.observe(container);
 
 		return () => {
+			disposed = true;
 			observer.disconnect();
 			clearTimeout(fitTimer);
 			dataListener.dispose();
 			resizeListener.dispose();
 			term.dispose();
+			// Drop the backend sink promptly — "latest wins" only replaces it
+			// on a next attach, which never comes while the dock stays hidden.
+			void detachSession(sessionId).catch(() => {});
 		};
 	}, [sessionId]);
 

@@ -30,6 +30,12 @@ type DoneTx = tokio::sync::oneshot::Sender<std::result::Result<(), String>>;
 /// The session pool: owns every live PTY, its scrollback, and its state. All
 /// app-dependent side effects (jobs/events/broadcast/notification) no-op until
 /// `start(app)` runs, so the pool is fully testable headless.
+///
+/// Size note (rust.md ~500-line rule): this file stays one module on purpose —
+/// spawn, the endpoint pump, the reaper, output flushing, and state
+/// transitions all mutate the same `Entry` under the same lock, and the lock
+/// discipline (no await while held, transitions applied after release) is the
+/// invariant most worth reading in one place. Roughly a third is tests.
 #[derive(Clone)]
 pub struct SessionPool {
     inner: Arc<Inner>,
@@ -701,6 +707,17 @@ impl SessionPool {
         Ok(())
     }
 
+    /// Drop the session's output sink (terminal unmounted / dock hidden). The
+    /// backend stops pushing batches into a disposed terminal immediately —
+    /// "latest wins" only replaces the sink on a NEXT attach, which never
+    /// comes while the dock stays hidden. Scrollback keeps accumulating.
+    pub fn detach(&self, id: &str) {
+        let mut sessions = self.sessions();
+        if let Some(entry) = sessions.get_mut(id) {
+            entry.sink = None;
+        }
+    }
+
     pub(crate) fn attach_sink(&self, id: &str, sink: Sink) {
         let mut sessions = self.sessions();
         let Some(entry) = sessions.get_mut(id) else {
@@ -927,6 +944,60 @@ mod tests {
             permission_mode: None,
             permission_allow: vec![],
         }
+    }
+
+    #[tokio::test]
+    async fn detach_stops_streaming_but_keeps_scrollback() {
+        let pool = SessionPool::new();
+        let id = pool
+            .spawn_headless(task("t"), Program::Custom("bash -c 'cat'".into()))
+            .await
+            .unwrap();
+        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+        pool.attach_sink(&id, Box::new(move |bytes| tx.send(bytes.to_vec()).is_ok()));
+        pool.write(&id, b"before\n").unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut got = Vec::new();
+        while std::time::Instant::now() < deadline
+            && !String::from_utf8_lossy(&got).contains("before")
+        {
+            if let Ok(chunk) = rx.recv_timeout(Duration::from_millis(100)) {
+                got.extend(chunk);
+            }
+        }
+        assert!(String::from_utf8_lossy(&got).contains("before"));
+
+        pool.detach(&id);
+        // Detach drops the sink closure (and its tx): the receiver
+        // disconnects instead of seeing any further output.
+        loop {
+            match rx.recv_timeout(Duration::from_secs(2)) {
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                Ok(chunk) => {
+                    assert!(
+                        !String::from_utf8_lossy(&chunk).contains("after"),
+                        "no delivery after detach"
+                    );
+                }
+                Err(err) => panic!("sink must be dropped at detach: {err:?}"),
+            }
+        }
+        // Scrollback still accumulates while detached: a fresh attach replays
+        // (or live-streams) the output written in between.
+        pool.write(&id, b"after\n").unwrap();
+        let (tx2, rx2) = std::sync::mpsc::channel::<Vec<u8>>();
+        pool.attach_sink(&id, Box::new(move |bytes| tx2.send(bytes.to_vec()).is_ok()));
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut replayed = Vec::new();
+        while std::time::Instant::now() < deadline
+            && !String::from_utf8_lossy(&replayed).contains("after")
+        {
+            if let Ok(chunk) = rx2.recv_timeout(Duration::from_millis(100)) {
+                replayed.extend(chunk);
+            }
+        }
+        assert!(String::from_utf8_lossy(&replayed).contains("after"));
+        pool.close(&id, CloseReason::UserClosed).await.unwrap();
     }
 
     #[test]

@@ -223,6 +223,13 @@ export const commands = {
 	 *  then live 16 ms / 16 KB batches stream over the channel.
 	 */
 	attachSession: (id: string, onData: Channel<number[]>) => typedError<null, Error>(__TAURI_INVOKE("attach_session", { id, onData })),
+	/**
+	 *  Drop a session's output sink when its terminal unmounts (dock hidden or
+	 *  tab switched away): the backend stops streaming into a disposed terminal
+	 *  instead of waiting for a next attach. Idempotent; unknown ids are a no-op
+	 *  (the session may have closed while the panel was hidden).
+	 */
+	detachSession: (id: string) => typedError<null, Error>(__TAURI_INVOKE("detach_session", { id })),
 	/**  Forward xterm keystrokes (already encoded by xterm's onData) to the PTY. */
 	writeSession: (id: string, data: string) => typedError<null, Error>(__TAURI_INVOKE("write_session", { id, data })),
 	/**  Propagate an xterm resize to the PTY. */

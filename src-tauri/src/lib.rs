@@ -79,6 +79,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::scheduler::set_scheduled_job,
             commands::sessions::spawn_session,
             commands::sessions::attach_session,
+            commands::sessions::detach_session,
             commands::sessions::write_session,
             commands::sessions::resize_session,
             commands::sessions::close_session,

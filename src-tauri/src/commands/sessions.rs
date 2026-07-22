@@ -49,6 +49,17 @@ pub async fn attach_session(
     state.sessions.attach(&id, on_data)
 }
 
+/// Drop a session's output sink when its terminal unmounts (dock hidden or
+/// tab switched away): the backend stops streaming into a disposed terminal
+/// instead of waiting for a next attach. Idempotent; unknown ids are a no-op
+/// (the session may have closed while the panel was hidden).
+#[tauri::command]
+#[specta::specta]
+pub async fn detach_session(state: State<'_, AppState>, id: String) -> Result<()> {
+    state.sessions.detach(&id);
+    Ok(())
+}
+
 /// Forward xterm keystrokes (already encoded by xterm's onData) to the PTY.
 #[tauri::command]
 #[specta::specta]

@@ -47,19 +47,22 @@ vi.mock("@xterm/addon-webgl", () => ({
 }));
 
 const attachCallbacks = new Map<string, (bytes: Uint8Array) => void>();
-const { attachSession, writeSession, resizeSession } = vi.hoisted(() => ({
-	attachSession: vi.fn(
-		(id: string, onData: (bytes: Uint8Array) => void): Promise<null> => {
-			attachCallbacks.set(id, onData);
-			return Promise.resolve(null);
-		},
-	),
-	writeSession: vi.fn(() => Promise.resolve(null)),
-	resizeSession: vi.fn(() => Promise.resolve(null)),
-}));
+const { attachSession, detachSession, writeSession, resizeSession } =
+	vi.hoisted(() => ({
+		attachSession: vi.fn(
+			(id: string, onData: (bytes: Uint8Array) => void): Promise<null> => {
+				attachCallbacks.set(id, onData);
+				return Promise.resolve(null);
+			},
+		),
+		detachSession: vi.fn(() => Promise.resolve(null)),
+		writeSession: vi.fn(() => Promise.resolve(null)),
+		resizeSession: vi.fn(() => Promise.resolve(null)),
+	}));
 
 vi.mock("@/lib/ipc/sessions", () => ({
 	attachSession,
+	detachSession,
 	writeSession,
 	resizeSession,
 }));
@@ -113,5 +116,45 @@ describe("Terminal", () => {
 		const term = xtermInstances[0];
 		if (!term) throw new Error("xterm never constructed");
 		expect(term.dispose).toHaveBeenCalled();
+	});
+
+	it("detaches the backend sink on unmount", async () => {
+		const { unmount } = render(<Terminal sessionId="s1" />);
+		await vi.waitFor(() => expect(attachSession).toHaveBeenCalled());
+		unmount();
+		expect(detachSession).toHaveBeenCalledWith("s1");
+	});
+
+	it("never writes into a disposed terminal via a stale attach callback", async () => {
+		const { unmount } = render(<Terminal sessionId="s1" />);
+		await vi.waitFor(() => expect(attachSession).toHaveBeenCalled());
+		const onData = attachCallbacks.get("s1");
+		if (!onData) throw new Error("attach callback missing");
+		const term = xtermInstances[0];
+		if (!term) throw new Error("xterm never constructed");
+		unmount();
+		term.write.mockClear();
+		onData(new Uint8Array([120]));
+		expect(term.write).not.toHaveBeenCalled();
+	});
+
+	it("surfaces a failed keystroke write into the terminal once", async () => {
+		writeSession.mockImplementation(() => Promise.reject(new Error("closed")));
+		render(<Terminal sessionId="s1" />);
+		const term = xtermInstances[0];
+		if (!term?.dataHandler) throw new Error("onData never registered");
+		term.dataHandler("a");
+		term.dataHandler("b");
+		await vi.waitFor(() => {
+			expect(
+				term.write.mock.calls.some(
+					(c) => typeof c[0] === "string" && c[0].includes("not delivered"),
+				),
+			).toBe(true);
+		});
+		const notices = term.write.mock.calls.filter(
+			(c) => typeof c[0] === "string" && c[0].includes("not delivered"),
+		);
+		expect(notices).toHaveLength(1);
 	});
 });
