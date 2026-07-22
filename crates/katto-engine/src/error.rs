@@ -25,6 +25,12 @@ pub enum Error {
     /// Any other transcription transport/response failure.
     #[error("elevenlabs: {0}")]
     Transcribe(String),
+    /// A planner failure (transport or invalid output after retry).
+    #[error("plan: {0}")]
+    Plan(#[from] crate::planner::PlanError),
+    /// A persisted cuts.json failed re-validation on load.
+    #[error("cuts validation failed: {0}")]
+    CutsInvalid(String),
     /// The manifest's source video is missing on open (Phase 5 adds relocation).
     #[error("source missing: expected {expected_path}", expected_path = .expected_path.display())]
     SourceMissing {

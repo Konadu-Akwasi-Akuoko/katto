@@ -8,6 +8,7 @@ pub mod ffprobe;
 pub mod import;
 pub mod ingest;
 pub mod merge;
+pub mod planner;
 pub mod rational;
 pub mod schema;
 pub mod transcribe;
