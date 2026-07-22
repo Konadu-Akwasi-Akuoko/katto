@@ -13,6 +13,18 @@ pub const DEFAULT_MODEL: &str = "claude-sonnet-4-6";
 /// PRD-locked completion budget.
 pub const MAX_TOKENS: u32 = 8192;
 
+/// TCP connect cap; a black-holed host must fail fast, not hang the job.
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Overall per-POST cap. Non-streaming Messages call with an 8192-token
+/// budget finishes well inside this; without it a dead connection hangs the
+/// pipeline job forever (jobs have no cancel yet).
+const REQUEST_TIMEOUT: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_secs(2)
+} else {
+    std::time::Duration::from_secs(300)
+};
+
 /// Cut planner backed by the Anthropic Messages API with the owner's key.
 pub struct HttpAnthropicPlanner {
     /// The Anthropic API key (never logged; Debug redacts).
@@ -78,7 +90,12 @@ impl HttpAnthropicPlanner {
     async fn post(&self, messages: &[(String, String)]) -> Result<String, PlanError> {
         let system = format!("{CUT_DECIDER_PROMPT}{OUTPUT_OVERRIDE}");
         let body = request_body(&self.model, &system, messages);
-        let response = reqwest::Client::new()
+        let client = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .map_err(|e| PlanError::Http(e.to_string()))?;
+        let response = client
             .post(format!("{}/v1/messages", self.base_url))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -204,6 +221,27 @@ mod tests {
             a.messages,
             vec![("user".to_string(), "TRANSCRIPT".to_string())]
         );
+    }
+
+    #[tokio::test]
+    async fn hung_planner_post_times_out() {
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("POST"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"content": [{"type": "text", "text": "x"}]}))
+                    .set_delay(std::time::Duration::from_secs(30)),
+            )
+            .mount(&server)
+            .await;
+        let p = HttpAnthropicPlanner {
+            api_key: "k".into(),
+            model: DEFAULT_MODEL.into(),
+            base_url: server.uri(),
+        };
+        let started = std::time::Instant::now();
+        assert!(matches!(p.first("T").await, Err(PlanError::Http(_))));
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
     }
 
     #[tokio::test]
