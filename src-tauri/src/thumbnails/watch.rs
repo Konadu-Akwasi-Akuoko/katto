@@ -68,6 +68,29 @@ fn is_png_change(event: &notify::Event) -> bool {
     })
 }
 
+fn record_watch_failed(app: &AppHandle, slug: &str, error: &str) {
+    let Some(state) = app.try_state::<crate::state::AppState>() else {
+        return;
+    };
+    let payload = serde_json::json!({ "slug": slug, "error": error }).to_string();
+    let slug = slug.to_string();
+    let db = state.db.clone();
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = db
+            .call(move |conn| {
+                crate::db::events::record(
+                    conn,
+                    "thumbnail_watch_failed",
+                    Some(&slug),
+                    Some(&payload),
+                )
+            })
+            .await;
+        crate::broadcast::events_appended(&app);
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,27 +124,4 @@ mod tests {
             AccessKind::Any
         ))));
     }
-}
-
-fn record_watch_failed(app: &AppHandle, slug: &str, error: &str) {
-    let Some(state) = app.try_state::<crate::state::AppState>() else {
-        return;
-    };
-    let payload = serde_json::json!({ "slug": slug, "error": error }).to_string();
-    let slug = slug.to_string();
-    let db = state.db.clone();
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let _ = db
-            .call(move |conn| {
-                crate::db::events::record(
-                    conn,
-                    "thumbnail_watch_failed",
-                    Some(&slug),
-                    Some(&payload),
-                )
-            })
-            .await;
-        crate::broadcast::events_appended(&app);
-    });
 }

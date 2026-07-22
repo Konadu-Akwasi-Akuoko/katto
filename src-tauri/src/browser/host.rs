@@ -98,40 +98,6 @@ impl DownloadRegistry {
     }
 }
 
-#[cfg(test)]
-mod registry_tests {
-    use super::*;
-
-    fn pending(id: &str, url: &str) -> PendingDownload {
-        PendingDownload {
-            id: id.into(),
-            url: url.into(),
-            page_url: String::new(),
-            filename: "f.zip".into(),
-            staging_path: PathBuf::from(format!("/staging/{id}/f.zip")),
-            started_at: String::new(),
-        }
-    }
-
-    #[test]
-    fn duplicate_url_downloads_finish_fifo_without_loss() {
-        let registry = DownloadRegistry::default();
-        registry.begin(pending("a", "https://x.test/f.zip"));
-        registry.begin(pending("b", "https://x.test/f.zip"));
-        let first = registry.finish("https://x.test/f.zip").unwrap();
-        let second = registry.finish("https://x.test/f.zip").unwrap();
-        assert_eq!(first.id, "a");
-        assert_eq!(second.id, "b");
-        assert!(registry.finish("https://x.test/f.zip").is_none());
-    }
-
-    #[test]
-    fn unknown_url_is_a_miss() {
-        let registry = DownloadRegistry::default();
-        assert!(registry.finish("https://never.test/").is_none());
-    }
-}
-
 /// `<app_data_dir>/browser/staging`, created on demand. Downloads land here
 /// first so no partial file ever appears inside a project folder.
 pub fn staging_dir(app: &AppHandle) -> Result<PathBuf> {
@@ -848,5 +814,39 @@ impl BrowserTabHost for SingleWebviewHost {
                     .flatten()
             })
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+
+    fn pending(id: &str, url: &str) -> PendingDownload {
+        PendingDownload {
+            id: id.into(),
+            url: url.into(),
+            page_url: String::new(),
+            filename: "f.zip".into(),
+            staging_path: PathBuf::from(format!("/staging/{id}/f.zip")),
+            started_at: String::new(),
+        }
+    }
+
+    #[test]
+    fn duplicate_url_downloads_finish_fifo_without_loss() {
+        let registry = DownloadRegistry::default();
+        registry.begin(pending("a", "https://x.test/f.zip"));
+        registry.begin(pending("b", "https://x.test/f.zip"));
+        let first = registry.finish("https://x.test/f.zip").unwrap();
+        let second = registry.finish("https://x.test/f.zip").unwrap();
+        assert_eq!(first.id, "a");
+        assert_eq!(second.id, "b");
+        assert!(registry.finish("https://x.test/f.zip").is_none());
+    }
+
+    #[test]
+    fn unknown_url_is_a_miss() {
+        let registry = DownloadRegistry::default();
+        assert!(registry.finish("https://never.test/").is_none());
     }
 }
