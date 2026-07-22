@@ -37,6 +37,9 @@ pub enum Error {
     /// MP4 render failed (ffmpeg stderr tail included).
     #[error("render: {0}")]
     Render(String),
+    /// FCPXML pre-write validation failed; export aborted before any file write.
+    #[error("fcpxml invariant: {0}")]
+    Fcpxml(String),
     /// The manifest's source video is missing on open (Phase 5 adds relocation).
     #[error("source missing: expected {expected_path}", expected_path = .expected_path.display())]
     SourceMissing {
