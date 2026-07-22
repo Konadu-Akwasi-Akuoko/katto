@@ -192,6 +192,12 @@ export function Waveform({
 		const wanted = new Map(ranges.map((r) => [r.key, r]));
 		for (const [id, region] of regionMap.current) {
 			if (!wanted.has(id)) {
+				// Never tear down a region mid-drag: remove() kills wavesurfer's
+				// drag subscriptions before region-updated fires, so commitDrag
+				// would never run and the temporal store would stay paused. A
+				// key can drop mid-drag (disc-to-manual conversion, inverted
+				// drag); the post-commit reconcile pass sweeps it up.
+				if (region.updatingSide !== undefined) continue;
 				region.remove();
 				regionMap.current.delete(id);
 			}

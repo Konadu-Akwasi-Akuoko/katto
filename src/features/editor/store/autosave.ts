@@ -1,7 +1,7 @@
 import { toWireEdits } from "@/features/editor/model/wire";
 import type { EditorStore } from "@/features/editor/store/editor-store";
 import { documentOf, historyOf } from "@/features/editor/store/editor-store";
-import type { Edits_Deserialize, Rational } from "@/lib/ipc/bindings.gen";
+import type { Edits_Deserialize, Rational } from "@/lib/ipc/editor";
 
 export type SaveFn = (edits: Edits_Deserialize) => Promise<unknown>;
 export type AutosaveState = "idle" | "pending" | "saving" | "paused-error";
@@ -51,13 +51,21 @@ export function createAutosave(opts: {
 		}
 	};
 
+	// Saves are strictly sequential: a new run chains behind any in-flight one
+	// (two concurrent atomic writes to edits.json could land out of order).
+	const runChained = (): Promise<void> => {
+		const next = (running ?? Promise.resolve()).then(run);
+		running = next;
+		return next;
+	};
+
 	const schedule = (): void => {
 		if (state === "paused-error") return;
 		state = "pending";
 		if (timer !== null) clearTimeout(timer);
 		timer = setTimeout(() => {
 			timer = null;
-			running = run();
+			void runChained();
 		}, debounceMs);
 	};
 
@@ -71,9 +79,7 @@ export function createAutosave(opts: {
 				clearTimeout(timer);
 				timer = null;
 			}
-			if (running !== null) await running;
-			running = run();
-			await running;
+			await runChained();
 		},
 		dispose: () => {
 			if (timer !== null) clearTimeout(timer);

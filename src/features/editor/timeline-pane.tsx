@@ -1,5 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { snapEdge } from "@/features/editor/model/snap";
 import type {
 	HitTarget,
@@ -18,7 +18,7 @@ import type { TokenSpan } from "@/features/editor/model/tokens";
 import type { Range } from "@/features/editor/model/wire";
 import type { DragTarget } from "@/features/editor/store/editor-store";
 import { keyToDragTarget } from "@/features/editor/store/editor-store";
-import type { Rational } from "@/lib/ipc/bindings.gen";
+import type { Rational } from "@/lib/ipc/editor";
 
 const RULER_HEIGHT = 20;
 const TRACK_HEIGHT = 64;
@@ -94,7 +94,7 @@ export function TimelinePane({
 	fps: Rational;
 	tokens: TokenSpan[];
 	ranges: Array<Range & { key: string }>;
-	discretionaryUnapplied: Range[];
+	discretionaryUnapplied: Array<Range & { key: string }>;
 	selectedKey: string | null;
 	currentTime: number;
 	viewport: Viewport;
@@ -116,6 +116,9 @@ export function TimelinePane({
 	const [marquee, setMarquee] = useState<Range | null>(null);
 	const [thumbsReady, setThumbsReady] = useState(false);
 	const missingReported = useRef(false);
+	// Filmstrip images decode async; a loaded frame re-renders so the draw
+	// effect paints it (without this, frames appear only on the next redraw).
+	const [, bumpRedraw] = useReducer((x: number) => x + 1, 0);
 
 	// Probe the first thumbnail: present -> filmstrip on; absent -> ask once.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: thumbsVersion re-runs the probe after the regeneration job lands
@@ -160,6 +163,7 @@ export function TimelinePane({
 				let img = imagesRef.current.get(slot.index);
 				if (img === undefined) {
 					img = new Image();
+					img.onload = () => bumpRedraw();
 					img.src = convertFileSrc(
 						`${bundlePath}/thumbs/${String(slot.index).padStart(5, "0")}.jpg`,
 					);

@@ -1,6 +1,6 @@
 import type { TokenSpan } from "@/features/editor/model/tokens";
 import type { Range } from "@/features/editor/model/wire";
-import type { Rational } from "@/lib/ipc/bindings.gen";
+import type { Rational } from "@/lib/ipc/editor";
 
 /** How far an edge drag reaches for a token boundary before frame fallback. */
 const EDGE_SNAP_DELTA_SECONDS = 0.15;

@@ -6,7 +6,7 @@ import {
 	secondsToRational,
 	toWireEdits,
 } from "@/features/editor/model/wire";
-import type { Rational } from "@/lib/ipc/bindings.gen";
+import type { Rational } from "@/lib/ipc/editor";
 
 const NTSC: Rational = { num: 30000, den: 1001 };
 const PAL: Rational = { num: 25, den: 1 };

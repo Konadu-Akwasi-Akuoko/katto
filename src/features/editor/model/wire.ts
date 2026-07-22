@@ -3,7 +3,7 @@ import type {
 	EditSnapshot,
 	Edits_Deserialize,
 	Rational,
-} from "@/lib/ipc/bindings.gen";
+} from "@/lib/ipc/editor";
 
 /** Seconds-domain time range (UI). */
 export type Range = { start: number; end: number };

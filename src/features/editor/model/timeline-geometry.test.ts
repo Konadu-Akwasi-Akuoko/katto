@@ -37,14 +37,16 @@ describe("timeline geometry", () => {
 	});
 
 	it("regionRects projects keyed ranges and discretionary outlines", () => {
+		// The discretionary key is the canonical cuts.discretionary index,
+		// supplied by the caller — never a position in the filtered array.
 		const rects = regionRects(
 			[{ key: "base-0", start: 11, end: 12 }],
-			[{ start: 13, end: 14 }],
+			[{ key: "disc-1", start: 13, end: 14 }],
 			vp,
 		);
 		expect(rects).toEqual([
 			{ key: "base-0", startPx: 50, endPx: 100, kind: "cut" },
-			{ key: "disc-0", startPx: 150, endPx: 200, kind: "discretionary" },
+			{ key: "disc-1", startPx: 150, endPx: 200, kind: "discretionary" },
 		]);
 	});
 

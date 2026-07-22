@@ -4,6 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@/components/ui/button";
 import { ExportDialog } from "@/features/editor/export-dialog";
@@ -11,11 +12,12 @@ import {
 	coalesceRanges,
 	effectiveCutRanges,
 	keptDuration,
+	keptTimeOf,
 } from "@/features/editor/model/kept-ranges";
+import { snapEdge } from "@/features/editor/model/snap";
 import type { Viewport } from "@/features/editor/model/timeline-geometry";
 import { clampViewport } from "@/features/editor/model/timeline-geometry";
 import { buildTokenSpans } from "@/features/editor/model/tokens";
-import type { Range } from "@/features/editor/model/wire";
 import { fromWireEdits } from "@/features/editor/model/wire";
 import { RelocateDialog } from "@/features/editor/relocate-dialog";
 import { createAutosave } from "@/features/editor/store/autosave";
@@ -33,6 +35,8 @@ import type { VideoPaneHandle } from "@/features/editor/video-pane";
 import { VideoPane } from "@/features/editor/video-pane";
 import { Waveform } from "@/features/editor/waveform";
 import { generateThumbs, saveEdits } from "@/lib/ipc/editor";
+import { eventsKeys } from "@/lib/ipc/events";
+import { jobsKeys } from "@/lib/ipc/jobs";
 import type { BundleData, Cut, Cuts } from "@/lib/ipc/pipeline";
 import { openBundle, pipelineKeys } from "@/lib/ipc/pipeline";
 import { IpcError } from "@/lib/ipc/result";
@@ -53,16 +57,6 @@ function readout(seconds: number): string {
 	const m = Math.floor(clamped / 60);
 	const s = clamped - m * 60;
 	return `${m}:${s.toFixed(1).padStart(4, "0")}`;
-}
-
-/** Source time -> kept-only time (subtract removed span time before t). */
-function keptTimeOf(t: number, coalesced: Range[]): number {
-	let removed = 0;
-	for (const cut of coalesced) {
-		if (cut.end <= t) removed += cut.end - cut.start;
-		else if (cut.start < t) removed += t - cut.start;
-	}
-	return t - removed;
 }
 
 /**
@@ -226,25 +220,37 @@ function Editing({
 		() => buildTokenSpans(data.transcript.words),
 		[data.transcript],
 	);
-	const store: EditorStore = useMemo(
-		() =>
-			createEditorStore({
+	// The store is created once per bundle and NEVER swapped on a query
+	// refetch — a refetch-on-focus would otherwise rebuild it from disk and
+	// drop in-memory edits that haven't auto-saved yet.
+	const storeRef = useRef<{ path: string; store: EditorStore } | null>(null);
+	if (storeRef.current === null || storeRef.current.path !== bundlePath) {
+		storeRef.current = {
+			path: bundlePath,
+			store: createEditorStore({
 				...fromWireEdits(data.edits, fps),
 				cuts,
 				tokens,
 			}),
-		[data.edits, fps, cuts, tokens],
-	);
-	const state = useStore(store);
-	const doc = documentOf(state);
+		};
+	}
+	const store = storeRef.current.store;
+	// Selector subscription (never the whole store): documentOf projects the
+	// four document arrays; useShallow keeps `doc` referentially stable so the
+	// range memos below don't recompute on unrelated renders. Actions are read
+	// off store.getState() in handlers — they never change identity.
+	const doc = useStore(store, useShallow(documentOf));
 
 	const ranges = useMemo(() => effectiveCutRanges(cuts, doc), [cuts, doc]);
 	const coalesced = useMemo(() => coalesceRanges(ranges), [ranges]);
+	// Keyed by the CANONICAL cuts.discretionary index — a positional key over
+	// the filtered array would apply the wrong entry once any earlier
+	// discretionary is applied.
 	const discretionaryUnapplied = useMemo(
 		() =>
 			cuts.discretionary
-				.map((d, i) => ({ start: d.start, end: d.end, index: i }))
-				.filter((d) => !doc.appliedDiscretionary.includes(d.index)),
+				.map((d, i) => ({ start: d.start, end: d.end, key: `disc-${i}` }))
+				.filter((_, i) => !doc.appliedDiscretionary.includes(i)),
 		[cuts, doc.appliedDiscretionary],
 	);
 
@@ -278,8 +284,18 @@ function Editing({
 	});
 	const { showOriginal, currentTime, playing, dispatch } = transport;
 
+	const [exportOpen, setExportOpen] = useState(false);
+	const [relocateInfo, setRelocateInfo] = useState<{
+		expected_path: string;
+		filename: string;
+		duration_secs: number;
+	} | null>(null);
+
 	// Global editor keys; the transcript pane owns X/Delete (needs selection).
+	// Suspended while a dialog is up — Space/J/K/L must not drive playback or
+	// mutate history behind a modal.
 	useEffect(() => {
+		if (exportOpen || relocateInfo !== null) return;
 		const handler = (event: KeyboardEvent) => {
 			if (isEditableTarget(event.target)) return;
 			const action = keyToAction(event);
@@ -297,7 +313,7 @@ function Editing({
 		};
 		window.addEventListener("keydown", handler);
 		return () => window.removeEventListener("keydown", handler);
-	}, [store, dispatch]);
+	}, [store, dispatch, exportOpen, relocateInfo]);
 
 	// Timeline viewport (canvas owns it; waveform mirrors it one-way).
 	const [viewport, setViewport] = useState<Viewport>({
@@ -311,22 +327,15 @@ function Editing({
 	);
 	const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
-	const [exportOpen, setExportOpen] = useState(false);
-	const [relocateInfo, setRelocateInfo] = useState<{
-		expected_path: string;
-		filename: string;
-		duration_secs: number;
-	} | null>(null);
-
-	// D21 close guard: while a save is pending/saving, hold the close, flush,
-	// then destroy (the Rust side keeps katto in the tray either way).
+	// D21 close guard: any not-yet-persisted state (pending, saving, or
+	// paused after an error) holds the close for one last flush attempt, then
+	// destroys either way (the Rust side keeps katto in the tray).
 	useEffect(() => {
 		const win = getCurrentWindow();
 		const unlisten = win.onCloseRequested(async (event) => {
 			const autosave = autosaveRef.current;
 			if (!autosave) return;
-			const s = autosave.state();
-			if (s === "pending" || s === "saving") {
+			if (autosave.state() !== "idle") {
 				event.preventDefault();
 				await autosave.flushNow().catch(() => {});
 				await win.destroy();
@@ -348,7 +357,7 @@ function Editing({
 		}).catch(() => {
 			// The job row + events carry the failure; the strip stays empty.
 		});
-		void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+		void queryClient.invalidateQueries({ queryKey: jobsKeys.all });
 	}, [bundlePath, queryClient]);
 
 	const seek = useCallback((t: number) => videoRef.current?.seek(t), []);
@@ -376,9 +385,9 @@ function Editing({
 						document={doc}
 						activeTime={currentTime}
 						onSeek={seek}
-						onToggleCut={(i) => state.toggleCut(i)}
-						onApplyDiscretionary={(i) => state.applyDiscretionary(i)}
-						onManualCut={(range) => state.addManualCut(range)}
+						onToggleCut={(i) => store.getState().toggleCut(i)}
+						onApplyDiscretionary={(i) => store.getState().applyDiscretionary(i)}
+						onManualCut={(range) => store.getState().addManualCut(range)}
 						selectedKey={selectedKey}
 					/>
 				</div>
@@ -408,12 +417,16 @@ function Editing({
 					onViewportChange={onViewportChange}
 					onSeek={seek}
 					onSelect={setSelectedKey}
-					onDragBegin={() => state.beginDrag()}
-					onDrag={(target, edge, t) => state.dragBoundary(target, edge, t)}
-					onDragEnd={(commit) =>
-						commit ? state.commitDrag() : state.cancelDrag()
+					onDragBegin={() => store.getState().beginDrag()}
+					onDrag={(target, edge, t) =>
+						store.getState().dragBoundary(target, edge, t)
 					}
-					onMarqueeCut={(range) => state.addManualCut(range)}
+					onDragEnd={(commit) =>
+						commit
+							? store.getState().commitDrag()
+							: store.getState().cancelDrag()
+					}
+					onMarqueeCut={(range) => store.getState().addManualCut(range)}
 				/>
 
 				<Waveform
@@ -423,12 +436,18 @@ function Editing({
 					viewport={viewport}
 					selectedKey={selectedKey}
 					onSeek={seek}
-					onDragBegin={() => state.beginDrag()}
+					onDragBegin={() => store.getState().beginDrag()}
 					onDrag={(key, edge, t) => {
 						const target = keyToDragTarget(key);
-						if (target) state.dragBoundary(target, edge, t);
+						// Same token snap as the canvas (wavesurfer has no
+						// modifier state, so no free-drag escape hatch here).
+						if (target) {
+							store
+								.getState()
+								.dragBoundary(target, edge, snapEdge(t, tokens, fps, false));
+						}
 					}}
-					onDragEnd={() => state.commitDrag()}
+					onDragEnd={() => store.getState().commitDrag()}
 					onSelect={setSelectedKey}
 				/>
 
@@ -486,7 +505,7 @@ function Editing({
 					flush={() => autosaveRef.current?.flushNow() ?? Promise.resolve()}
 					onClose={() => setExportOpen(false)}
 					onExported={() => {
-						void queryClient.invalidateQueries({ queryKey: ["events"] });
+						void queryClient.invalidateQueries({ queryKey: eventsKeys.all });
 					}}
 					onSourceMissing={(info) => {
 						setExportOpen(false);

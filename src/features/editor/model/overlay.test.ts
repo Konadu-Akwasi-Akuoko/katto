@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { classifyTokens } from "@/features/editor/model/overlay";
+import {
+	classifyEffective,
+	classifyTokens,
+} from "@/features/editor/model/overlay";
 import { buildTokenSpans } from "@/features/editor/model/tokens";
+import type { EditorDocument } from "@/features/editor/model/wire";
 import { fixtureCuts, fixtureWords } from "@/test/fixtures/editor";
+
+const doc0: EditorDocument = {
+	toggledOff: [],
+	appliedDiscretionary: [],
+	manualCuts: [],
+	boundaryAdjustments: [],
+};
 
 describe("classifyTokens", () => {
 	it("classifies each covered token once with precedence", () => {
@@ -37,5 +48,42 @@ describe("classifyTokens", () => {
 			],
 		});
 		expect(overlays[0]).toMatchObject({ kind: "cut" });
+	});
+});
+
+describe("classifyEffective", () => {
+	it("strikes effective cuts by key and keeps unapplied discretionary amber", () => {
+		const overlays = classifyEffective(
+			buildTokenSpans(fixtureWords),
+			fixtureCuts,
+			doc0,
+		);
+		expect(overlays[0]).toMatchObject({ kind: "cut", key: "base-0" });
+		expect(overlays[2]).toMatchObject({ kind: "discretionary", entryIndex: 0 });
+		expect(overlays[3]).toMatchObject({ kind: "flag", entryIndex: 0 });
+	});
+
+	it("an applied discretionary strikes with its canonical disc key", () => {
+		const overlays = classifyEffective(
+			buildTokenSpans(fixtureWords),
+			fixtureCuts,
+			{
+				...doc0,
+				appliedDiscretionary: [0],
+			},
+		);
+		expect(overlays[2]).toMatchObject({ kind: "cut", key: "disc-0" });
+	});
+
+	it("a toggled-off base cut releases its tokens", () => {
+		const overlays = classifyEffective(
+			buildTokenSpans(fixtureWords),
+			fixtureCuts,
+			{
+				...doc0,
+				toggledOff: [0],
+			},
+		);
+		expect(overlays[0]).toBeNull();
 	});
 });

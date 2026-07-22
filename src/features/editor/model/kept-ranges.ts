@@ -96,3 +96,28 @@ export function seekPastCut(t: number, coalesced: Range[]): number | null {
 	}
 	return null;
 }
+
+/**
+ * Backward motion (frame-step back, shuttle): if `t` lands inside a cut, the
+ * seek target just BEFORE it (clamped to 0); else null. Landing before the
+ * cut, not after, keeps the timeupdate forward-skip from fighting reverse
+ * transport across a removed span.
+ */
+export function seekBeforeCut(t: number, coalesced: Range[]): number | null {
+	for (const cut of coalesced) {
+		if (t >= cut.start && t < cut.end) {
+			return Math.max(0, cut.start - SEEK_PAST_MARGIN_SECONDS);
+		}
+	}
+	return null;
+}
+
+/** Source time -> kept-only time (subtract removed span time before t). */
+export function keptTimeOf(t: number, coalesced: Range[]): number {
+	let removed = 0;
+	for (const cut of coalesced) {
+		if (cut.end <= t) removed += cut.end - cut.start;
+		else if (cut.start < t) removed += t - cut.start;
+	}
+	return t - removed;
+}

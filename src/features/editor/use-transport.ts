@@ -2,12 +2,13 @@ import type { RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	coalesceRanges,
+	seekBeforeCut,
 	seekPastCut,
 } from "@/features/editor/model/kept-ranges";
 import type { Range } from "@/features/editor/model/wire";
 import type { TransportAction } from "@/features/editor/transport";
 import type { VideoPaneHandle } from "@/features/editor/video-pane";
-import type { Rational } from "@/lib/ipc/bindings.gen";
+import type { Rational } from "@/lib/ipc/editor";
 
 /** J-shuttle: step back this many seconds per tick (≈1× reverse). */
 const SHUTTLE_STEP_SECONDS = 0.25;
@@ -78,6 +79,16 @@ export function useTransport(opts: {
 		[showOriginal, getCutRanges, videoRef],
 	);
 
+	// Backward motion lands BEFORE a cut, never inside it — a seek into a cut
+	// would trip the timeupdate forward-skip and bounce playback forward.
+	const guardBackward = useCallback(
+		(t: number): number => {
+			if (showOriginal) return t;
+			return seekBeforeCut(t, coalesceRanges(getCutRanges())) ?? t;
+		},
+		[showOriginal, getCutRanges],
+	);
+
 	const dispatch = useCallback(
 		(action: TransportAction) => {
 			const video = videoRef.current;
@@ -114,7 +125,9 @@ export function useTransport(opts: {
 					if (shuttleTimer.current !== null) break;
 					shuttleTimer.current = setInterval(() => {
 						const now = videoRef.current?.getCurrentTime() ?? 0;
-						videoRef.current?.seek(Math.max(0, now - SHUTTLE_STEP_SECONDS));
+						videoRef.current?.seek(
+							guardBackward(Math.max(0, now - SHUTTLE_STEP_SECONDS)),
+						);
 					}, SHUTTLE_TICK_MS);
 					break;
 				}
@@ -123,7 +136,8 @@ export function useTransport(opts: {
 					pause();
 					const frame = fps.den / fps.num;
 					const now = video.getCurrentTime();
-					video.seek(Math.max(0, now + action.frames * frame));
+					const target = Math.max(0, now + action.frames * frame);
+					video.seek(action.frames < 0 ? guardBackward(target) : target);
 					break;
 				}
 				case "toggle-original": {
@@ -134,7 +148,7 @@ export function useTransport(opts: {
 					break; // undo/redo/manual-cut are handled by the caller
 			}
 		},
-		[videoRef, fps, clearShuttle, setRate, play, pause],
+		[videoRef, fps, clearShuttle, setRate, play, pause, guardBackward],
 	);
 
 	return {

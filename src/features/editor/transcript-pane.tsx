@@ -118,7 +118,7 @@ function Token({
 			type="button"
 			data-token-index={span.index}
 			data-active={active || selected ? "" : undefined}
-			className={`inline cursor-default whitespace-pre-wrap text-left ${
+			className={`select-text inline cursor-default whitespace-pre-wrap text-left ${
 				active || selected ? "bg-surface-2" : ""
 			}`}
 			title={note ?? undefined}
@@ -197,7 +197,7 @@ export function TranscriptPane({
 	return (
 		<div
 			ref={containerRef}
-			className="flex max-w-[65ch] flex-col gap-4 text-[15px] leading-[1.7]"
+			className="select-text flex max-w-[65ch] flex-col gap-4 text-[15px] leading-[1.7]"
 		>
 			{paragraphs.map((para) => {
 				const first = para.tokens[0];

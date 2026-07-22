@@ -76,10 +76,12 @@ export type RegionRect = {
 };
 
 /** Project effective cut ranges (dimmed absence) and unapplied discretionary
- * spans (dotted outline) into pixel rects. */
+ * spans (dotted outline) into pixel rects. Unapplied spans arrive pre-keyed
+ * with their canonical `disc-N` index — positional keys would collide with
+ * applied discretionaries and target the wrong entry on apply. */
 export function regionRects(
 	ranges: Array<Range & { key: string }>,
-	discretionaryUnapplied: Range[],
+	discretionaryUnapplied: Array<Range & { key: string }>,
 	vp: Viewport,
 ): RegionRect[] {
 	const rects: RegionRect[] = ranges.map((r) => ({
@@ -88,14 +90,14 @@ export function regionRects(
 		endPx: timeToPx(r.end, vp),
 		kind: "cut",
 	}));
-	discretionaryUnapplied.forEach((r, i) => {
+	for (const r of discretionaryUnapplied) {
 		rects.push({
-			key: `disc-${i}`,
+			key: r.key,
 			startPx: timeToPx(r.start, vp),
 			endPx: timeToPx(r.end, vp),
 			kind: "discretionary",
 		});
-	});
+	}
 	return rects;
 }
 

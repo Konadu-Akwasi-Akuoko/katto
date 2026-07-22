@@ -4,6 +4,8 @@ import {
 	effectiveCutRanges,
 	keptDuration,
 	keptRanges,
+	keptTimeOf,
+	seekBeforeCut,
 	seekPastCut,
 } from "@/features/editor/model/kept-ranges";
 import type { EditorDocument } from "@/features/editor/model/wire";
@@ -85,5 +87,25 @@ describe("kept-ranges", () => {
 		expect(seekPastCut(1.5, cuts)).toBeCloseTo(2.001, 3);
 		expect(seekPastCut(1.997, cuts)).toBeNull(); // inside the 5ms boundary guard
 		expect(seekPastCut(0.5, cuts)).toBeNull();
+	});
+
+	it("seekBeforeCut lands just before a cut for backward motion", () => {
+		const cuts = [{ start: 1, end: 2 }];
+		expect(seekBeforeCut(1.5, cuts)).toBeCloseTo(0.999, 6);
+		expect(seekBeforeCut(0.5, cuts)).toBeNull();
+		expect(seekBeforeCut(2.5, cuts)).toBeNull();
+		// A cut starting at 0 has no "before": clamp to 0.
+		expect(seekBeforeCut(0.2, [{ start: 0, end: 1 }])).toBe(0);
+	});
+
+	it("keptTimeOf subtracts removed time before t", () => {
+		const cuts = [
+			{ start: 1, end: 2 },
+			{ start: 4, end: 5 },
+		];
+		expect(keptTimeOf(0.5, cuts)).toBeCloseTo(0.5, 9);
+		expect(keptTimeOf(1.5, cuts)).toBeCloseTo(1, 9); // mid-cut clamps to cut start
+		expect(keptTimeOf(3, cuts)).toBeCloseTo(2, 9);
+		expect(keptTimeOf(6, cuts)).toBeCloseTo(4, 9);
 	});
 });
