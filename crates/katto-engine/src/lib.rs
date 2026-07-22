@@ -4,6 +4,7 @@
 
 pub mod error;
 pub mod ffprobe;
+pub mod ingest;
 pub mod rational;
 pub mod schema;
 
