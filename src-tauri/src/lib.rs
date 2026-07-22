@@ -17,6 +17,7 @@ pub mod projects;
 pub mod scheduler;
 pub mod sessions;
 mod state;
+pub mod thumbnails;
 mod tray;
 pub mod vfx;
 mod volumes;
