@@ -12,7 +12,7 @@ import { useUiStore } from "@/stores/ui";
 
 /** Plain-language copy for the typed open failures. */
 function openErrorCopy(error: unknown): string {
-	if (error instanceof IpcError && error.message.startsWith("source missing")) {
+	if (error instanceof IpcError && error.kind === "source_missing") {
 		const path = error.message.replace("source missing: expected ", "");
 		return `Source video not found at ${path}. Relocation arrives with the editor phase.`;
 	}

@@ -69,6 +69,9 @@ pub enum Error {
 
     #[error("{0}")]
     NoPlanner(String),
+
+    #[error("{0}")]
+    SourceMissing(String),
 }
 
 impl Error {
@@ -120,7 +123,11 @@ impl From<keyring_core::Error> for Error {
 
 impl From<katto_engine::Error> for Error {
     fn from(err: katto_engine::Error) -> Self {
-        Error::Engine(err.to_string())
+        match err {
+            // Its own wire kind: the editor renders relocation copy for it.
+            e @ katto_engine::Error::SourceMissing { .. } => Error::SourceMissing(e.to_string()),
+            other => Error::Engine(other.to_string()),
+        }
     }
 }
 
