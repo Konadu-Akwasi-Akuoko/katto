@@ -265,21 +265,24 @@ export function TimelinePane({
 		draw();
 	});
 
-	// Container width -> viewport width (HiDPI redraw included).
+	// Container width -> viewport width. Observed once; the callback reads the
+	// live viewport through a ref so resizes never re-subscribe the observer.
+	const viewportRef = useRef(viewport);
+	viewportRef.current = viewport;
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container) return;
 		const observer = new ResizeObserver(() => {
 			const width = container.clientWidth;
-			if (width > 0 && width !== viewport.widthPx) {
-				onViewportChange({ ...viewport, widthPx: width });
+			if (width > 0 && width !== viewportRef.current.widthPx) {
+				onViewportChange({ ...viewportRef.current, widthPx: width });
 			}
 		});
 		observer.observe(container);
 		return () => observer.disconnect();
-	}, [viewport, onViewportChange]);
+	}, [onViewportChange]);
 
-	const localX = (e: React.PointerEvent): number => {
+	const localX = (e: { clientX: number }): number => {
 		const rect = canvasRef.current?.getBoundingClientRect();
 		return e.clientX - (rect?.left ?? 0);
 	};
@@ -348,14 +351,7 @@ export function TimelinePane({
 	const handleWheel = (e: React.WheelEvent) => {
 		if (e.shiftKey) {
 			const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
-			onViewportChange(
-				zoomAround(
-					viewport,
-					localX(e as unknown as React.PointerEvent),
-					factor,
-					duration,
-				),
-			);
+			onViewportChange(zoomAround(viewport, localX(e), factor, duration));
 			return;
 		}
 		const delta = (e.deltaX || e.deltaY) / viewport.pxPerSec;

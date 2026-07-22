@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
+import type { Region } from "wavesurfer.js/dist/plugins/regions.esm.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
 
 import type { Viewport } from "@/features/editor/model/timeline-geometry";
@@ -15,21 +16,6 @@ function withAlpha(color: string, alpha: number): string {
 	}
 	return trimmed || `rgba(0, 0, 0, ${alpha})`;
 }
-
-type RegionLike = {
-	id: string;
-	start: number;
-	end: number;
-	updatingSide?: "start" | "end";
-	setOptions(options: {
-		start?: number;
-		end?: number;
-		color?: string;
-		drag?: boolean;
-		resize?: boolean;
-	}): void;
-	remove(): void;
-};
 
 /**
  * Display-only wavesurfer strip mirroring the effective cut regions. The
@@ -64,7 +50,7 @@ export function Waveform({
 	const wsRef = useRef<WaveSurfer | null>(null);
 	const regionsRef = useRef<InstanceType<typeof RegionsPlugin> | null>(null);
 	const ownIds = useRef<Set<string>>(new Set());
-	const regionMap = useRef<Map<string, RegionLike>>(new Map());
+	const regionMap = useRef<Map<string, Region>>(new Map());
 	const draggingRef = useRef(false);
 	const [ready, setReady] = useState(false);
 
@@ -106,45 +92,37 @@ export function Waveform({
 			handlers.current.onSeek(newTime);
 		});
 
-		const sideOf = (
-			region: RegionLike,
-			side?: "start" | "end",
-		): "start" | "end" => side ?? region.updatingSide ?? "end";
+		const sideOf = (region: Region, side?: "start" | "end"): "start" | "end" =>
+			side ?? region.updatingSide ?? "end";
 
 		// Only region-update / region-updated exist (no -start/-end events);
 		// updatingSide is set ONLY during user drags, so programmatic
 		// setOptions never re-enters here.
-		regions.on(
-			"region-update",
-			(region: RegionLike, side?: "start" | "end") => {
-				if (region.updatingSide === undefined) return;
-				const edge = sideOf(region, side);
-				if (!draggingRef.current) {
-					draggingRef.current = true;
-					handlers.current.onDragBegin();
-				}
-				handlers.current.onDrag(
-					region.id,
-					edge,
-					edge === "start" ? region.start : region.end,
-				);
-			},
-		);
-		regions.on(
-			"region-updated",
-			(region: RegionLike, side?: "start" | "end") => {
-				if (!draggingRef.current) return;
-				const edge = sideOf(region, side);
-				handlers.current.onDrag(
-					region.id,
-					edge,
-					edge === "start" ? region.start : region.end,
-				);
-				draggingRef.current = false;
-				handlers.current.onDragEnd();
-			},
-		);
-		regions.on("region-clicked", (region: RegionLike) => {
+		regions.on("region-update", (region: Region, side?: "start" | "end") => {
+			if (region.updatingSide === undefined) return;
+			const edge = sideOf(region, side);
+			if (!draggingRef.current) {
+				draggingRef.current = true;
+				handlers.current.onDragBegin();
+			}
+			handlers.current.onDrag(
+				region.id,
+				edge,
+				edge === "start" ? region.start : region.end,
+			);
+		});
+		regions.on("region-updated", (region: Region, side?: "start" | "end") => {
+			if (!draggingRef.current) return;
+			const edge = sideOf(region, side);
+			handlers.current.onDrag(
+				region.id,
+				edge,
+				edge === "start" ? region.start : region.end,
+			);
+			draggingRef.current = false;
+			handlers.current.onDragEnd();
+		});
+		regions.on("region-clicked", (region: Region) => {
 			handlers.current.onSelect(region.id);
 		});
 
@@ -225,7 +203,7 @@ export function Waveform({
 				color,
 				drag: false,
 				resize: true,
-			}) as unknown as RegionLike;
+			});
 			regionMap.current.set(key, region);
 		}
 	}, [ranges, selectedKey, ready]);
