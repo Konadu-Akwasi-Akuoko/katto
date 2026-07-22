@@ -3,6 +3,7 @@
 
 pub mod http;
 pub mod partial;
+pub(crate) mod retry;
 pub mod subprocess;
 
 use crate::schema::Cuts;
@@ -82,6 +83,27 @@ pub fn correction_message(errors: &[ValidationError]) -> String {
     format!(
         "the JSON you returned was invalid: {lines}; return only valid JSON matching the schema"
     )
+}
+
+/// Runtime planner selection (claude detected -> Subprocess, else BYOK Http).
+#[derive(Debug)]
+pub enum Planner {
+    /// Subscription-auth claude subprocess.
+    Subprocess(subprocess::SubprocessClaudePlanner),
+    /// BYOK Anthropic Messages API.
+    Http(http::HttpAnthropicPlanner),
+}
+
+impl CutPlanner for Planner {
+    async fn plan(
+        &self,
+        transcript: &crate::schema::Transcript,
+    ) -> std::result::Result<Cuts, PlanError> {
+        match self {
+            Planner::Subprocess(p) => p.plan(transcript).await,
+            Planner::Http(p) => p.plan(transcript).await,
+        }
+    }
 }
 
 /// Return the slice of `s` covering the first balanced `{...}` object, or

@@ -123,12 +123,11 @@ impl StreamAccum {
                 if !is_text {
                     return false;
                 }
-                if let Some(text) = delta.and_then(|d| d.get("text")).and_then(Value::as_str) {
-                    if !text.is_empty() {
+                if let Some(text) = delta.and_then(|d| d.get("text")).and_then(Value::as_str)
+                    && !text.is_empty() {
                         self.text.push_str(text);
                         return true;
                     }
-                }
                 false
             }
             Some("result") => {
@@ -225,15 +224,14 @@ impl SubprocessClaudePlanner {
                 .await
                 .map_err(|e| sub(format!("stdout: {e}")))?
             {
-                if accum.push_line(&line) {
-                    if let Some(obs) = &self.observer {
+                if accum.push_line(&line)
+                    && let Some(obs) = &self.observer {
                         let cuts = cuts_prefix(accum.text());
                         if cuts.len() > seen_cuts {
                             seen_cuts = cuts.len();
                             obs.on_cuts(&cuts);
                         }
                     }
-                }
             }
 
             let output = child
@@ -317,6 +315,41 @@ impl SubprocessClaudePlanner {
         tokio::time::timeout(self.timeout, run)
             .await
             .map_err(|_| sub(format!("timed out after {:?}", self.timeout)))?
+    }
+}
+
+impl crate::planner::retry::AttemptDriver for SubprocessClaudePlanner {
+    // (session id for --resume, transcript json for the resume-less fallback)
+    type Attempt = (Option<String>, String);
+
+    async fn first(&self, transcript_json: &str) -> Result<(String, Self::Attempt), PlanError> {
+        let raw = SubprocessClaudePlanner::first(self, transcript_json).await?;
+        Ok((raw.text, (raw.session_id, transcript_json.to_owned())))
+    }
+
+    async fn correction(
+        &self,
+        prior: Self::Attempt,
+        message: &str,
+    ) -> Result<(String, Self::Attempt), PlanError> {
+        let (session_id, transcript_json) = prior;
+        let raw = SubprocessClaudePlanner::correction(
+            self,
+            session_id.as_deref(),
+            &transcript_json,
+            message,
+        )
+        .await?;
+        Ok((raw.text, (raw.session_id, transcript_json)))
+    }
+}
+
+impl crate::planner::CutPlanner for SubprocessClaudePlanner {
+    async fn plan(
+        &self,
+        transcript: &crate::schema::Transcript,
+    ) -> Result<crate::schema::Cuts, PlanError> {
+        crate::planner::retry::plan_with_retry(self, transcript).await
     }
 }
 

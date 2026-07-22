@@ -122,6 +122,33 @@ fn api_error_message(value: &Value) -> String {
         .unwrap_or_else(|| value.to_string())
 }
 
+impl crate::planner::retry::AttemptDriver for HttpAnthropicPlanner {
+    type Attempt = HttpAttempt;
+
+    async fn first(&self, transcript_json: &str) -> Result<(String, Self::Attempt), PlanError> {
+        let attempt = HttpAnthropicPlanner::first(self, transcript_json).await?;
+        Ok((attempt.text.clone(), attempt))
+    }
+
+    async fn correction(
+        &self,
+        prior: Self::Attempt,
+        message: &str,
+    ) -> Result<(String, Self::Attempt), PlanError> {
+        let attempt = HttpAnthropicPlanner::correction(self, &prior, message).await?;
+        Ok((attempt.text.clone(), attempt))
+    }
+}
+
+impl crate::planner::CutPlanner for HttpAnthropicPlanner {
+    async fn plan(
+        &self,
+        transcript: &crate::schema::Transcript,
+    ) -> Result<crate::schema::Cuts, PlanError> {
+        crate::planner::retry::plan_with_retry(self, transcript).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

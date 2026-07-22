@@ -17,10 +17,7 @@ pub fn cuts_prefix(text: &str) -> Vec<Cut> {
     };
     let mut rest = &after_key[bracket + 1..];
     let mut cuts = Vec::new();
-    loop {
-        let Some(obj_start) = rest.find(|c: char| !c.is_whitespace() && c != ',') else {
-            break;
-        };
+    while let Some(obj_start) = rest.find(|c: char| !c.is_whitespace() && c != ',') {
         if !rest[obj_start..].starts_with('{') {
             break; // ']' ends the array, anything else is an unparseable tail
         }
