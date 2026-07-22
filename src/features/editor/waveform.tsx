@@ -72,6 +72,7 @@ export function Waveform({
 	const handlers = useRef({ onSeek, onDragBegin, onDrag, onDragEnd, onSelect });
 	handlers.current = { onSeek, onDragBegin, onDrag, onDragEnd, onSelect };
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: viewport.pxPerSec only seeds minPxPerSec at create; the zoom effect below owns live sync
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container) return;

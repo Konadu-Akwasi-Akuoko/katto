@@ -134,19 +134,26 @@ export function ExportDialog({
 						)}
 
 						<div className="flex flex-col gap-2">
-							<label className="flex items-center gap-2 text-sm">
-								<Checkbox checked disabled /> Timeline (FCPXML 1.11)
-							</label>
-							<label className="flex items-center gap-2 text-sm">
-								<Checkbox checked disabled /> Captions (SRT + VTT)
-							</label>
-							<label className="flex items-center gap-2 text-sm">
+							<div className="flex items-center gap-2 text-sm">
+								<Checkbox
+									checked
+									disabled
+									aria-label="Timeline (FCPXML 1.11)"
+								/>
+								<span>Timeline (FCPXML 1.11)</span>
+							</div>
+							<div className="flex items-center gap-2 text-sm">
+								<Checkbox checked disabled aria-label="Captions (SRT + VTT)" />
+								<span>Captions (SRT + VTT)</span>
+							</div>
+							<div className="flex items-center gap-2 text-sm">
 								<Checkbox
 									checked={alsoRender}
 									onCheckedChange={(v) => setAlsoRender(v === true)}
-								/>{" "}
-								Also render MP4
-							</label>
+									aria-label="Also render MP4"
+								/>
+								<span>Also render MP4</span>
+							</div>
 						</div>
 
 						<fieldset className="flex flex-col gap-2">
