@@ -157,7 +157,7 @@ impl Default for TabModel {
 }
 
 /// Cosmetic tab title derived from the URL: host without `www.`, plus the
-/// prettified last path segment when there is one, joined with " · ".
+/// prettified last path segment when there is one, joined with " — ".
 pub fn tab_title(url: &str) -> String {
     let Ok(parsed) = url::Url::parse(url) else {
         return url.to_string();
@@ -174,7 +174,7 @@ pub fn tab_title(url: &str) -> String {
         .map(prettify_segment)
         .filter(|s| !s.is_empty());
     match segment {
-        Some(seg) => format!("{host} · {seg}"),
+        Some(seg) => format!("{host} — {seg}"),
         None => host.to_string(),
     }
 }
@@ -318,7 +318,7 @@ mod tests {
         );
         assert_eq!(
             tab_title("https://elements.envato.com/dust-particles-overlay-ABC123"),
-            "elements.envato.com · dust particles overlay ABC123"
+            "elements.envato.com — dust particles overlay ABC123"
         );
         assert_eq!(tab_title("not a url"), "not a url");
     }
