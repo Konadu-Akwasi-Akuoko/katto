@@ -141,6 +141,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::DownloadFailed,
             broadcast::ThumbnailsChanged,
             broadcast::StudioImportFinished,
+            broadcast::StudioImportFailed,
         ])
 }
 

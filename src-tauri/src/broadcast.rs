@@ -116,6 +116,13 @@ pub struct StudioImportFinished {
     pub report: crate::import_studio::ImportReport,
 }
 
+/// Broadcast when the studio.db import job fails, so the wizard leaves
+/// "Importing…" and shows the error inline instead of wedging forever.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct StudioImportFailed {
+    pub message: String,
+}
+
 /// Broadcast when a PNG lands in (or changes inside) the watched project's
 /// `thumbnails/` folder; the detail card and project grid refetch.
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
@@ -194,6 +201,14 @@ pub fn vfx_render_landed(app: &AppHandle, slug: &str, effect: &str, file: &str) 
 /// Best-effort, same contract as [`events_appended`].
 pub fn studio_import_finished(app: &AppHandle, report: crate::import_studio::ImportReport) {
     let _ = StudioImportFinished { report }.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn studio_import_failed(app: &AppHandle, message: &str) {
+    let _ = StudioImportFailed {
+        message: message.to_string(),
+    }
+    .emit(app);
 }
 
 /// Best-effort, same contract as [`events_appended`].

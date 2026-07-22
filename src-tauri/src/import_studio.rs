@@ -124,6 +124,18 @@ pub fn read_source(conn: &Connection) -> Result<(Vec<Idea>, Vec<String>)> {
     Ok((ideas, warnings))
 }
 
+fn run_upserts(tx: &rusqlite::Transaction<'_>, ideas: &[Idea]) -> Result<ImportReport> {
+    let mut report = ImportReport::default();
+    for idea in ideas {
+        match upsert_imported(tx, idea)? {
+            UpsertOutcome::Inserted => report.imported += 1,
+            UpsertOutcome::Updated => report.updated += 1,
+            UpsertOutcome::Unchanged => report.skipped += 1,
+        }
+    }
+    Ok(report)
+}
+
 /// Apply mapped rows in one transaction — commits whole or rolls back whole;
 /// partial application is impossible.
 ///
@@ -131,15 +143,21 @@ pub fn read_source(conn: &Connection) -> Result<(Vec<Idea>, Vec<String>)> {
 /// Any upsert failure aborts the transaction and surfaces here.
 pub fn apply(conn: &mut Connection, ideas: &[Idea]) -> Result<ImportReport> {
     let tx = conn.transaction().map_err(crate::error::Error::from)?;
-    let mut report = ImportReport::default();
-    for idea in ideas {
-        match upsert_imported(&tx, idea)? {
-            UpsertOutcome::Inserted => report.imported += 1,
-            UpsertOutcome::Updated => report.updated += 1,
-            UpsertOutcome::Unchanged => report.skipped += 1,
-        }
-    }
+    let report = run_upserts(&tx, ideas)?;
     tx.commit().map_err(crate::error::Error::from)?;
+    Ok(report)
+}
+
+/// What [`apply`] WOULD do (the D18 dry-run promise), computed by running
+/// the exact same upserts inside a transaction that is rolled back — the
+/// preview cannot diverge from apply and never writes.
+///
+/// # Errors
+/// Same failure surface as [`apply`].
+pub fn preview(conn: &mut Connection, ideas: &[Idea]) -> Result<ImportReport> {
+    let tx = conn.transaction().map_err(crate::error::Error::from)?;
+    let report = run_upserts(&tx, ideas)?;
+    drop(tx); // no commit: rollback
     Ok(report)
 }
 
@@ -233,6 +251,44 @@ VALUES ('a1', 'mirror', 'long', 'promoted', 'T1', '2026-07-01 10:00:00', 'video-
             warnings.iter().any(|w| w.contains("kind_source")),
             "column absence noted"
         );
+    }
+
+    #[test]
+    fn preview_matches_apply_and_never_writes() {
+        let mut conn = crate::db::test_db();
+        let idea = Idea {
+            id: "p1".to_string(),
+            r#type: "manual".to_string(),
+            kind: "unset".to_string(),
+            status: "backlog".to_string(),
+            title: "Preview".to_string(),
+            rationale: None,
+            source: None,
+            source_url: None,
+            source_title: None,
+            evidence_json: None,
+            raw_signal_id: None,
+            first_seen: "2026-07-01T10:00:00Z".to_string(),
+            notes: None,
+            promoted_slug: None,
+            kind_source: None,
+            kind_why: None,
+        };
+        let ideas = std::slice::from_ref(&idea);
+
+        let previewed = preview(&mut conn, ideas).unwrap();
+        // preview never writes: the idea must still be absent
+        assert!(crate::db::ideas::get(&conn, "p1").unwrap().is_none());
+
+        let applied = apply(&mut conn, ideas).unwrap();
+        assert_eq!(
+            (previewed.imported, previewed.updated, previewed.skipped),
+            (applied.imported, applied.updated, applied.skipped),
+        );
+
+        // after apply, a re-preview reports the idempotent outcome
+        let again = preview(&mut conn, ideas).unwrap();
+        assert_eq!((again.imported, again.updated, again.skipped), (0, 0, 1));
     }
 
     #[test]

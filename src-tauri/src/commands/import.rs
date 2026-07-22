@@ -51,21 +51,10 @@ pub async fn import_studio_db(
     .map_err(|e| Error::Io(e.to_string()))??;
 
     if dry_run {
-        // preview counts: what apply WOULD do, computed against the live DB
         let preview_ideas = ideas.clone();
         let report = state
             .db
-            .call(move |conn| {
-                let mut report = ImportReport::default();
-                for idea in &preview_ideas {
-                    match crate::db::ideas::get(conn, &idea.id)? {
-                        None => report.imported += 1,
-                        Some(existing) if existing == *idea => report.skipped += 1,
-                        Some(_) => report.updated += 1,
-                    }
-                }
-                Ok(report)
-            })
+            .call(move |conn| import_studio::preview(conn, &preview_ideas))
             .await?;
         return Ok(ImportOutcome::Preview {
             report: ImportReport { warnings, ..report },
@@ -87,6 +76,20 @@ pub async fn import_studio_db(
 
 async fn run_apply(
     app: AppHandle,
+    ideas: Vec<crate::db::ideas::Idea>,
+    warnings: Vec<String>,
+) -> std::result::Result<(), String> {
+    // the wizard's "Importing…" state resolves only via broadcast — a
+    // failure must broadcast too, or it wedges forever
+    let result = run_apply_inner(&app, ideas, warnings).await;
+    if let Err(message) = &result {
+        crate::broadcast::studio_import_failed(&app, message);
+    }
+    result
+}
+
+async fn run_apply_inner(
+    app: &AppHandle,
     ideas: Vec<crate::db::ideas::Idea>,
     warnings: Vec<String>,
 ) -> std::result::Result<(), String> {
@@ -112,9 +115,9 @@ async fn run_apply(
             crate::db::events::record(conn, "studio_imported", None, Some(&payload))
         })
         .await;
-    crate::broadcast::events_appended(&app);
-    crate::broadcast::ideas_changed(&app);
-    crate::broadcast::studio_import_finished(&app, report);
+    crate::broadcast::events_appended(app);
+    crate::broadcast::ideas_changed(app);
+    crate::broadcast::studio_import_finished(app, report);
     Ok(())
 }
 
