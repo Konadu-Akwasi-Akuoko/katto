@@ -31,14 +31,16 @@ fn encode_letters(mut n: u64) -> String {
 }
 
 /// The next free `<slug>-thumb-<letters>.<ext>` name: max existing letter
-/// index for this slug/ext plus one.
+/// index for this slug/ext plus one. Existing names match case-insensitively
+/// — APFS is case-insensitive, so `X.PSD` would collide with `x.psd`.
 pub fn next_thumb_name(existing: &[String], slug: &str, ext: &str) -> String {
     let prefix = format!("{slug}-thumb-");
     let suffix = format!(".{ext}");
     let max = existing
         .iter()
         .filter_map(|name| {
-            let letters = name.strip_prefix(&prefix)?.strip_suffix(&suffix)?;
+            let lowered = name.to_lowercase();
+            let letters = lowered.strip_prefix(&prefix)?.strip_suffix(&suffix)?;
             decode_letters(letters)
         })
         .max()
@@ -100,6 +102,17 @@ mod tests {
         assert_eq!(
             next_thumb_name(&existing, "sprint-recap", "psd"),
             "sprint-recap-thumb-a.psd"
+        );
+    }
+
+    #[test]
+    fn existing_names_match_case_insensitively() {
+        // APFS is case-insensitive: an uppercased survivor must still count,
+        // or the next scaffold would collide with it on disk
+        let existing = vec!["Sprint-Recap-THUMB-B.PSD".into()];
+        assert_eq!(
+            next_thumb_name(&existing, "sprint-recap", "psd"),
+            "sprint-recap-thumb-c.psd"
         );
     }
 

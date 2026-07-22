@@ -55,9 +55,10 @@ pub fn start(app: AppHandle, slug: String, dir: PathBuf) -> crate::error::Result
 }
 
 fn is_png_change(event: &notify::Event) -> bool {
+    // Remove matters too: deleting the newest PNG must re-pick the card
     if !matches!(
         event.kind,
-        notify::EventKind::Create(_) | notify::EventKind::Modify(_)
+        notify::EventKind::Create(_) | notify::EventKind::Modify(_) | notify::EventKind::Remove(_)
     ) {
         return false;
     }
@@ -65,6 +66,41 @@ fn is_png_change(event: &notify::Event) -> bool {
         path.extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("png"))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn png_event(kind: notify::EventKind) -> notify::Event {
+        notify::Event::new(kind).add_path(PathBuf::from("/p/thumbnails/x.png"))
+    }
+
+    #[test]
+    fn create_modify_and_remove_of_png_all_signal() {
+        use notify::event::{CreateKind, ModifyKind, RemoveKind};
+        assert!(is_png_change(&png_event(notify::EventKind::Create(
+            CreateKind::File
+        ))));
+        assert!(is_png_change(&png_event(notify::EventKind::Modify(
+            ModifyKind::Any
+        ))));
+        assert!(is_png_change(&png_event(notify::EventKind::Remove(
+            RemoveKind::File
+        ))));
+    }
+
+    #[test]
+    fn non_png_and_access_events_are_ignored() {
+        use notify::event::{AccessKind, RemoveKind};
+        assert!(!is_png_change(
+            &notify::Event::new(notify::EventKind::Remove(RemoveKind::File))
+                .add_path(PathBuf::from("/p/thumbnails/x.psd"))
+        ));
+        assert!(!is_png_change(&png_event(notify::EventKind::Access(
+            AccessKind::Any
+        ))));
+    }
 }
 
 fn record_watch_failed(app: &AppHandle, slug: &str, error: &str) {

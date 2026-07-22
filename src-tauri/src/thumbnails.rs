@@ -74,8 +74,10 @@ pub enum ThumbOpen {
 /// Open the scaffold in Photoshop; absent/failed → reveal in Finder instead
 /// (PRD: the PSD still scaffolds — Photoshop is never a blocker).
 pub fn open_scaffold(app: &AppHandle, path: &Path) -> ThumbOpen {
+    // by bundle id, not name: real installs are versioned ("Adobe Photoshop
+    // 2026.app"), so `open -a "Adobe Photoshop"` misses them
     let opened = std::process::Command::new("open")
-        .args(["-a", "Adobe Photoshop"])
+        .args(["-b", "com.adobe.Photoshop"])
         .arg(path)
         .status()
         .map(|status| status.success())

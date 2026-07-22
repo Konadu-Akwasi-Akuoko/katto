@@ -17,11 +17,14 @@ pub struct CreateThumbnailResult {
     pub opened: ThumbOpen,
 }
 
-/// A project's newest exported thumbnail PNG.
+/// A project's newest exported thumbnail PNG. `mtime_ms` exists so the
+/// frontend can cache-bust `convertFileSrc` — a re-export over the same
+/// filename must show the new bytes.
 #[derive(serde::Serialize, specta::Type)]
 pub struct LatestThumb {
     pub slug: String,
     pub path: String,
+    pub mtime_ms: f64,
 }
 
 async fn project_dir(state: &State<'_, AppState>, slug: &str) -> Result<PathBuf> {
@@ -77,7 +80,7 @@ pub async fn create_thumbnail(
     })
 }
 
-fn newest_png_in(dir: &std::path::Path) -> Option<String> {
+fn newest_png_in(dir: &std::path::Path) -> Option<(String, f64)> {
     let entries: Vec<(String, std::time::SystemTime)> = std::fs::read_dir(dir)
         .ok()?
         .flatten()
@@ -87,41 +90,70 @@ fn newest_png_in(dir: &std::path::Path) -> Option<String> {
             Some((name, mtime))
         })
         .collect();
-    naming::newest_png(&entries).map(|name| dir.join(name).to_string_lossy().into_owned())
+    let name = naming::newest_png(&entries)?;
+    let mtime_ms = entries
+        .iter()
+        .find(|(n, _)| *n == name)
+        .and_then(|(_, t)| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0);
+    Some((dir.join(name).to_string_lossy().into_owned(), mtime_ms))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn latest_thumbnail(state: State<'_, AppState>, slug: String) -> Result<Option<String>> {
+pub async fn latest_thumbnail(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    slug: String,
+) -> Result<Option<LatestThumb>> {
     let dir = project_dir(&state, &slug).await?.join("thumbnails");
-    tauri::async_runtime::spawn_blocking(move || newest_png_in(&dir))
+    let found = tauri::async_runtime::spawn_blocking(move || newest_png_in(&dir))
         .await
-        .map_err(|e| Error::Io(e.to_string()))
+        .map_err(|e| Error::Io(e.to_string()))?;
+    Ok(found.map(|(path, mtime_ms)| {
+        // per-use asset grant (no blanket studio-root grant — see assets.rs)
+        crate::assets::allow_source_file(&app, std::path::Path::new(&path));
+        LatestThumb {
+            slug,
+            path,
+            mtime_ms,
+        }
+    }))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn list_latest_thumbnails(state: State<'_, AppState>) -> Result<Vec<LatestThumb>> {
+pub async fn list_latest_thumbnails(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<LatestThumb>> {
     let projects = state
         .db
         .call(|conn| crate::db::projects::list(conn))
         .await?;
-    tauri::async_runtime::spawn_blocking(move || {
+    let thumbs: Vec<LatestThumb> = tauri::async_runtime::spawn_blocking(move || {
         projects
             .into_iter()
             .filter_map(|project| {
                 let dir = std::path::Path::new(&project.root_path).join("thumbnails");
                 // unreadable/missing dirs skip silently — reconcile owns folder truth
-                let path = newest_png_in(&dir)?;
+                let (path, mtime_ms) = newest_png_in(&dir)?;
                 Some(LatestThumb {
                     slug: project.slug,
                     path,
+                    mtime_ms,
                 })
             })
             .collect()
     })
     .await
-    .map_err(|e| Error::Io(e.to_string()))
+    .map_err(|e| Error::Io(e.to_string()))?;
+    for thumb in &thumbs {
+        // per-use asset grant (no blanket studio-root grant — see assets.rs)
+        crate::assets::allow_source_file(&app, std::path::Path::new(&thumb.path));
+    }
+    Ok(thumbs)
 }
 
 #[tauri::command]
@@ -132,7 +164,10 @@ pub async fn watch_thumbnails(
     slug: String,
 ) -> Result<()> {
     let dir = project_dir(&state, &slug).await?.join("thumbnails");
-    std::fs::create_dir_all(&dir)?;
+    let mkdir = dir.clone();
+    tauri::async_runtime::spawn_blocking(move || std::fs::create_dir_all(&mkdir))
+        .await
+        .map_err(|e| Error::Io(e.to_string()))??;
     let watch = thumbnails::watch::start(app, slug, dir)?;
     let mut slot = state
         .thumb_watch

@@ -287,8 +287,12 @@ export const commands = {
 	 */
 	revealInProject: (slug: string, relPath: string) => typedError<null, Error>(__TAURI_INVOKE("reveal_in_project", { slug, relPath })),
 	createThumbnail: (slug: string, format: ThumbFormat) => typedError<CreateThumbnailResult, Error>(__TAURI_INVOKE("create_thumbnail", { slug, format })),
-	latestThumbnail: (slug: string) => typedError<string | null, Error>(__TAURI_INVOKE("latest_thumbnail", { slug })),
-	listLatestThumbnails: () => typedError<LatestThumb[], Error>(__TAURI_INVOKE("list_latest_thumbnails")),
+	latestThumbnail: (slug: string) => typedError<{
+	slug: string,
+	path: string,
+	mtime_ms: number,
+} | null, Error>(__TAURI_INVOKE("latest_thumbnail", { slug })).then((v) => ((v.status === "ok" ? { ...v, data: v.data==null?v.data:v.data } : v) as typeof v)),
+	listLatestThumbnails: () => typedError<LatestThumb[], Error>(__TAURI_INVOKE("list_latest_thumbnails")).then((v) => ((v.status === "ok" ? { ...v, data: v.data.map(i=>i) } : v) as typeof v)),
 	watchThumbnails: (slug: string) => typedError<null, Error>(__TAURI_INVOKE("watch_thumbnails", { slug })),
 	unwatchThumbnails: () => typedError<null, Error>(__TAURI_INVOKE("unwatch_thumbnails")),
 	/**  Resolve is installed — gates the "Open in Resolve" button. */
@@ -335,6 +339,7 @@ export const events = {
 	scheduleChanged: makeEvent<ScheduleChanged>("schedule-changed"),
 	sessionStateChanged: makeEvent<SessionStateChanged>("session-state-changed"),
 	sessionsChanged: makeEvent<SessionsChanged>("sessions-changed"),
+	studioImportFailed: makeEvent<StudioImportFailed>("studio-import-failed"),
 	studioImportFinished: makeEvent<StudioImportFinished>("studio-import-finished"),
 	thumbnailsChanged: makeEvent<ThumbnailsChanged>("thumbnails-changed"),
 	vfxRenderLanded: makeEvent<VfxRenderLanded>("vfx-render-landed"),
@@ -564,8 +569,13 @@ export type DownloadFallback = {
 	filename: string,
 };
 
-/**  Broadcast when a download filed into a project's assets folder. */
+/**
+ *  Broadcast when a download filed into a project's assets folder.
+ *  `download_id` matches the id `DownloadNeedsProject` carried, so the
+ *  frontend's filing row resolves instead of sticking at "filing…".
+ */
 export type DownloadFiled = {
+	download_id: string,
 	project: string,
 	filename: string,
 	dest_rel: string,
@@ -666,7 +676,7 @@ export type Edits_Serialize = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | { kind: "invalid_name"; message: string } | { kind: "no_such_scheduled_job"; message: string } | { kind: "invalid_schedule"; message: string } | { kind: "unzip_failed"; message: string } | { kind: "browser_unavailable"; message: string } | { kind: "download_missing"; message: string } | { kind: "resolve_not_installed"; message: string } | { kind: "resolve_not_running"; message: string } | { kind: "resolve_scripting_unavailable"; message: string } | { kind: "resolve_failed"; message: string } | { kind: "import_failed"; message: string } | 
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | { kind: "invalid_name"; message: string } | { kind: "no_such_scheduled_job"; message: string } | { kind: "invalid_schedule"; message: string } | { kind: "unzip_failed"; message: string } | { kind: "browser_unavailable"; message: string } | { kind: "download_missing"; message: string } | { kind: "resolve_not_installed"; message: string } | { kind: "resolve_not_running"; message: string } | { kind: "resolve_failed"; message: string } | { kind: "import_failed"; message: string } | 
 /**
  *  The one structured variant: the relocation surface needs the fields
  *  (name a file, show its duration), not a flattened string. On the wire
@@ -867,10 +877,15 @@ export type KeysPresent = {
 	anthropic: boolean,
 };
 
-/**  A project's newest exported thumbnail PNG. */
+/**
+ *  A project's newest exported thumbnail PNG. `mtime_ms` exists so the
+ *  frontend can cache-bust `convertFileSrc` — a re-export over the same
+ *  filename must show the new bytes.
+ */
 export type LatestThumb = {
 	slug: string,
 	path: string,
+	mtime_ms: number,
 };
 
 /**  A human-added cut span. */
@@ -1132,6 +1147,14 @@ export type SettingsPatch = {
 
 /**  One pipeline step, as the step indicator renders it. */
 export type StageName = "extracting_audio" | "transcribing" | "detecting_cuts";
+
+/**
+ *  Broadcast when the studio.db import job fails, so the wizard leaves
+ *  "Importing…" and shows the error inline instead of wedging forever.
+ */
+export type StudioImportFailed = {
+	message: string,
+};
 
 /**
  *  Broadcast when the studio.db import job finishes, carrying the final
