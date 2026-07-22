@@ -11,6 +11,7 @@ import {
 	onScheduleChanged,
 	onSessionStateChanged,
 	onSessionsChanged,
+	onStudioImportFinished,
 	onThumbnailsChanged,
 	onVfxRenderLanded,
 } from "@/lib/ipc/broadcast";
@@ -68,6 +69,9 @@ export function useBroadcastInvalidation(): void {
 			}),
 			onBrowserStateChanged(() => {
 				void queryClient.invalidateQueries({ queryKey: browserKeys.state });
+			}),
+			onStudioImportFinished(() => {
+				void queryClient.invalidateQueries({ queryKey: ideasKeys.all });
 			}),
 			onThumbnailsChanged((payload) => {
 				void queryClient.invalidateQueries({

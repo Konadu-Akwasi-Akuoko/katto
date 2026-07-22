@@ -6,6 +6,7 @@ import type {
 	DownloadNeedsProject,
 	DriveStatusChanged,
 	SessionStateChanged,
+	StudioImportFinished,
 	ThumbnailsChanged,
 	VfxRenderLanded,
 } from "@/lib/ipc/bindings.gen";
@@ -19,6 +20,7 @@ export type {
 	DownloadNeedsProject,
 	DriveStatusChanged,
 	SessionStateChanged,
+	StudioImportFinished,
 	ThumbnailsChanged,
 	VfxRenderLanded,
 };
@@ -103,6 +105,12 @@ export const onDownloadFailed = (
 	callback: (payload: DownloadFailed) => void,
 ): Promise<Unlisten> =>
 	events.downloadFailed.listen((event) => callback(event.payload));
+
+/** The studio.db import job finished — carries the final report. */
+export const onStudioImportFinished = (
+	callback: (payload: StudioImportFinished) => void,
+): Promise<Unlisten> =>
+	events.studioImportFinished.listen((event) => callback(event.payload));
 
 /** A PNG landed in the watched project's thumbnails/ — refetch previews. */
 export const onThumbnailsChanged = (

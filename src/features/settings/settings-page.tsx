@@ -2,6 +2,7 @@ import { Separator } from "@/components/ui/separator";
 import { ClaudeSection } from "@/features/settings/components/claude-section";
 import { DockSection } from "@/features/settings/components/dock-section";
 import { GeneralSection } from "@/features/settings/components/general-section";
+import { ImportSection } from "@/features/settings/components/import-section";
 import { KeysSection } from "@/features/settings/components/keys-section";
 import { StudioRootSection } from "@/features/settings/components/studio-root-section";
 import { useSettings } from "@/hooks/use-settings";
@@ -24,6 +25,8 @@ export function SettingsPage() {
 			<ClaudeSection settings={settings.data} />
 			<Separator />
 			<DockSection settings={settings.data} />
+			<Separator />
+			<ImportSection settings={settings.data} />
 		</div>
 	);
 }
