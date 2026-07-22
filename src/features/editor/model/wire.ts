@@ -98,9 +98,7 @@ export function toWireEdits(
 ): Edits_Deserialize {
 	const wireHistory: EditHistory = {
 		past: history.past.slice(-HISTORY_LIMIT).map(toWireSnapshot),
-		future: history.future
-			.slice(0, HISTORY_LIMIT)
-			.map(toWireSnapshot),
+		future: history.future.slice(0, HISTORY_LIMIT).map(toWireSnapshot),
 	};
 	return {
 		schema_version: 1,
