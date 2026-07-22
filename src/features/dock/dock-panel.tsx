@@ -11,6 +11,7 @@ import {
 import { getSettings, settingsKeys } from "@/lib/ipc/settings";
 import { useUiStore } from "@/stores/ui";
 import { TabStrip } from "./tab-strip";
+import { Terminal } from "./terminal";
 
 /**
  * The Claude dock: a right-side slide-over inside the content pane. Mounted
@@ -99,10 +100,7 @@ export function DockPanel() {
 						No sessions. New session starts Claude here.
 					</p>
 				) : (
-					<div
-						className="h-full rounded-lg bg-term-bg"
-						style={{ backgroundImage: "none" }}
-					/>
+					<Terminal key={active.id} sessionId={active.id} />
 				)}
 			</div>
 		</section>

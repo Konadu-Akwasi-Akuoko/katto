@@ -7,6 +7,14 @@ import type { SessionInfo } from "@/lib/ipc/bindings.gen";
 import { useUiStore } from "@/stores/ui";
 import { DockPanel } from "./dock-panel";
 
+// The terminal drives real xterm (canvas, measure) — out of jsdom's reach and
+// covered by its own unit tests with a mocked xterm.
+vi.mock("./terminal", () => ({
+	Terminal: ({ sessionId }: { sessionId: string }) => (
+		<div data-testid="terminal" data-session={sessionId} />
+	),
+}));
+
 function makeSession(id: string, label: string): SessionInfo {
 	return {
 		id,
