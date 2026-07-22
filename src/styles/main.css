@@ -278,7 +278,6 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-
 	/* Reduced-motion backstop: every animation/transition collapses to a
 	   frame. Component-level motion-reduce gates stay — they also stop the
 	   layout consequences of motion, which this can't. */
