@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 
 pub mod enumerate;
+pub mod naming;
 pub mod recognize;
 
 /// The kind of camera card recognized, by on-card layout.
@@ -60,6 +61,15 @@ pub struct ClipEntry {
     pub is_video: bool,
     /// Whether the clip is selected by default (videos yes, sidecars no).
     pub selected: bool,
+}
+
+/// A planned copy: a source path and the `YYYY-MM-DD_NNN.ext` name it lands as.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rename {
+    /// Source path relative to the volume root.
+    pub source: PathBuf,
+    /// Destination file name inside the project's `footage/`.
+    pub dest_name: String,
 }
 
 /// A group of clips sharing card substructure (e.g. `CLIP`, `SUB`, `100APPLE`).
