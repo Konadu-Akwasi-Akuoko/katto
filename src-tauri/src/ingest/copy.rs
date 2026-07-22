@@ -11,6 +11,7 @@ use crate::db::{DbHandle, events};
 use crate::jobs::JobContext;
 
 /// Everything the copy job needs, resolved by the command before spawning.
+#[derive(Debug)]
 pub struct CopyPlan {
     /// Absolute path to the volume/source root that `Rename::source` is relative to.
     pub source_root: PathBuf,
@@ -20,6 +21,119 @@ pub struct CopyPlan {
     pub renames: Vec<Rename>,
     /// The owning project slug (for the events row).
     pub project_slug: String,
+}
+
+/// What the command resolves before spawning: validated sources and the
+/// destination. Sequence planning and the authoritative free-space check
+/// happen inside the job (under the footage-dir lock), so the command returns
+/// a queued job instantly instead of blocking behind a running import.
+#[derive(Debug)]
+pub struct IngestSpec {
+    /// Absolute path the sources are relative to (card mount, or `/`).
+    pub source_root: PathBuf,
+    /// Absolute path to the project's `footage/` directory.
+    pub footage_dir: PathBuf,
+    /// Naming date (`YYYY-MM-DD`): project shoot date or today.
+    pub date: String,
+    /// Validated source paths, relative to `source_root`.
+    pub sources: Vec<PathBuf>,
+    /// The owning project slug (for the events rows).
+    pub project_slug: String,
+}
+
+/// Turn a spec into a concrete [`CopyPlan`]: read the existing footage names,
+/// re-check free space (authoritative — the caller holds the footage-dir
+/// lock, so no concurrent job can invalidate it), and assign sequence numbers
+/// in stable source order. Blocking filesystem work — call from
+/// `spawn_blocking`.
+pub fn plan_copies(spec: &IngestSpec) -> std::result::Result<CopyPlan, String> {
+    std::fs::create_dir_all(&spec.footage_dir)
+        .map_err(|e| format!("cannot create {}: {e}", spec.footage_dir.display()))?;
+    let existing: Vec<String> = std::fs::read_dir(&spec.footage_dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut needed = 0u64;
+    for s in &spec.sources {
+        let src = spec.source_root.join(s);
+        needed += std::fs::metadata(&src)
+            .map_err(|e| format!("cannot read source {}: {e}", src.display()))?
+            .len();
+    }
+    let free = fs4::available_space(&spec.footage_dir)
+        .map_err(|e| format!("cannot read free space: {e}"))?;
+    if free < needed {
+        return Err(format!(
+            "insufficient free space: need {needed} bytes, {free} free"
+        ));
+    }
+
+    let mut typed: Vec<(PathBuf, String)> = spec
+        .sources
+        .iter()
+        .map(|p| {
+            let ext = p
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_ascii_lowercase())
+                .unwrap_or_default();
+            (p.clone(), ext)
+        })
+        .collect();
+    typed.sort_by(|a, b| a.0.cmp(&b.0));
+    let renames = katto_engine::ingest::naming::plan_renames(&spec.date, &existing, &typed);
+
+    Ok(CopyPlan {
+        source_root: spec.source_root.clone(),
+        footage_dir: spec.footage_dir.clone(),
+        renames,
+        project_slug: spec.project_slug.clone(),
+    })
+}
+
+/// The whole ingest job: serialize on the footage dir, plan under the lock,
+/// then copy/verify. Planning failures record an `ingest_failed` events row
+/// with every source still remaining, so the sheet can offer a retry.
+pub async fn run_ingest_job(
+    ctx: JobContext,
+    db: DbHandle,
+    app: AppHandle,
+    spec: IngestSpec,
+) -> std::result::Result<(), String> {
+    let _footage_guard = crate::ingest::lock_footage_dir(&spec.footage_dir).await;
+
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        let plan = plan_copies(&spec);
+        (plan, spec)
+    })
+    .await
+    .map_err(|_| "planning task panicked".to_string())?;
+    let plan = match outcome {
+        (Ok(plan), _) => plan,
+        (Err(message), spec) => {
+            let remaining = spec
+                .sources
+                .iter()
+                .map(|s| s.to_string_lossy().into_owned())
+                .collect();
+            record_ingest_failed(
+                &db,
+                &app,
+                &spec.source_root,
+                &spec.project_slug,
+                ctx.job_id(),
+                remaining,
+            )
+            .await;
+            return Err(message);
+        }
+    };
+
+    run_copy_job(ctx, db, app, plan).await
 }
 
 /// Claim `final_path` from a fully-copied `partial`: `hard_link` fails with
@@ -100,17 +214,18 @@ fn offender_names(errors: &[VerifyError]) -> Vec<String> {
 async fn record_ingest_failed(
     db: &DbHandle,
     app: &AppHandle,
-    plan: &CopyPlan,
+    source_root: &Path,
+    project_slug: &str,
     job_id: &str,
     remaining: Vec<String>,
 ) {
     let payload = serde_json::json!({
         "job_id": job_id,
         "remaining": remaining,
-        "volume": plan.source_root.to_string_lossy(),
+        "volume": source_root.to_string_lossy(),
     })
     .to_string();
-    let slug = plan.project_slug.clone();
+    let slug = project_slug.to_string();
     let outcome = db
         .call(move |conn| events::record(conn, "ingest_failed", Some(&slug), Some(&payload)))
         .await;
@@ -143,7 +258,15 @@ pub async fn run_copy_job(
             Ok(meta) => meta.len(),
             Err(message) => {
                 let remaining = remaining_sources(&plan, i);
-                record_ingest_failed(&db, &app, &plan, ctx.job_id(), remaining).await;
+                record_ingest_failed(
+                    &db,
+                    &app,
+                    &plan.source_root,
+                    &plan.project_slug,
+                    ctx.job_id(),
+                    remaining,
+                )
+                .await;
                 return Err(message);
             }
         };
@@ -166,7 +289,15 @@ pub async fn run_copy_job(
             Ok(n) => n,
             Err(message) => {
                 let remaining = remaining_sources(&plan, i);
-                record_ingest_failed(&db, &app, &plan, ctx.job_id(), remaining).await;
+                record_ingest_failed(
+                    &db,
+                    &app,
+                    &plan.source_root,
+                    &plan.project_slug,
+                    ctx.job_id(),
+                    remaining,
+                )
+                .await;
                 return Err(message);
             }
         };
@@ -206,7 +337,15 @@ pub async fn run_copy_job(
             .filter(|r| offenders.contains(&r.dest_name))
             .map(|r| r.source.to_string_lossy().into_owned())
             .collect();
-        record_ingest_failed(&db, &app, &plan, ctx.job_id(), remaining).await;
+        record_ingest_failed(
+            &db,
+            &app,
+            &plan.source_root,
+            &plan.project_slug,
+            ctx.job_id(),
+            remaining,
+        )
+        .await;
         return Err(format!("verification failed: {errors:?}"));
     }
 
@@ -311,6 +450,92 @@ mod tests {
         );
         assert!(err.is_err());
         assert!(!footage.join("2026-07-22_001.mp4").exists());
+    }
+
+    #[test]
+    fn plan_copies_continues_the_sequence_in_sorted_source_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let card = dir.path().join("card");
+        std::fs::create_dir_all(card.join("CLIP")).unwrap();
+        std::fs::write(card.join("CLIP/C0002.MP4"), b"bb").unwrap();
+        std::fs::write(card.join("CLIP/C0001.MOV"), b"a").unwrap();
+        let footage = dir.path().join("footage");
+        std::fs::create_dir_all(&footage).unwrap();
+        std::fs::write(footage.join("2026-07-22_003.mp4"), b"old").unwrap();
+
+        let spec = IngestSpec {
+            source_root: card,
+            footage_dir: footage,
+            date: "2026-07-22".to_string(),
+            sources: vec![
+                PathBuf::from("CLIP/C0002.MP4"),
+                PathBuf::from("CLIP/C0001.MOV"),
+            ],
+            project_slug: "p-2026-07-22".to_string(),
+        };
+        let plan = plan_copies(&spec).unwrap();
+        let dests: Vec<&str> = plan.renames.iter().map(|r| r.dest_name.as_str()).collect();
+        // Sorted by source path, continuing after the existing _003.
+        assert_eq!(dests, vec!["2026-07-22_004.mov", "2026-07-22_005.mp4"]);
+    }
+
+    #[test]
+    fn plan_copies_fails_on_an_unreadable_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = IngestSpec {
+            source_root: dir.path().to_path_buf(),
+            footage_dir: dir.path().join("footage"),
+            date: "2026-07-22".to_string(),
+            sources: vec![PathBuf::from("missing.mp4")],
+            project_slug: "p".to_string(),
+        };
+        let err = plan_copies(&spec).unwrap_err();
+        assert!(err.contains("missing.mp4"), "got: {err}");
+    }
+
+    #[test]
+    fn a_queued_import_plans_only_after_the_lock_frees_and_sees_prior_output() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let dir = tempfile::tempdir().unwrap();
+            let card = dir.path().join("card");
+            std::fs::create_dir_all(&card).unwrap();
+            std::fs::write(card.join("D0001.MP4"), b"second").unwrap();
+            let footage = dir.path().join("footage");
+            std::fs::create_dir_all(&footage).unwrap();
+
+            // First import: holds the footage-dir lock, as run_ingest_job does.
+            let guard = crate::ingest::lock_footage_dir(&footage).await;
+
+            let spec = IngestSpec {
+                source_root: card,
+                footage_dir: footage.clone(),
+                date: "2026-07-22".to_string(),
+                sources: vec![PathBuf::from("D0001.MP4")],
+                project_slug: "p".to_string(),
+            };
+            let queued = tokio::spawn(async move {
+                let _guard = crate::ingest::lock_footage_dir(&spec.footage_dir).await;
+                plan_copies(&spec)
+            });
+
+            // The queued job must park on the lock, not plan eagerly.
+            for _ in 0..10 {
+                tokio::task::yield_now().await;
+            }
+            assert!(!queued.is_finished());
+
+            // The first import lands a file while still holding the lock; the
+            // queued plan must observe it and continue the sequence.
+            std::fs::write(footage.join("2026-07-22_001.mp4"), b"first").unwrap();
+            drop(guard);
+
+            let plan = queued.await.unwrap().unwrap();
+            let dests: Vec<&str> = plan.renames.iter().map(|r| r.dest_name.as_str()).collect();
+            assert_eq!(dests, vec!["2026-07-22_002.mp4"]);
+        });
     }
 
     #[test]

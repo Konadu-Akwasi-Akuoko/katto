@@ -2,11 +2,9 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, State};
 
-use katto_engine::ingest::naming::plan_renames;
-
 use crate::db::jobs::Job;
 use crate::error::{Error, Result};
-use crate::ingest::copy::{CopyPlan, run_copy_job};
+use crate::ingest::copy::{IngestSpec, run_ingest_job};
 use crate::ingest::offer::CardOffer;
 use crate::ingest::validate;
 use crate::state::{AppState, IngestState};
@@ -131,10 +129,12 @@ pub async fn eject_card(ingest: State<'_, IngestState>, volume: String) -> Resul
 }
 
 /// Shared spawn path for `start_ingest` (sources relative to the card mount)
-/// and `import_files` (sources relative to `/`): serialize on the project's
-/// footage dir, resolve the naming date, plan renames off the highest existing
-/// sequence, guard free space, and spawn the copy job (which holds the
-/// serialization guard until it ends).
+/// and `import_files` (sources relative to `/`): resolve the destination and
+/// naming date, run a fast best-effort free-space precheck (tagged refusal
+/// with exact numbers, per the PRD), then spawn the job and return it queued
+/// immediately. The footage-dir lock and the authoritative sequence/space
+/// planning happen inside the job future, so a second import into the same
+/// project shows up as a visible queued job instead of a hung command.
 async fn plan_and_spawn(
     state: &AppState,
     app: &AppHandle,
@@ -164,35 +164,24 @@ async fn plan_and_spawn(
         })
         .await?;
 
-    // Serialize plan+copy per footage dir: held from the existing-sequence
-    // read until the spawned job finishes, so a concurrent import cannot plan
-    // the same sequence numbers.
-    let footage_guard = crate::ingest::lock_footage_dir(&footage_dir).await;
-
-    // Filesystem prep off both the DB writer and the async runtime: existing
-    // footage names (for the sequence), the byte total, and the free space.
-    let fs_footage = footage_dir.clone();
-    let fs_root = source_root.clone();
-    let fs_sources = sources.clone();
-    let (existing, needed, free): (Vec<String>, u64, u64) =
-        tauri::async_runtime::spawn_blocking(move || -> Result<(Vec<String>, u64, u64)> {
-            let existing: Vec<String> = std::fs::read_dir(&fs_footage)
-                .map(|rd| {
-                    rd.flatten()
-                        .filter_map(|e| e.file_name().into_string().ok())
-                        .collect()
-                })
-                .unwrap_or_default();
+    // Best-effort precheck (no lock): refuse an obviously oversized import at
+    // the command boundary with exact numbers. The authoritative check runs
+    // again inside the job, under the footage-dir lock.
+    let pre_footage = footage_dir.clone();
+    let pre_root = source_root.clone();
+    let pre_sources = sources.clone();
+    let (needed, free): (u64, u64) =
+        tauri::async_runtime::spawn_blocking(move || -> Result<(u64, u64)> {
             let mut needed = 0u64;
-            for s in &fs_sources {
-                let src = fs_root.join(s);
+            for s in &pre_sources {
+                let src = pre_root.join(s);
                 needed += std::fs::metadata(&src)
                     .map_err(|e| Error::Io(format!("cannot read source {}: {e}", src.display())))?
                     .len();
             }
-            std::fs::create_dir_all(&fs_footage)?;
-            let free = fs4::available_space(&fs_footage)?;
-            Ok((existing, needed, free))
+            std::fs::create_dir_all(&pre_footage)?;
+            let free = fs4::available_space(&pre_footage)?;
+            Ok((needed, free))
         })
         .await
         .map_err(|e| Error::Io(e.to_string()))??;
@@ -202,27 +191,13 @@ async fn plan_and_spawn(
         )));
     }
 
-    // Plan renames: (path, lowercased ext) in stable order.
-    let mut typed: Vec<(PathBuf, String)> = sources
-        .into_iter()
-        .map(|p| {
-            let ext = p
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e.to_ascii_lowercase())
-                .unwrap_or_default();
-            (p, ext)
-        })
-        .collect();
-    typed.sort_by(|a, b| a.0.cmp(&b.0));
-    let renames = plan_renames(&date, &existing, &typed);
-
-    let count = renames.len();
+    let count = sources.len();
     let label = format!("Import {count} clip{}", if count == 1 { "" } else { "s" });
-    let plan = CopyPlan {
+    let spec = IngestSpec {
         source_root,
         footage_dir,
-        renames,
+        date,
+        sources,
         project_slug,
     };
     let db = state.db.clone();
@@ -230,8 +205,7 @@ async fn plan_and_spawn(
     state
         .jobs
         .spawn("ingest", &label, None, move |ctx| async move {
-            let _footage_guard = footage_guard;
-            run_copy_job(ctx, db, app2, plan).await
+            run_ingest_job(ctx, db, app2, spec).await
         })
         .await
 }
