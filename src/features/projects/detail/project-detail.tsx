@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusChip } from "@/components/ui/status-chip";
+import { FootageCard } from "@/features/projects/detail/footage-card";
 import { relativeMtime } from "@/features/projects/model/format";
 import type { FolderFreshness, Project } from "@/lib/ipc/projects";
 import {
@@ -82,6 +83,8 @@ export function ProjectDetail({ slug }: { slug: string }) {
 						freshness={data.freshness}
 						onReveal={(subfolder) => reveal.mutate(subfolder)}
 					/>
+
+					<FootageCard slug={slug} />
 				</>
 			)}
 		</div>

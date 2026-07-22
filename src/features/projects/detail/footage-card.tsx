@@ -17,7 +17,14 @@ export function FootageCard({ slug }: { slug: string }) {
 
 	useEffect(() => {
 		let cancelled = false;
-		const unlisten = getCurrentWebview().onDragDropEvent((event) => {
+		let webview: ReturnType<typeof getCurrentWebview>;
+		try {
+			webview = getCurrentWebview();
+		} catch {
+			// Outside a real Tauri webview (jsdom tests) there is no drop source.
+			return;
+		}
+		const unlisten = webview.onDragDropEvent((event) => {
 			if (cancelled) return;
 			if (event.payload.type === "enter") setOver(true);
 			else if (event.payload.type === "leave") setOver(false);
