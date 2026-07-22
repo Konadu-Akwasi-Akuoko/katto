@@ -35,17 +35,44 @@ pub struct Bundle {
     pub edits: Option<Edits>,
 }
 
-/// Atomically write `bytes` to `path` via a sibling `<file_name>.tmp` -> rename.
+/// Atomically write `bytes` to `path` via a sibling `<file_name>.tmp` ->
+/// fsync -> rename, retrying the whole write once (PRD: transient save
+/// failures — a briefly full disk, an interrupted write — get one more shot).
 ///
 /// # Errors
-/// Returns [`Error::Io`] on any filesystem failure.
+/// Returns [`Error::Io`] when both attempts fail.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+    match write_atomic_once(path, bytes) {
+        Ok(()) => Ok(()),
+        Err(_) => write_atomic_once(path, bytes),
+    }
+}
+
+fn write_atomic_once(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
     let file_name = path
         .file_name()
         .ok_or_else(|| Error::Io(format!("no file name in {}", path.display())))?;
     let tmp = path.with_file_name(format!("{}.tmp", file_name.to_string_lossy()));
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path)?;
+    let write = (|| {
+        let mut file = std::fs::File::create(&tmp)?;
+        file.write_all(bytes)?;
+        // fsync before rename: without it a crash can leave the renamed file
+        // empty — the rename is only atomic for data already on disk.
+        file.sync_all()?;
+        std::fs::rename(&tmp, path)
+    })();
+    if write.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+        return write.map_err(Into::into);
+    }
+    // Make the rename itself durable; failure here is not worth failing the
+    // save over (the data landed), so best-effort.
+    if let Some(dir) = path.parent()
+        && let Ok(dir_file) = std::fs::File::open(dir)
+    {
+        let _ = dir_file.sync_all();
+    }
     Ok(())
 }
 
@@ -135,6 +162,17 @@ mod tests {
             frame_rate: Rational::new(30000, 1001),
             duration: Rational::new(3_843_840, 30000),
         }
+    }
+
+    #[test]
+    fn write_atomic_failure_leaves_no_tmp_and_surfaces_io() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing_parent = dir.path().join("gone").join("file.json");
+        assert!(matches!(
+            write_atomic(&missing_parent, b"x"),
+            Err(Error::Io(_))
+        ));
+        assert!(std::fs::read_dir(dir.path()).unwrap().next().is_none());
     }
 
     #[test]
