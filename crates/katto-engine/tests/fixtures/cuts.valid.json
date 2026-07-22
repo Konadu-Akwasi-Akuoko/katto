@@ -1,0 +1,17 @@
+{
+  "source_duration_secs": 8.0,
+  "cuts": [
+    { "start": 1.0, "end": 1.2, "reason": "filler", "excerpt": "um" },
+    { "start": 4.0, "end": 4.5, "reason": "audio_event", "excerpt": "[cough]" }
+  ],
+  "flags": [
+    {
+      "start": 6.5,
+      "end": 7.6,
+      "reason": "low_confidence",
+      "excerpt": "serendipitously",
+      "logprob": -7.8
+    }
+  ],
+  "total_cut_secs": 0.7
+}
