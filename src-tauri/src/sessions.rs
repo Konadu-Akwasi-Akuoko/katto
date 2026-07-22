@@ -2,4 +2,5 @@
 //! surfaced as tabs in the dock panel. Pure logic (state machine, scrollback,
 //! launch assembly) lives in submodules; process/PTY spawn sites stay thin.
 
+pub mod buffer;
 pub mod state;
