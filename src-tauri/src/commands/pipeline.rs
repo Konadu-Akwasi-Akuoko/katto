@@ -421,11 +421,16 @@ async fn run_pipeline_inner(
     })
     .to_string();
     let slug = spec.project_slug.clone();
-    let _ = db
+    if let Err(err) = db
         .call(move |conn| {
             crate::db::events::record(conn, "rough_cut_planned", Some(&slug), Some(&event_payload))
         })
-        .await;
+        .await
+    {
+        // The pipeline succeeded; only the domain event write failed. The jobs
+        // framework still records job_done, so log rather than fail the run.
+        eprintln!("rough_cut_planned event write failed: {err}");
+    }
     crate::broadcast::events_appended(app);
 
     ctx.progress(1.0, Some("Rough cut ready".to_string())).await;
