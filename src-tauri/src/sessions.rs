@@ -7,6 +7,7 @@ pub mod hooks_endpoint;
 pub mod launch;
 pub mod pool;
 pub mod pty;
+pub mod reap;
 pub mod state;
 
 use std::path::PathBuf;

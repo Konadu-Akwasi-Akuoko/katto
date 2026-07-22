@@ -9,9 +9,10 @@ use crate::error::Result;
 use crate::keychain::{self, KeyService};
 use crate::state::AppState;
 
-/// Minutes of inactivity before a dock session is reaped (Phase 6); default when
-/// the setting is unset.
-const DEFAULT_IDLE_REAP_MINUTES: u32 = 10;
+/// Minutes of inactivity before a dock session is reaped (D15: default 5,
+/// Settings offers 2/5/10); used when the setting is unset. Shared with the
+/// pool's reaper tick.
+pub(crate) const DEFAULT_IDLE_REAP_MINUTES: u32 = 5;
 
 /// PRD-locked default model for the HTTP cut planner (single source: engine).
 const DEFAULT_PLANNER_MODEL: &str = katto_engine::planner::http::DEFAULT_MODEL;

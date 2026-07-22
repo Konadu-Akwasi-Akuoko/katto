@@ -129,7 +129,64 @@ impl SessionPool {
                 SessionPool { inner }.apply_silence_timeouts();
             }
         });
+        let weak = Arc::downgrade(&self.inner);
+        tauri::async_runtime::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                tick.tick().await;
+                let Some(inner) = weak.upgrade() else { break };
+                SessionPool { inner }.reap_idle().await;
+            }
+        });
         Ok(())
+    }
+
+    /// One reaper pass: close every session `should_reap` selects. The timeout
+    /// comes from the `idle_reap_minutes` setting on each tick so a Settings
+    /// change applies without restart.
+    async fn reap_idle(&self) {
+        let Some(app) = self.inner.app.get() else {
+            return;
+        };
+        let Some(state) = app.try_state::<crate::state::AppState>() else {
+            return;
+        };
+        let minutes = state
+            .db
+            .call(|conn| crate::db::settings::get(conn, "idle_reap_minutes"))
+            .await
+            .ok()
+            .flatten()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(crate::commands::settings::DEFAULT_IDLE_REAP_MINUTES);
+        let timeout = Duration::from_secs(u64::from(minutes) * 60);
+        let (open, focused) = {
+            let dock = self
+                .inner
+                .dock
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            (dock.open, dock.focused.clone())
+        };
+        let victims: Vec<String> = {
+            let sessions = self.sessions();
+            sessions
+                .iter()
+                .filter(|(id, entry)| {
+                    let exempt = open && focused.as_deref() == Some(id.as_str());
+                    crate::sessions::reap::should_reap(
+                        &entry.state,
+                        entry.idle_since.map(|at| at.elapsed()),
+                        timeout,
+                        exempt,
+                    )
+                })
+                .map(|(id, _)| id.clone())
+                .collect()
+        };
+        for id in victims {
+            let _ = self.close(&id, CloseReason::IdleReaped).await;
+        }
     }
 
     /// Start the hooks endpoint (idempotent) and return its `(port, token)`.
