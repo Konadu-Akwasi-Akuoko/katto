@@ -1,10 +1,12 @@
 import { FilmStripIcon } from "@phosphor-icons/react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { importFiles } from "@/lib/ipc/ingest";
+import { jobsKeys } from "@/lib/ipc/jobs";
 
 /**
  * The manual iPhone-footage path: drop video files anywhere over the detail
@@ -14,6 +16,18 @@ import { importFiles } from "@/lib/ipc/ingest";
  */
 export function FootageCard({ slug }: { slug: string }) {
 	const [over, setOver] = useState(false);
+	const queryClient = useQueryClient();
+
+	const drop = useMutation({
+		mutationFn: (paths: string[]) => importFiles(slug, paths),
+		onSuccess: (_job, paths) => {
+			void queryClient.invalidateQueries({ queryKey: jobsKeys.all });
+			toast.success(
+				`Importing ${paths.length} ${paths.length === 1 ? "file" : "files"}`,
+			);
+		},
+		onError: (err) => toast.error(err.message),
+	});
 
 	useEffect(() => {
 		let cancelled = false;
@@ -30,17 +44,16 @@ export function FootageCard({ slug }: { slug: string }) {
 			else if (event.payload.type === "leave") setOver(false);
 			else if (event.payload.type === "drop") {
 				setOver(false);
-				const paths = event.payload.paths;
-				void importFiles(slug, paths)
-					.then(() => toast.success(`Importing ${paths.length} files`))
-					.catch((err: Error) => toast.error(err.message));
+				if (!drop.isPending && event.payload.paths.length > 0) {
+					drop.mutate(event.payload.paths);
+				}
 			}
 		});
 		return () => {
 			cancelled = true;
 			void unlisten.then((un) => un());
 		};
-	}, [slug]);
+	}, [drop.isPending, drop.mutate]);
 
 	return (
 		<Card className={over ? "border-ember" : undefined}>

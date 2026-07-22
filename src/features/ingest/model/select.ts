@@ -48,6 +48,11 @@ export function hasEnoughFreeSpace(bytes: number, freeBytes: number): boolean {
 	return freeBytes >= bytes;
 }
 
+/** `"1 clip"` / `"N clips"` — shared by the sheet title and progress copy. */
+export function clipCountLabel(count: number): string {
+	return count === 1 ? `${count} clip` : `${count} clips`;
+}
+
 interface ProjectLike {
 	slug: string;
 	shoot_date: string | null;

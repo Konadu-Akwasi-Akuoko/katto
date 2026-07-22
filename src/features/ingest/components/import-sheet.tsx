@@ -23,6 +23,7 @@ import { ClipGroupList } from "@/features/ingest/components/clip-group-list";
 import { IngestProgress } from "@/features/ingest/components/ingest-progress";
 import { useCardOffer } from "@/features/ingest/hooks/use-card-offer";
 import {
+	clipCountLabel,
 	defaultProjectSlug,
 	formatBytes,
 	hasEnoughFreeSpace,
@@ -93,9 +94,13 @@ export function ImportSheet() {
 
 	// Set when an import has been started from this sheet: the body swaps from
 	// the clip list to the copy-progress panel (which offers Eject on finish).
+	// Carries everything the panel needs so it survives the card offer going
+	// null when the volume is ejected or removed.
 	const [activeJob, setActiveJob] = useState<{
 		id: string;
 		count: number;
+		volume: string;
+		projectTitle: string;
 	} | null>(null);
 
 	const importMutation = useMutation({
@@ -105,12 +110,16 @@ export function ImportSheet() {
 		},
 		onSuccess: (job) => {
 			void queryClient.invalidateQueries({ queryKey: jobsKeys.all });
-			setActiveJob({ id: job.id, count: totals.count });
+			if (!offer) return;
+			setActiveJob({
+				id: job.id,
+				count: totals.count,
+				volume: offer.volume,
+				projectTitle: activeProject?.title ?? "project",
+			});
 		},
 		onError: (err) => toast.error(err.message),
 	});
-
-	if (!offer) return null;
 
 	if (activeJob) {
 		return (
@@ -127,8 +136,8 @@ export function ImportSheet() {
 					</DialogHeader>
 					<IngestProgress
 						jobId={activeJob.id}
-						volume={offer.volume}
-						projectTitle={activeProject?.title ?? "project"}
+						volume={activeJob.volume}
+						projectTitle={activeJob.projectTitle}
 						clipCount={activeJob.count}
 					/>
 					<div className="flex justify-end">
@@ -139,6 +148,29 @@ export function ImportSheet() {
 								setActiveJob(null);
 							}}
 						>
+							Close
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
+		);
+	}
+
+	if (!offer) {
+		// Opened by the palette or katto://ingest with no card inserted: say so
+		// instead of silently doing nothing (and let the user clear the state).
+		return (
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent className="max-w-lg">
+					<DialogHeader>
+						<DialogTitle>No camera card detected</DialogTitle>
+					</DialogHeader>
+					<p className="text-fg-muted text-sm">
+						Insert a card — the import sheet opens by itself when one is
+						recognized.
+					</p>
+					<div className="flex justify-end">
+						<Button variant="secondary" onClick={() => setOpen(false)}>
 							Close
 						</Button>
 					</div>
@@ -168,7 +200,7 @@ export function ImportSheet() {
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogContent className="max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Import {totals.count} clips</DialogTitle>
+					<DialogTitle>Import {clipCountLabel(totals.count)}</DialogTitle>
 				</DialogHeader>
 
 				<div className="flex flex-col gap-4">

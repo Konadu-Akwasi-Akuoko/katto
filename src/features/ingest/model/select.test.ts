@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
 	allPathsIn,
+	clipCountLabel,
 	defaultProjectSlug,
 	formatBytes,
 	formatDuration,
+	hasEnoughFreeSpace,
 	selectionTotals,
 } from "@/features/ingest/model/select";
 import type { CardOffer } from "@/lib/ipc/ingest";
@@ -81,6 +83,25 @@ describe("defaultProjectSlug", () => {
 	});
 	it("returns null with no projects", () => {
 		expect(defaultProjectSlug([], "2026-07-22")).toBeNull();
+	});
+});
+
+describe("hasEnoughFreeSpace", () => {
+	it("passes when free space covers the selection exactly", () => {
+		expect(hasEnoughFreeSpace(100, 100)).toBe(true);
+	});
+	it("fails when the selection exceeds free space", () => {
+		expect(hasEnoughFreeSpace(101, 100)).toBe(false);
+	});
+});
+
+describe("clipCountLabel", () => {
+	it("singularizes one clip", () => {
+		expect(clipCountLabel(1)).toBe("1 clip");
+	});
+	it("pluralizes everything else", () => {
+		expect(clipCountLabel(0)).toBe("0 clips");
+		expect(clipCountLabel(14)).toBe("14 clips");
 	});
 });
 

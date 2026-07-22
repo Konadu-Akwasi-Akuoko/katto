@@ -106,19 +106,23 @@ afterEach(() => {
 });
 
 describe("ImportSheet", () => {
-	it("lists card clips grouped with videos pre-selected and sidecars hidden", async () => {
+	it("lists card clips grouped with videos pre-selected and sidecars listed deselected", async () => {
 		useIngestSheetStore.setState({ open: true });
 		renderSheet();
 
 		expect(await screen.findByText("C0001.MP4")).toBeInTheDocument();
 		expect(screen.getByText("C0002.MP4")).toBeInTheDocument();
-		expect(screen.queryByText("C0001M01.XML")).not.toBeInTheDocument();
 		expect(
 			await screen.findByRole("heading", { name: "Import 2 clips" }),
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("checkbox", { name: "Import C0001.MP4" }),
 		).toBeChecked();
+		// Sidecars are listed but deselected (PRD: listed, not pre-selected).
+		expect(screen.getByText("C0001M01.XML")).toBeInTheDocument();
+		expect(
+			screen.getByRole("checkbox", { name: "Import C0001M01.XML" }),
+		).not.toBeChecked();
 	});
 
 	it("starts the ingest with the selected paths and target project", async () => {
@@ -144,7 +148,7 @@ describe("ImportSheet", () => {
 		);
 		// The sheet swaps to the copy-progress panel for the started job.
 		expect(
-			await screen.findByText("Copying 1 clips → NVMe deep dive"),
+			await screen.findByText("Copying 1 clip → NVMe deep dive"),
 		).toBeInTheDocument();
 	});
 });

@@ -5,8 +5,9 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import type { JobProgress } from "@/lib/ipc/bindings.gen";
+import { clipCountLabel } from "@/features/ingest/model/select";
 import { ejectCard } from "@/lib/ipc/ingest";
+import type { JobProgress } from "@/lib/ipc/jobs";
 import { subscribeJobProgress } from "@/lib/ipc/jobs";
 
 interface Props {
@@ -58,8 +59,8 @@ export function IngestProgress({
 				) : null}
 				<span className="text-sm">
 					{done
-						? `Imported ${clipCount} clips → ${projectTitle}`
-						: `Copying ${clipCount} clips → ${projectTitle}`}
+						? `Imported ${clipCountLabel(clipCount)} → ${projectTitle}`
+						: `Copying ${clipCountLabel(clipCount)} → ${projectTitle}`}
 				</span>
 			</div>
 			<Progress value={progress * 100} />

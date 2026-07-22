@@ -1,4 +1,4 @@
-import { FilmSlateIcon } from "@phosphor-icons/react";
+import { FileIcon, FilmSlateIcon } from "@phosphor-icons/react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -15,6 +15,10 @@ interface Props {
 	onToggleGroup: (paths: string[], on: boolean) => void;
 }
 
+/**
+ * Grouped card contents. Videos are pre-selected; sidecars (.XML/.THM) are
+ * listed but deselected per the PRD — the group select-all covers videos only.
+ */
 export function ClipGroupList({
 	offer,
 	selected,
@@ -35,33 +39,43 @@ export function ClipGroupList({
 								aria-label={`Select all in ${group.label}`}
 							/>
 							<span className="text-sm">{group.label}</span>
-							<span className="ml-auto font-mono text-xs tabular-nums">
-								{paths.length} clips
+							<span className="ml-auto text-xs">
+								{paths.length} {paths.length === 1 ? "clip" : "clips"}
 							</span>
 						</div>
 						<ul className="flex flex-col">
-							{group.clips
-								.filter((c) => c.is_video)
-								.map((clip) => (
-									<li
-										key={clip.path}
-										className="flex items-center gap-2 rounded-[var(--r)] px-1 py-1.5 hover:bg-surface-2"
-									>
-										<Checkbox
-											checked={selected.has(clip.path)}
-											onCheckedChange={(v) => onToggle(clip.path, v === true)}
-											aria-label={`Import ${clip.name}`}
-										/>
+							{group.clips.map((clip) => (
+								<li
+									key={clip.path}
+									className="flex items-center gap-2 rounded-[var(--r)] px-1 py-1.5 hover:bg-surface-2"
+								>
+									<Checkbox
+										checked={selected.has(clip.path)}
+										onCheckedChange={(v) => onToggle(clip.path, v === true)}
+										aria-label={`Import ${clip.name}`}
+									/>
+									{clip.is_video ? (
 										<FilmSlateIcon size={16} className="text-fg-faint" />
-										<span className="truncate text-sm">{clip.name}</span>
-										<span className="ml-auto font-mono text-fg-muted text-xs tabular-nums">
-											{formatDuration(clip.duration_s)}
-										</span>
-										<span className="w-20 text-right font-mono text-fg-muted text-xs tabular-nums">
-											{formatBytes(clip.size)}
-										</span>
-									</li>
-								))}
+									) : (
+										<FileIcon size={16} className="text-fg-faint" />
+									)}
+									<span
+										className={
+											clip.is_video
+												? "truncate text-sm"
+												: "truncate text-fg-muted text-sm"
+										}
+									>
+										{clip.name}
+									</span>
+									<span className="ml-auto font-mono text-fg-muted text-xs tabular-nums">
+										{formatDuration(clip.duration_s)}
+									</span>
+									<span className="w-20 text-right font-mono text-fg-muted text-xs tabular-nums">
+										{formatBytes(clip.size)}
+									</span>
+								</li>
+							))}
 						</ul>
 					</div>
 				);
