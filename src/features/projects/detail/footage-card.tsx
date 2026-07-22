@@ -1,12 +1,17 @@
 import { FilmStripIcon } from "@phosphor-icons/react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PlanSteps } from "@/features/projects/detail/plan-steps";
 import { importFiles } from "@/lib/ipc/ingest";
 import { jobsKeys } from "@/lib/ipc/jobs";
+import { listFootage, pipelineKeys } from "@/lib/ipc/pipeline";
+import { usePipelineStore } from "@/stores/pipeline";
+import { useUiStore } from "@/stores/ui";
 
 const VIDEO_EXTS = new Set(["mp4", "mov", "mts", "m4v"]);
 
@@ -73,7 +78,8 @@ export function FootageCard({ slug }: { slug: string }) {
 			<CardHeader>
 				<CardTitle>Footage</CardTitle>
 			</CardHeader>
-			<CardContent>
+			<CardContent className="flex flex-col gap-2">
+				<FootageClipList slug={slug} />
 				<div className="flex items-center gap-2 text-fg-muted">
 					<FilmStripIcon size={20} />
 					<span className="text-sm">
@@ -82,5 +88,61 @@ export function FootageCard({ slug }: { slug: string }) {
 				</div>
 			</CardContent>
 		</Card>
+	);
+}
+
+/**
+ * The project's footage clips, each with the rough-cut runner: a ghost "Plan
+ * rough cut" action that swaps to the three-step indicator while its pipeline
+ * job runs, then offers "Review cut plan".
+ */
+function FootageClipList({ slug }: { slug: string }) {
+	const openCutEditor = useUiStore((s) => s.openCutEditor);
+	const runs = usePipelineStore((s) => s.runs);
+	const start = usePipelineStore((s) => s.start);
+	const queryClient = useQueryClient();
+
+	const { data: clips = [] } = useQuery({
+		queryKey: pipelineKeys.footage(slug),
+		queryFn: () => listFootage(slug),
+	});
+
+	if (clips.length === 0) return null;
+
+	return (
+		<ul className="flex flex-col">
+			{clips.map((clip) => {
+				const run = runs[clip.path];
+				return (
+					<li
+						key={clip.path}
+						className="flex flex-col border-b border-hairline py-1 last:border-b-0"
+					>
+						<div className="flex h-[30px] items-center gap-2">
+							<span className="flex-1 truncate font-mono text-xs tabular-nums">
+								{clip.name}
+							</span>
+							{!run && (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="cursor-default"
+									onClick={() => {
+										void start(slug, clip.path).then(() => {
+											void queryClient.invalidateQueries({
+												queryKey: jobsKeys.all,
+											});
+										});
+									}}
+								>
+									Plan rough cut
+								</Button>
+							)}
+						</div>
+						{run && <PlanSteps run={run} onReview={openCutEditor} />}
+					</li>
+				);
+			})}
+		</ul>
 	);
 }

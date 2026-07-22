@@ -103,6 +103,60 @@ fn bundle_summary(root: &Path) -> Option<BundleSummary> {
     })
 }
 
+/// One video file in the project's footage folder.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct FootageClip {
+    pub path: String,
+    pub name: String,
+}
+
+/// Video extensions the pipeline accepts (mirrors the ingest drop filter).
+const VIDEO_EXTS: [&str; 4] = ["mp4", "mov", "mts", "m4v"];
+
+/// Scan a footage directory into sorted clip rows. Missing dir -> empty.
+fn footage_clips(footage_dir: &Path) -> Vec<FootageClip> {
+    let Ok(entries) = std::fs::read_dir(footage_dir) else {
+        return Vec::new();
+    };
+    let mut clips: Vec<FootageClip> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|ext| VIDEO_EXTS.contains(&ext.to_ascii_lowercase().as_str()))
+        })
+        .map(|p| FootageClip {
+            name: p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            path: p.to_string_lossy().into_owned(),
+        })
+        .collect();
+    clips.sort_by(|a, b| a.name.cmp(&b.name));
+    clips
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn list_footage(
+    state: State<'_, AppState>,
+    project_slug: String,
+) -> Result<Vec<FootageClip>> {
+    let footage_dir: PathBuf = state
+        .db
+        .call(move |conn| {
+            let project = crate::db::projects::get(conn, &project_slug)?
+                .ok_or_else(|| Error::NoSuchProject(format!("no such project: {project_slug}")))?;
+            Ok(PathBuf::from(project.root_path).join("footage"))
+        })
+        .await?;
+    tauri::async_runtime::spawn_blocking(move || Ok(footage_clips(&footage_dir)))
+        .await
+        .map_err(|e| Error::Io(e.to_string()))?
+}
+
 /// Streams `CutsPartial` while the subprocess planner emits.
 struct ChannelObserver(Channel<PipelineEvent>);
 
@@ -480,6 +534,20 @@ mod tests {
         assert_eq!(s.name, "clip");
         assert!(s.has_transcript);
         assert!(!s.has_cuts);
+    }
+
+    #[test]
+    fn footage_clips_filters_and_sorts_videos() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("b.MP4"), b"x").unwrap();
+        std::fs::write(dir.path().join("a.mov"), b"x").unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"x").unwrap();
+        let clips = footage_clips(dir.path());
+        assert_eq!(
+            clips.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+            vec!["a.mov", "b.MP4"]
+        );
+        assert!(footage_clips(&dir.path().join("missing")).is_empty());
     }
 
     #[test]

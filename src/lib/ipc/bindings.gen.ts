@@ -41,6 +41,7 @@ export const commands = {
 	planRoughCut: (projectSlug: string, footagePath: string, onEvent: Channel<PipelineEvent>) => typedError<Job, Error>(__TAURI_INVOKE("plan_rough_cut", { projectSlug, footagePath, onEvent })),
 	openBundle: (path: string) => typedError<BundleData, Error>(__TAURI_INVOKE("open_bundle", { path })).then((v) => ((v.status === "ok" ? { ...v, data: ({...v.data,transcript:({...v.data.transcript,audio_duration_secs:v.data.transcript.audio_duration_secs==null?v.data.transcript.audio_duration_secs:v.data.transcript.audio_duration_secs,words:v.data.transcript.words.map(i=>i)}),cuts:v.data.cuts==null?v.data.cuts:({...v.data.cuts,cuts:v.data.cuts.cuts.map(i=>i),discretionary:v.data.cuts.discretionary.map(i=>i),flags:v.data.cuts.flags.map(i=>i)})}) } : v) as typeof v)),
 	listBundles: (projectSlug: string) => typedError<BundleSummary[], Error>(__TAURI_INVOKE("list_bundles", { projectSlug })),
+	listFootage: (projectSlug: string) => typedError<FootageClip[], Error>(__TAURI_INVOKE("list_footage", { projectSlug })),
 	/**
 	 *  Open the native folder picker and inspect the chosen directory. `None` when
 	 *  the user cancels. Nothing is persisted here — the wizard saves the path via
@@ -471,6 +472,12 @@ export type FolderFreshness = {
 	subfolder: string,
 	file_count: number,
 	latest_mtime: string | null,
+};
+
+/**  One video file in the project's footage folder. */
+export type FootageClip = {
+	path: string,
+	name: string,
 };
 
 /**

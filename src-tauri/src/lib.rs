@@ -35,6 +35,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::pipeline::plan_rough_cut,
             commands::pipeline::open_bundle,
             commands::pipeline::list_bundles,
+            commands::pipeline::list_footage,
             commands::onboarding::pick_studio_root,
             commands::onboarding::store_key,
             commands::onboarding::key_present,
