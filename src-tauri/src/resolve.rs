@@ -66,6 +66,9 @@ pub async fn run_import(project_name: &str, fcpxml_path: &Path) -> Result<script
     }
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
+    // a timeout drops the wait future; without this the orphaned python3
+    // could keep mutating Resolve after katto already reported failure
+    command.kill_on_drop(true);
     let output = tokio::time::timeout(SCRIPT_TIMEOUT, async {
         command
             .spawn()

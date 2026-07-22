@@ -110,9 +110,6 @@ pub enum Error {
     ResolveNotRunning(String),
 
     #[error("{0}")]
-    ResolveScriptingUnavailable(String),
-
-    #[error("{0}")]
     ResolveFailed(String),
 
     #[error("{0}")]

@@ -30,10 +30,19 @@ pub async fn open_in_resolve(
     slug: String,
     timeline_version: Option<u32>,
 ) -> Result<()> {
-    if !crate::resolve::resolve_installed() {
+    // preflights spawn pgrep and stat the bundle — off the runtime thread
+    let (installed, running) = tauri::async_runtime::spawn_blocking(|| {
+        (
+            crate::resolve::resolve_installed(),
+            crate::resolve::resolve_running(),
+        )
+    })
+    .await
+    .map_err(|e| Error::Io(e.to_string()))?;
+    if !installed {
         return Err(Error::ResolveNotInstalled(NOT_INSTALLED.to_string()));
     }
-    if !crate::resolve::resolve_running() {
+    if !running {
         return Err(Error::ResolveNotRunning(NOT_RUNNING.to_string()));
     }
 
