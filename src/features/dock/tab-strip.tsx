@@ -40,7 +40,8 @@ export function TabStrip({
 					}
 				};
 				return (
-					// biome-ignore lint/a11y/useSemanticElements: the close control is a real <button>; nesting it in a <button> tab would be invalid HTML
+					// The close control is a real <button>; nesting it in a <button>
+					// tab would be invalid HTML, so the tab is a div with tab semantics.
 					<div
 						key={session.id}
 						role="tab"
