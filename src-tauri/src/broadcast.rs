@@ -106,6 +106,13 @@ pub struct DownloadFailed {
     pub filename: String,
 }
 
+/// Broadcast when a PNG lands in (or changes inside) the watched project's
+/// `thumbnails/` folder; the detail card and project grid refetch.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct ThumbnailsChanged {
+    pub slug: String,
+}
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -170,6 +177,14 @@ pub fn vfx_render_landed(app: &AppHandle, slug: &str, effect: &str, file: &str) 
         slug: slug.to_string(),
         effect: effect.to_string(),
         file: file.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn thumbnails_changed(app: &AppHandle, slug: &str) {
+    let _ = ThumbnailsChanged {
+        slug: slug.to_string(),
     }
     .emit(app);
 }

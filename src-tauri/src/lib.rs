@@ -105,6 +105,11 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::browser::parked_downloads,
             commands::browser::file_parked_download,
             commands::browser::reveal_in_project,
+            commands::thumbnails::create_thumbnail,
+            commands::thumbnails::latest_thumbnail,
+            commands::thumbnails::list_latest_thumbnails,
+            commands::thumbnails::watch_thumbnails,
+            commands::thumbnails::unwatch_thumbnails,
             commands::shell::set_autostart,
             commands::shell::get_autostart,
             commands::shell::sleep_to_tray,
@@ -129,6 +134,7 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::DownloadFiled,
             broadcast::DownloadFallback,
             broadcast::DownloadFailed,
+            broadcast::ThumbnailsChanged,
         ])
 }
 
@@ -162,6 +168,7 @@ fn bootstrap_state(app: &tauri::App) -> Result<state::AppState, Box<dyn std::err
         browser,
         downloads: browser::host::DownloadRegistry::default(),
         active_asset_project: std::sync::Mutex::new(None),
+        thumb_watch: std::sync::Mutex::new(None),
     })
 }
 

@@ -286,6 +286,11 @@ export const commands = {
 	 *  never escape the studio root.
 	 */
 	revealInProject: (slug: string, relPath: string) => typedError<null, Error>(__TAURI_INVOKE("reveal_in_project", { slug, relPath })),
+	createThumbnail: (slug: string, format: ThumbFormat) => typedError<CreateThumbnailResult, Error>(__TAURI_INVOKE("create_thumbnail", { slug, format })),
+	latestThumbnail: (slug: string) => typedError<string | null, Error>(__TAURI_INVOKE("latest_thumbnail", { slug })),
+	listLatestThumbnails: () => typedError<LatestThumb[], Error>(__TAURI_INVOKE("list_latest_thumbnails")),
+	watchThumbnails: (slug: string) => typedError<null, Error>(__TAURI_INVOKE("watch_thumbnails", { slug })),
+	unwatchThumbnails: () => typedError<null, Error>(__TAURI_INVOKE("unwatch_thumbnails")),
 	/**
 	 *  Enable or disable launch-at-login, recording the change in the activity
 	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
@@ -326,6 +331,7 @@ export const events = {
 	scheduleChanged: makeEvent<ScheduleChanged>("schedule-changed"),
 	sessionStateChanged: makeEvent<SessionStateChanged>("session-state-changed"),
 	sessionsChanged: makeEvent<SessionsChanged>("sessions-changed"),
+	thumbnailsChanged: makeEvent<ThumbnailsChanged>("thumbnails-changed"),
 	vfxRenderLanded: makeEvent<VfxRenderLanded>("vfx-render-landed"),
 };
 
@@ -462,6 +468,12 @@ export type CloseReason = "exited" | "idle_reaped" | "user_closed";
  *  never rendered as a number.
  */
 export type Confidence = "low" | "medium" | "high";
+
+/**  What `create_thumbnail` produced and how it opened. */
+export type CreateThumbnailResult = {
+	psd_path: string,
+	opened: ThumbOpen,
+};
 
 /**  One hard cut span with its reason and transcript excerpt. */
 export type Cut = {
@@ -839,6 +851,12 @@ export type KeysPresent = {
 	anthropic: boolean,
 };
 
+/**  A project's newest exported thumbnail PNG. */
+export type LatestThumb = {
+	slug: string,
+	path: string,
+};
+
 /**  A human-added cut span. */
 export type ManualCut = {
 	/**  Start time. */
@@ -1103,6 +1121,20 @@ export type TabSnapshot = {
 	url: string,
 	can_go_back: boolean,
 	can_go_forward: boolean,
+};
+
+/**  Which bundled template a scaffold copies. */
+export type ThumbFormat = "landscape" | "portrait";
+
+/**  How the scaffold opened for the owner. */
+export type ThumbOpen = "photoshop" | "revealed_in_finder";
+
+/**
+ *  Broadcast when a PNG lands in (or changes inside) the watched project's
+ *  `thumbnails/` folder; the detail card and project grid refetch.
+ */
+export type ThumbnailsChanged = {
+	slug: string,
 };
 
 /**  A parsed Scribe v2 transcription response. */

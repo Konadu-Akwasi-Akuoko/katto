@@ -26,6 +26,9 @@ pub struct AppState {
     /// Explicit filing-target override; `None` falls back to the most
     /// recently touched project.
     pub active_asset_project: Mutex<Option<String>>,
+    /// The single live thumbnails watch (the open project detail); replaced
+    /// on watch, cleared on unwatch — dropping the old one stops it.
+    pub thumb_watch: Mutex<Option<crate::thumbnails::watch::ThumbWatch>>,
 }
 
 /// Holds the currently-detected card offer, if any. Populated by the volume
