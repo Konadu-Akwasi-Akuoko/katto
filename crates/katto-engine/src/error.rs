@@ -16,6 +16,15 @@ pub enum Error {
     /// Bundle artifact malformed or missing where required.
     #[error("bundle: {0}")]
     Bundle(String),
+    /// ElevenLabs rejected the API key (401).
+    #[error("elevenlabs auth: {0}")]
+    TranscribeAuth(String),
+    /// ElevenLabs quota/rate limit (429) after retry.
+    #[error("elevenlabs quota: {0}")]
+    TranscribeQuota(String),
+    /// Any other transcription transport/response failure.
+    #[error("elevenlabs: {0}")]
+    Transcribe(String),
     /// The manifest's source video is missing on open (Phase 5 adds relocation).
     #[error("source missing: expected {expected_path}", expected_path = .expected_path.display())]
     SourceMissing {

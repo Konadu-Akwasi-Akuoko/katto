@@ -10,6 +10,7 @@ pub mod ingest;
 pub mod merge;
 pub mod rational;
 pub mod schema;
+pub mod transcribe;
 pub mod validate;
 
 pub use error::{Error, Result};
