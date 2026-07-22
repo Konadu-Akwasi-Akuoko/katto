@@ -3,5 +3,6 @@
 //! launch assembly) lives in submodules; process/PTY spawn sites stay thin.
 
 pub mod buffer;
+pub mod hooks_endpoint;
 pub mod launch;
 pub mod state;
