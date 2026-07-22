@@ -28,7 +28,9 @@ pub async fn run_scheduled_job_now(
             .await?
     };
     if row.is_none() {
-        return Err(Error::Db(format!("no scheduled job named {name}")));
+        return Err(Error::NoSuchScheduledJob(format!(
+            "no scheduled job named {name}"
+        )));
     }
     {
         let name = name.clone();
@@ -57,7 +59,7 @@ pub async fn set_scheduled_job(
 ) -> Result<()> {
     let spec = format!("daily@{hour:02}:{minute:02};catchup=20h");
     if crate::scheduler::due::parse_spec(&spec).is_none() {
-        return Err(Error::Db(format!(
+        return Err(Error::InvalidSchedule(format!(
             "invalid schedule time {hour:02}:{minute:02}"
         )));
     }

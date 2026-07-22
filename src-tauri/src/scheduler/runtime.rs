@@ -65,6 +65,7 @@ struct Shared {
     consecutive_failures: Mutex<HashMap<String, u32>>,
     next_retry_at: Mutex<HashMap<String, NaiveDateTime>>,
     reported_bad_specs: Mutex<HashSet<String>>,
+    reported_pass_failure: Mutex<bool>,
 }
 
 impl SchedulerHandle {
@@ -105,6 +106,7 @@ pub fn start(app: AppHandle) -> SchedulerHandle {
         consecutive_failures: Mutex::new(HashMap::new()),
         next_retry_at: Mutex::new(HashMap::new()),
         reported_bad_specs: Mutex::new(HashSet::new()),
+        reported_pass_failure: Mutex::new(false),
     });
 
     #[cfg(target_os = "macos")]
@@ -132,8 +134,27 @@ pub fn start(app: AppHandle) -> SchedulerHandle {
 async fn evaluate_pass(shared: &Arc<Shared>) {
     let db = shared.app.state::<crate::state::AppState>().db.clone();
     let rows = match db.call(|conn| scheduled_jobs::list(conn)).await {
-        Ok(rows) => rows,
-        Err(_) => return,
+        Ok(rows) => {
+            *lock(&shared.reported_pass_failure) = false;
+            rows
+        }
+        Err(error) => {
+            // A dead scheduler must not be silent. Reported once per failure
+            // streak (the event write itself is best-effort against the same
+            // DB); a later successful pass re-arms the report.
+            let already = {
+                let mut reported = lock(&shared.reported_pass_failure);
+                std::mem::replace(&mut *reported, true)
+            };
+            if !already {
+                record_event(
+                    shared,
+                    "scheduler_pass_failed",
+                    serde_json::json!({ "error": error.to_string() }),
+                );
+            }
+            return;
+        }
     };
     let now_local = chrono::Local::now().naive_local();
     for row in rows {
@@ -178,9 +199,25 @@ fn spawn_run(shared: &Arc<Shared>, name: String) {
                 let stamp = now_local.format(LAST_SUCCESS_FORMAT).to_string();
                 let db = shared.app.state::<crate::state::AppState>().db.clone();
                 let job_name = name.clone();
-                let _ = db
+                let write = db
                     .call(move |conn| scheduled_jobs::set_last_success(conn, &job_name, &stamp))
                     .await;
+                if let Err(error) = write {
+                    // Without a recorded success the row still evaluates as
+                    // due; releasing the in-flight guard here would re-spawn
+                    // the full job (a claude session) every 60 s tick. Hold
+                    // the guard for the rest of this launch and say so.
+                    record_event(
+                        &shared,
+                        "scheduler_last_success_write_failed",
+                        serde_json::json!({
+                            "name": name,
+                            "error": error.to_string(),
+                            "note": "job held until relaunch to avoid a run storm",
+                        }),
+                    );
+                    return;
+                }
                 lock(&shared.consecutive_failures).remove(&name);
                 lock(&shared.next_retry_at).remove(&name);
             }

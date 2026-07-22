@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 use serde::Serialize;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 /// A named recurring job with anacron-style catch-up semantics (Phase 6).
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -40,22 +40,35 @@ pub fn get(conn: &Connection, name: &str) -> Result<Option<ScheduledJob>> {
     Ok(rows.next().transpose()?)
 }
 
-/// Record a successful run. `iso_utc` is the caller's timestamp string; the
-/// scheduler stores naive-local (`YYYY-MM-DD HH:MM:SS`) to match its due-math.
-pub fn set_last_success(conn: &Connection, name: &str, iso_utc: &str) -> Result<()> {
-    conn.execute(
+/// Record a successful run. `local_stamp` is naive LOCAL time formatted
+/// `YYYY-MM-DD HH:MM:SS` — the scheduler's due-math parses exactly that shape
+/// back (`scheduler::runtime::LAST_SUCCESS_FORMAT`); any other format would be
+/// read as never-run. Errors on an unknown job name.
+pub fn set_last_success(conn: &Connection, name: &str, local_stamp: &str) -> Result<()> {
+    let changed = conn.execute(
         "UPDATE scheduled_jobs SET last_success_at = ?2 WHERE name = ?1",
-        (name, iso_utc),
+        (name, local_stamp),
     )?;
+    if changed == 0 {
+        return Err(Error::NoSuchScheduledJob(format!(
+            "no scheduled job named {name}"
+        )));
+    }
     Ok(())
 }
 
-/// Update a job's schedule spec and enabled flag.
+/// Update a job's schedule spec and enabled flag. Errors on an unknown name
+/// instead of silently matching zero rows.
 pub fn update(conn: &Connection, name: &str, spec: &str, enabled: bool) -> Result<()> {
-    conn.execute(
+    let changed = conn.execute(
         "UPDATE scheduled_jobs SET spec = ?2, enabled = ?3 WHERE name = ?1",
         (name, spec, enabled as i64),
     )?;
+    if changed == 0 {
+        return Err(Error::NoSuchScheduledJob(format!(
+            "no scheduled job named {name}"
+        )));
+    }
     Ok(())
 }
 
@@ -78,9 +91,18 @@ mod tests {
     #[test]
     fn set_last_success_round_trips() {
         let conn = test_db();
-        set_last_success(&conn, "nightly-curation", "2026-07-22T08:00:00Z").unwrap();
+        // The scheduler stores naive-local `%Y-%m-%d %H:%M:%S`; the round-trip
+        // uses that shape so the test matches what the runtime later parses.
+        set_last_success(&conn, "nightly-curation", "2026-07-22 08:00:00").unwrap();
         let job = get(&conn, "nightly-curation").unwrap().unwrap();
-        assert_eq!(job.last_success_at.as_deref(), Some("2026-07-22T08:00:00Z"));
+        assert_eq!(job.last_success_at.as_deref(), Some("2026-07-22 08:00:00"));
+    }
+
+    #[test]
+    fn set_last_success_unknown_name_errors() {
+        let conn = test_db();
+        let err = set_last_success(&conn, "nope", "2026-07-22 08:00:00").unwrap_err();
+        assert!(matches!(err, crate::error::Error::NoSuchScheduledJob(_)));
     }
 
     #[test]
@@ -90,6 +112,13 @@ mod tests {
         let job = get(&conn, "nightly-curation").unwrap().unwrap();
         assert_eq!(job.spec, "daily@02:30;catchup=20h");
         assert!(!job.enabled);
+    }
+
+    #[test]
+    fn update_unknown_name_errors_instead_of_silent_noop() {
+        let conn = test_db();
+        let err = update(&conn, "nope", "daily@02:30;catchup=20h", true).unwrap_err();
+        assert!(matches!(err, crate::error::Error::NoSuchScheduledJob(_)));
     }
 
     #[test]
