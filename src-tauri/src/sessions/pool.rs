@@ -121,6 +121,14 @@ impl SessionPool {
     /// Wire the app handle and start the hooks endpoint plus the degraded-mode
     /// silence timer. Called once from the setup hook.
     pub fn start(&self, app: AppHandle) -> Result<()> {
+        // Crash hygiene: settings files (they carry the previous launch's
+        // endpoint token) orphaned by a hard exit are swept before any new
+        // session writes its own. First launch has no dir — nothing to sweep.
+        if let Ok(dir) = app.path().app_data_dir() {
+            std::thread::spawn(move || {
+                let _ = sweep_stale_settings(&dir.join("sessions"));
+            });
+        }
         let _ = self.inner.app.set(app);
         self.ensure_endpoint()?;
         let weak = Arc::downgrade(&self.inner);
@@ -244,31 +252,35 @@ impl SessionPool {
                     .await?
                     .filter(|p| !p.is_empty())
                     .map(PathBuf::from);
-                let claude_path = configured
-                    .or_else(katto_engine::detect::detect_claude)
-                    .ok_or_else(|| {
-                        Error::ClaudeMissing(
-                            "claude CLI not found — install it or set its path in Settings"
-                                .to_string(),
-                        )
-                    })?;
+                // detect_claude spawns a login shell (seconds); settings I/O
+                // may hit a slow disk — both stay off the shared async runtime.
+                let claude_path = tauri::async_runtime::spawn_blocking(move || {
+                    configured.or_else(katto_engine::detect::detect_claude)
+                })
+                .await
+                .map_err(|err| Error::SessionSpawn(err.to_string()))?
+                .ok_or_else(|| {
+                    Error::ClaudeMissing(
+                        "claude CLI not found — install it or set its path in Settings".to_string(),
+                    )
+                })?;
                 let dir = app
                     .path()
                     .app_data_dir()
                     .map_err(|err| Error::SessionSpawn(err.to_string()))?
                     .join("sessions");
-                std::fs::create_dir_all(&dir)?;
                 let (port, token) = self.ensure_endpoint()?;
                 let settings_path = dir.join(format!("{id}.settings.json"));
                 let json = hook_settings_json(port, &token, &id, &task.permission_allow);
-                std::fs::write(&settings_path, json)?;
-                #[cfg(unix)]
                 {
-                    use std::os::unix::fs::PermissionsExt;
-                    std::fs::set_permissions(
-                        &settings_path,
-                        std::fs::Permissions::from_mode(0o600),
-                    )?;
+                    let dir = dir.clone();
+                    let settings_path = settings_path.clone();
+                    tauri::async_runtime::spawn_blocking(move || -> std::io::Result<()> {
+                        std::fs::create_dir_all(&dir)?;
+                        write_settings_file_0600(&settings_path, &json)
+                    })
+                    .await
+                    .map_err(|err| Error::SessionSpawn(err.to_string()))??;
                 }
                 let spec = LaunchSpec {
                     claude_path,
@@ -479,6 +491,15 @@ impl SessionPool {
         let (id, machine_event) = match event {
             HookEvent::Stop { session_id } => (session_id, SessionEvent::HookStop),
             HookEvent::Notification { session_id } => (session_id, SessionEvent::HookNotification),
+            HookEvent::EndpointDied { error } => {
+                // Hook delivery is dead app-wide; sessions fall back to the
+                // 45 s silence heuristic. Say so once, at the root cause.
+                self.record_event(
+                    "session_hooks_endpoint_died",
+                    serde_json::json!({ "error": error }),
+                );
+                return;
+            }
         };
         let mut transition = None;
         let mut stop_watch = None;
@@ -862,6 +883,34 @@ impl SessionPool {
     }
 }
 
+/// Write a session's hooks settings file (it carries the endpoint token)
+/// owner-readable from the first byte — `mode(0o600)` at open, no
+/// chmod-after-write window — and never over an existing file (`create_new`).
+fn write_settings_file_0600(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    file.write_all(contents.as_bytes())
+}
+
+/// Delete settings files orphaned by a crash. Every session is dead at
+/// launch, so anything still in `sessions/` is stale token material.
+fn sweep_stale_settings(dir: &std::path::Path) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|e| e == "json") {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -878,6 +927,39 @@ mod tests {
             permission_mode: None,
             permission_allow: vec![],
         }
+    }
+
+    #[test]
+    fn settings_file_written_0600_and_never_overwritten() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s1.settings.json");
+
+        write_settings_file_0600(&path, "{\"token\":\"secret\"}").unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600, "owner-only from the first byte");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "{\"token\":\"secret\"}"
+        );
+        assert!(
+            write_settings_file_0600(&path, "other").is_err(),
+            "an existing file is never overwritten (create_new)"
+        );
+    }
+
+    #[test]
+    fn sweep_stale_settings_clears_orphaned_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.settings.json"), "{}").unwrap();
+        std::fs::write(dir.path().join("b.settings.json"), "{}").unwrap();
+
+        sweep_stale_settings(dir.path()).unwrap();
+
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+        // A missing directory (first launch) is not an error path worth failing on.
+        assert!(sweep_stale_settings(&dir.path().join("nope")).is_err());
     }
 
     #[tokio::test]

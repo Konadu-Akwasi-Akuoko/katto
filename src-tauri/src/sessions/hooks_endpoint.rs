@@ -16,8 +16,18 @@ const MAX_BODY_BYTES: usize = 64 * 1024;
 /// id comes from the URL path katto baked into the curl command.
 #[derive(Debug, PartialEq)]
 pub enum HookEvent {
-    Stop { session_id: String },
-    Notification { session_id: String },
+    Stop {
+        session_id: String,
+    },
+    Notification {
+        session_id: String,
+    },
+    /// The accept thread is exiting on a server error: hook delivery is dead
+    /// app-wide (sessions degrade to the silence heuristic). Dispatched so the
+    /// pool can record it — the endpoint itself has no DB access.
+    EndpointDied {
+        error: String,
+    },
 }
 
 /// The localhost hook receiver: one synchronous accept thread, mirroring the
@@ -50,7 +60,12 @@ pub fn start(on_event: Sender<HookEvent>) -> Result<HooksEndpoint> {
             match server.recv_timeout(Duration::from_millis(250)) {
                 Ok(Some(request)) => handle(request, &thread_token, &on_event),
                 Ok(None) => {}
-                Err(_) => break,
+                Err(err) => {
+                    let _ = on_event.send(HookEvent::EndpointDied {
+                        error: err.to_string(),
+                    });
+                    break;
+                }
             }
         }
     });
@@ -78,7 +93,7 @@ fn respond_status(
     let authed = request
         .headers()
         .iter()
-        .any(|h| h.field.equiv("x-katto-token") && h.value.as_str() == token);
+        .any(|h| h.field.equiv("x-katto-token") && token_matches(h.value.as_str(), token));
     if !authed {
         return 401;
     }
@@ -104,6 +119,18 @@ impl HooksEndpoint {
     pub fn shutdown(&self) {
         self.stop.store(true, Ordering::Relaxed);
     }
+}
+
+/// Constant-time token comparison: an early-exit `==` would let a local
+/// process narrow the token byte-by-byte through response timing. Length is
+/// not secret (it is a fixed-width UUID).
+fn token_matches(candidate: &str, token: &str) -> bool {
+    let a = candidate.as_bytes();
+    let b = token.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 #[cfg(test)]
@@ -184,6 +211,14 @@ mod tests {
             }
         );
         ep.shutdown();
+    }
+
+    #[test]
+    fn token_matches_only_on_exact_equality() {
+        assert!(token_matches("abc-123", "abc-123"));
+        assert!(!token_matches("abc-124", "abc-123"));
+        assert!(!token_matches("abc-12", "abc-123"));
+        assert!(!token_matches("", "abc-123"));
     }
 
     #[test]
