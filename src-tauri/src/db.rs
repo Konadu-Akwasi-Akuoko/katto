@@ -60,6 +60,12 @@ fn apply_pragmas(conn: &Connection, wal: bool) -> Result<()> {
     Ok(())
 }
 
+/// Today's date in the user's local timezone as `YYYY-MM-DD`, stamped by SQLite
+/// so callers need no clock (matches the events log's timestamp source).
+pub fn local_date_today(conn: &Connection) -> Result<String> {
+    Ok(conn.query_row("SELECT date('now','localtime')", [], |r| r.get(0))?)
+}
+
 /// Fresh in-memory database with the full migration ladder applied and the same
 /// pragmas as production (minus WAL). Shared by every `db/` repository test.
 #[cfg(test)]

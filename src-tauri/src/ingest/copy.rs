@@ -27,6 +27,13 @@ pub struct CopyPlan {
 pub fn copy_one(source: &Path, footage_dir: &Path, dest_name: &str) -> std::io::Result<u64> {
     let partial = footage_dir.join(format!("{dest_name}.partial"));
     let final_path = footage_dir.join(dest_name);
+    if final_path.exists() {
+        // Sequence planning makes collisions impossible for a single job; this
+        // backstop keeps a concurrent job from silently overwriting footage.
+        return Err(std::io::Error::other(format!(
+            "destination already exists: {dest_name}"
+        )));
+    }
     let copied = std::fs::copy(source, &partial)?;
     let source_size = std::fs::metadata(source)?.len();
     if copied != source_size {
@@ -50,12 +57,13 @@ pub async fn run_copy_job(
 ) -> std::result::Result<(), String> {
     let total = plan.renames.len();
     let mut expected: Vec<(String, u64)> = Vec::with_capacity(total);
-    let mut actual: Vec<(String, u64)> = Vec::with_capacity(total);
     let mut total_bytes: u64 = 0;
 
     for (i, rename) in plan.renames.iter().enumerate() {
         let source = plan.source_root.join(&rename.source);
-        let source_size = std::fs::metadata(&source).map(|m| m.len()).unwrap_or(0);
+        let source_size = std::fs::metadata(&source)
+            .map_err(|e| format!("cannot stat source {}: {e}", source.display()))?
+            .len();
         ctx.progress(
             i as f64 / total as f64,
             Some(format!("Copying {}", rename.dest_name)),
@@ -71,9 +79,24 @@ pub async fn run_copy_job(
             .map_err(|e| e.to_string())?;
 
         expected.push((rename.dest_name.clone(), source_size));
-        actual.push((rename.dest_name.clone(), copied));
         total_bytes += copied;
     }
+
+    // Verify against what actually landed on disk, not the loop's bookkeeping:
+    // re-stat every destination so a vanished or truncated file is caught.
+    let footage = plan.footage_dir.clone();
+    let names: Vec<String> = plan.renames.iter().map(|r| r.dest_name.clone()).collect();
+    let actual: Vec<(String, u64)> = tauri::async_runtime::spawn_blocking(move || {
+        names
+            .into_iter()
+            .filter_map(|n| {
+                let size = std::fs::metadata(footage.join(&n)).ok()?.len();
+                Some((n, size))
+            })
+            .collect()
+    })
+    .await
+    .map_err(|_| "verify task panicked".to_string())?;
 
     let errors = verify(&expected, &actual);
     if !errors.is_empty() {
@@ -112,6 +135,24 @@ mod tests {
         assert!(!footage.join("2026-07-22_001.mp4.partial").exists());
         // Source untouched.
         assert_eq!(std::fs::read(&src).unwrap(), b"footage-bytes");
+    }
+
+    #[test]
+    fn copy_one_refuses_to_overwrite_an_existing_destination() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("C0001.MP4");
+        std::fs::write(&src, b"new bytes").unwrap();
+        let footage = dir.path().join("footage");
+        std::fs::create_dir_all(&footage).unwrap();
+        std::fs::write(footage.join("2026-07-22_001.mp4"), b"earlier footage").unwrap();
+
+        let err = copy_one(&src, &footage, "2026-07-22_001.mp4");
+        assert!(err.is_err());
+        // The earlier footage is untouched.
+        assert_eq!(
+            std::fs::read(footage.join("2026-07-22_001.mp4")).unwrap(),
+            b"earlier footage"
+        );
     }
 
     #[test]

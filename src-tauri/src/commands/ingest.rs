@@ -185,45 +185,50 @@ async fn plan_and_spawn(
     sources: Vec<PathBuf>,
 ) -> Result<Job> {
     let slug = project_slug.clone();
-    let (footage_dir, existing, date): (PathBuf, Vec<String>, String) = state
+    let (footage_dir, date): (PathBuf, String) = state
         .db
         .call(move |conn| {
             crate::commands::projects::require_mounted(conn)?;
             let project = crate::db::projects::get(conn, &slug)?
                 .ok_or_else(|| Error::Db(format!("no such project: {slug}")))?;
             let footage = PathBuf::from(&project.root_path).join("footage");
-            let existing: Vec<String> = std::fs::read_dir(&footage)
+            let date = project
+                .shoot_date
+                .clone()
+                .filter(|d| !d.is_empty())
+                .map(Ok)
+                .unwrap_or_else(|| crate::db::local_date_today(conn))?;
+            Ok((footage, date))
+        })
+        .await?;
+
+    // Filesystem prep off both the DB writer and the async runtime: existing
+    // footage names (for the sequence), the byte total, and the free space.
+    let fs_footage = footage_dir.clone();
+    let fs_root = source_root.clone();
+    let fs_sources = sources.clone();
+    let (existing, needed, free): (Vec<String>, u64, u64) =
+        tauri::async_runtime::spawn_blocking(move || -> Result<(Vec<String>, u64, u64)> {
+            let existing: Vec<String> = std::fs::read_dir(&fs_footage)
                 .map(|rd| {
                     rd.flatten()
                         .filter_map(|e| e.file_name().into_string().ok())
                         .collect()
                 })
                 .unwrap_or_default();
-            let date = project
-                .shoot_date
-                .clone()
-                .filter(|d| !d.is_empty())
-                .map(Ok)
-                .unwrap_or_else(|| {
-                    conn.query_row("SELECT date('now','localtime')", [], |r| {
-                        r.get::<_, String>(0)
-                    })
-                })?;
-            Ok((footage, existing, date))
+            let mut needed = 0u64;
+            for s in &fs_sources {
+                let src = fs_root.join(s);
+                needed += std::fs::metadata(&src)
+                    .map_err(|e| Error::Io(format!("cannot read source {}: {e}", src.display())))?
+                    .len();
+            }
+            std::fs::create_dir_all(&fs_footage)?;
+            let free = fs4::available_space(&fs_footage)?;
+            Ok((existing, needed, free))
         })
-        .await?;
-
-    // Free-space guard on the studio drive before any copy begins.
-    let needed: u64 = sources
-        .iter()
-        .map(|s| {
-            std::fs::metadata(source_root.join(s))
-                .map(|m| m.len())
-                .unwrap_or(0)
-        })
-        .sum();
-    std::fs::create_dir_all(&footage_dir)?;
-    let free = fs4::available_space(&footage_dir).unwrap_or(0);
+        .await
+        .map_err(|e| Error::Io(e.to_string()))??;
     if free < needed {
         return Err(Error::Io(format!(
             "insufficient free space: need {needed} bytes, {free} free"

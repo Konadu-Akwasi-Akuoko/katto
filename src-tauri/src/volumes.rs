@@ -57,13 +57,15 @@ pub fn walk_volume(root: &Path) -> (VolumeTree, Vec<FileEntry>) {
 pub fn start_watcher(app: AppHandle) {
     std::thread::spawn(move || {
         let (tx, rx) = std::sync::mpsc::channel();
-        let Ok(mut watcher) = notify::recommended_watcher(tx) else {
-            return;
+        let mut watcher = match notify::recommended_watcher(tx) {
+            Ok(w) => w,
+            Err(err) => {
+                record_watcher_failure(&app, err.to_string());
+                return;
+            }
         };
-        if watcher
-            .watch(Path::new("/Volumes"), RecursiveMode::NonRecursive)
-            .is_err()
-        {
+        if let Err(err) = watcher.watch(Path::new("/Volumes"), RecursiveMode::NonRecursive) {
+            record_watcher_failure(&app, err.to_string());
             return;
         }
         for res in rx {
@@ -82,6 +84,24 @@ pub fn start_watcher(app: AppHandle) {
                 _ => {}
             }
         }
+    });
+}
+
+/// Record a watcher startup failure as an events row ("nothing fails
+/// silently") — card detection is disabled for the session, and the activity
+/// log is where that becomes visible.
+fn record_watcher_failure(app: &AppHandle, message: String) {
+    let Some(state) = app.try_state::<crate::state::AppState>() else {
+        return;
+    };
+    let db = state.db.clone();
+    tauri::async_runtime::spawn(async move {
+        let payload = serde_json::json!({ "error": message }).to_string();
+        let _ = db
+            .call(move |conn| {
+                crate::db::events::record(conn, "volume_watcher_failed", None, Some(&payload))
+            })
+            .await;
     });
 }
 
