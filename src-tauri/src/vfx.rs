@@ -228,21 +228,31 @@ fn handle_change(
     {
         return;
     }
-    if !wait_for_stable_size(changed) {
-        return;
-    }
+    // Marked at event time (not landing time): dedupes the burst of notify
+    // events one write produces, and keeps the up-to-30 s stability wait off
+    // this thread — a stalled render must not block other landings.
     cooldown.insert(changed.to_path_buf(), Instant::now());
     cooldown.retain(|_, at| at.elapsed() < LANDING_COOLDOWN * 6);
-    record_event(
-        app,
-        "vfx_render_landed",
-        serde_json::json!({
-            "project": slug,
-            "effect": landing.effect,
-            "file": landing.file_name,
-        }),
-    );
-    crate::broadcast::vfx_render_landed(app, slug, &landing.effect, &landing.file_name);
+    let app = app.clone();
+    let slug = slug.clone();
+    let path = changed.to_path_buf();
+    std::thread::spawn(move || {
+        if !wait_for_stable_size(&path) {
+            // Still growing past the cap (or vanished): a later write event
+            // after the cooldown expires retries against the finished file.
+            return;
+        }
+        record_event(
+            &app,
+            "vfx_render_landed",
+            serde_json::json!({
+                "project": slug,
+                "effect": landing.effect,
+                "file": landing.file_name,
+            }),
+        );
+        crate::broadcast::vfx_render_landed(&app, &slug, &landing.effect, &landing.file_name);
+    });
 }
 
 /// Size-stability debounce (volumes.rs lesson): a render is "landed" once its

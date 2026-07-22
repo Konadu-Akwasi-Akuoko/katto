@@ -35,7 +35,12 @@ pub async fn create_vfx_effect(
     let effect_dir = PathBuf::from(&project.root_path)
         .join("assets/vfx")
         .join(&slug);
-    std::fs::create_dir_all(&effect_dir)?;
+    {
+        let effect_dir = effect_dir.clone();
+        tauri::async_runtime::spawn_blocking(move || std::fs::create_dir_all(&effect_dir))
+            .await
+            .map_err(|e| Error::Io(e.to_string()))??;
+    }
 
     {
         let payload = serde_json::json!({ "project": project_slug, "effect": slug }).to_string();

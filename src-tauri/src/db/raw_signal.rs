@@ -26,11 +26,13 @@ pub fn unjudged_count(conn: &Connection) -> Result<u32> {
     Ok(n)
 }
 
-/// Housekeeping (PRD): judged rows older than `days` are deleted; unjudged rows never.
+/// Housekeeping (PRD): rows judged more than `days` ago are deleted; unjudged
+/// rows never. The retention clock starts at judging — a signal fetched long
+/// ago but only just judged keeps its full audit window.
 pub fn prune_judged_older_than_days(conn: &Connection, days: u32) -> Result<usize> {
     let n = conn.execute(
         "DELETE FROM raw_signal
-         WHERE judged_at IS NOT NULL AND fetched_at < datetime('now', '-' || ?1 || ' days')",
+         WHERE judged_at IS NOT NULL AND judged_at < datetime('now', '-' || ?1 || ' days')",
         [days],
     )?;
     Ok(n)
@@ -120,5 +122,21 @@ mod tests {
         let n = prune_judged_older_than_days(&conn, 90).unwrap();
         assert_eq!(n, 1);
         assert_eq!(unjudged_count(&conn).unwrap(), 1);
+    }
+
+    #[test]
+    fn prune_clock_starts_at_judging_not_fetching() {
+        let conn = test_db();
+        // Fetched long ago but only judged recently: the retention window is
+        // "90 days after judging", so this row must survive.
+        seed_row(
+            &conn,
+            "old-fetch-new-judge",
+            Some("2026-07-21 00:00:00"),
+            Some("kept"),
+            "2026-01-01 00:00:00",
+        );
+        let n = prune_judged_older_than_days(&conn, 90).unwrap();
+        assert_eq!(n, 0, "recently judged rows survive regardless of fetch age");
     }
 }

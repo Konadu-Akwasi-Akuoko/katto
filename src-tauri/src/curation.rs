@@ -58,7 +58,11 @@ async fn work(app: AppHandle, ctx: crate::jobs::JobContext) -> std::result::Resu
             .await
             .map_err(|err| err.to_string())?
             .filter(|p| !p.is_empty());
-        configured.is_some() || katto_engine::detect::detect_claude().is_some()
+        configured.is_some()
+            || tauri::async_runtime::spawn_blocking(katto_engine::detect::detect_claude)
+                .await
+                .map_err(|err| err.to_string())?
+                .is_some()
     };
     if !claude_present {
         record_event(
@@ -153,9 +157,18 @@ async fn work(app: AppHandle, ctx: crate::jobs::JobContext) -> std::result::Resu
         .call(move |conn| ideas::count_since(conn, &marker))
         .await
         .map_err(|err| err.to_string())?;
-    let _ = db
+    if let Err(error) = db
         .call(|conn| raw_signal::prune_judged_older_than_days(conn, PRUNE_AFTER_DAYS))
+        .await
+    {
+        // Housekeeping failure must not fail the judged run, but it surfaces.
+        record_event(
+            &app,
+            "curation_prune_failed",
+            serde_json::json!({ "error": error.to_string() }),
+        )
         .await;
+    }
 
     record_event(
         &app,
