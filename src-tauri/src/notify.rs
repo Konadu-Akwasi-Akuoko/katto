@@ -25,6 +25,8 @@ pub enum Route {
     Ingest,
     /// `katto://project/<slug>` — a project's detail view.
     Project(String),
+    /// `katto://dock` — the Claude session dock panel.
+    Dock,
 }
 
 impl Route {
@@ -35,6 +37,7 @@ impl Route {
             Route::Ideas => "ideas".to_string(),
             Route::Ingest => "ingest".to_string(),
             Route::Project(slug) => format!("project/{slug}"),
+            Route::Dock => "dock".to_string(),
         }
     }
 }
@@ -49,6 +52,9 @@ pub fn parse_deep_link(url: &str) -> Option<Route> {
     }
     if rest == "ingest" {
         return Some(Route::Ingest);
+    }
+    if rest == "dock" {
+        return Some(Route::Dock);
     }
     if let Some(slug) = rest.strip_prefix("project/")
         && !slug.is_empty()
@@ -83,6 +89,12 @@ mod tests {
     }
 
     #[test]
+    fn dock_route_round_trips() {
+        assert_eq!(parse_deep_link("katto://dock"), Some(Route::Dock));
+        assert_eq!(Route::Dock.as_wire(), "dock");
+    }
+
+    #[test]
     fn junk_is_none() {
         assert_eq!(parse_deep_link("https://example.com"), None);
         assert_eq!(parse_deep_link("katto://"), None);
@@ -110,6 +122,20 @@ mod tests {
 /// Returns [`crate::error::Error`] only if the degrade path fails to record its
 /// `events` row; the native banner path is best-effort (delivery/permission
 /// failures surface as `events` rows, never as an error here).
+/// Install the notification-click delegate (bundled builds only — dev builds
+/// cannot touch `UNUserNotificationCenter`). Clicking a katto notification
+/// then routes its `katto://` url through the same deep-link broadcast the OS
+/// open path uses.
+pub fn init(app: &AppHandle) {
+    if tauri::is_dev() {
+        return;
+    }
+    #[cfg(target_os = "macos")]
+    macos::install_delegate(app);
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
+
 pub fn notify(app: &AppHandle, title: &str, body: &str, url: &str) -> Result<()> {
     if tauri::is_dev() {
         return degrade_to_events(app, title, body, url);
@@ -145,25 +171,101 @@ mod macos {
     use tauri::{AppHandle, Manager};
 
     use block2::RcBlock;
-    use objc2::runtime::Bool;
-    use objc2_foundation::{NSError, NSString};
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyObject, Bool, ProtocolObject};
+    use objc2::{AllocAnyThread, DefinedClass, define_class, msg_send};
+    use objc2_foundation::{NSDictionary, NSError, NSObject, NSObjectProtocol, NSString};
     use objc2_user_notifications::{
         UNAuthorizationOptions, UNMutableNotificationContent, UNNotificationRequest,
-        UNUserNotificationCenter,
+        UNNotificationResponse, UNUserNotificationCenter, UNUserNotificationCenterDelegate,
     };
+
+    /// `userInfo` key carrying the notification's `katto://` destination.
+    const URL_KEY: &str = "katto_url";
+
+    struct DelegateIvars {
+        app: AppHandle,
+    }
+
+    define_class!(
+        // SAFETY:
+        // - NSObject has no subclassing requirements.
+        // - KattoNotificationDelegate does not implement Drop.
+        #[unsafe(super = NSObject)]
+        #[name = "KattoNotificationDelegate"]
+        #[ivars = DelegateIvars]
+        struct KattoNotificationDelegate;
+
+        // SAFETY: `NSObjectProtocol` has no safety requirements.
+        unsafe impl NSObjectProtocol for KattoNotificationDelegate {}
+
+        // SAFETY: `UNUserNotificationCenterDelegate` has no safety requirements.
+        unsafe impl UNUserNotificationCenterDelegate for KattoNotificationDelegate {
+            // SAFETY: The signature matches the protocol method.
+            #[unsafe(method(userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:))]
+            fn did_receive_response(
+                &self,
+                _center: &UNUserNotificationCenter,
+                response: &UNNotificationResponse,
+                completion_handler: &block2::DynBlock<dyn Fn()>,
+            ) {
+                self.route_click(response);
+                // The system requires the completion handler to run
+                // unconditionally, whatever the click carried.
+                completion_handler.call(());
+            }
+        }
+    );
+
+    impl KattoNotificationDelegate {
+        fn new(app: AppHandle) -> Retained<Self> {
+            let this = Self::alloc().set_ivars(DelegateIvars { app });
+            // SAFETY: plain NSObject init on a freshly allocated instance.
+            unsafe { msg_send![super(this), init] }
+        }
+
+        /// Read `katto_url` from the clicked notification and route it like
+        /// any other deep link. Callbacks arrive off the main thread — the
+        /// window/broadcast work hops via `run_on_main_thread`.
+        fn route_click(&self, response: &UNNotificationResponse) {
+            let user_info = response.notification().request().content().userInfo();
+            let key = NSString::from_str(URL_KEY);
+            let url = user_info
+                .objectForKey(key.as_ref() as &AnyObject)
+                .and_then(|value| value.downcast::<NSString>().ok())
+                .map(|value| value.to_string());
+            let Some(url) = url else {
+                return;
+            };
+            let Some(route) = crate::notify::parse_deep_link(&url) else {
+                return;
+            };
+            let app = self.ivars().app.clone();
+            let _ = app.clone().run_on_main_thread(move || {
+                let _ = crate::window::show_main(&app);
+                crate::broadcast::deep_link_opened(&app, &route.as_wire());
+            });
+        }
+    }
+
+    /// Install the click delegate once; the delegate property is weak, so the
+    /// instance is deliberately leaked to live for the process.
+    pub fn install_delegate(app: &AppHandle) {
+        let delegate = KattoNotificationDelegate::new(app.clone());
+        let center = UNUserNotificationCenter::currentNotificationCenter();
+        center.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+        std::mem::forget(delegate);
+    }
 
     /// Request authorization then post a deliver-now banner. Runs only in a
     /// bundled build (guarded by `tauri::is_dev()` at the call site) because
     /// `currentNotificationCenter()` throws on an unsigned binary. A denied
     /// authorization result is recorded once as an `events` row.
     ///
-    /// `_url` is accepted for parity with the public [`super::notify`] signature
-    /// but unused here: routing a *click* to a specific `katto://` destination
-    /// needs a `UNUserNotificationCenterDelegate` reading the request's
-    /// `userInfo`, which is deferred. Without it macOS focuses the app on click
-    /// (its default), and OS-delivered `katto://` opens still route via the
-    /// deep-link plugin's `on_open_url` path.
-    pub fn deliver(app: &AppHandle, title: &str, body: &str, _url: &str) {
+    /// The `katto://` destination rides in `userInfo[katto_url]`; the
+    /// installed [`KattoNotificationDelegate`] reads it on click and routes it
+    /// through the deep-link broadcast.
+    pub fn deliver(app: &AppHandle, title: &str, body: &str, url: &str) {
         let center = UNUserNotificationCenter::currentNotificationCenter();
 
         let auth_app = app.clone();
@@ -178,6 +280,15 @@ mod macos {
         let content = UNMutableNotificationContent::new();
         content.setTitle(&NSString::from_str(title));
         content.setBody(&NSString::from_str(body));
+        let key = NSString::from_str(URL_KEY);
+        let value = NSString::from_str(url);
+        let typed: Retained<NSDictionary<NSString, AnyObject>> =
+            NSDictionary::from_slices(&[&*key], &[value.as_ref() as &AnyObject]);
+        // SAFETY: NSDictionary is immutable and its key/object generics are
+        // erased at the ObjC level; NSString keys are valid AnyObject keys,
+        // and the values are plist-safe NSStrings.
+        let user_info: Retained<NSDictionary> = unsafe { Retained::cast_unchecked(typed) };
+        unsafe { content.setUserInfo(&user_info) };
 
         let identifier = NSString::from_str(&uuid::Uuid::new_v4().to_string());
         let request = UNNotificationRequest::requestWithIdentifier_content_trigger(

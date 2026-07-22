@@ -8,6 +8,7 @@ import { useUiStore } from "@/stores/ui";
 export type DeepLinkTarget =
 	| { kind: "planner" }
 	| { kind: "ingest" }
+	| { kind: "dock" }
 	| { kind: "project"; slug: string };
 
 /**
@@ -18,6 +19,7 @@ export type DeepLinkTarget =
 export function resolveDeepLink(route: string): DeepLinkTarget | null {
 	if (route === "ideas") return { kind: "planner" };
 	if (route === "ingest") return { kind: "ingest" };
+	if (route === "dock") return { kind: "dock" };
 	if (route.startsWith("project/")) {
 		const slug = route.slice("project/".length);
 		if (slug.length > 0 && !slug.includes("/")) {
@@ -44,6 +46,7 @@ export function useDeepLinkRouter(): void {
 			if (target.kind === "planner") setSurface("planner");
 			else if (target.kind === "ingest")
 				useIngestSheetStore.getState().setOpen(true);
+			else if (target.kind === "dock") useUiStore.getState().openDock();
 			else openProject(target.slug);
 		});
 		return () => {

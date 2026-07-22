@@ -102,16 +102,28 @@ pub fn update(
     title: Option<&str>,
     kind: Option<&str>,
     notes: Option<&str>,
+    kind_source: Option<&str>,
 ) -> Result<()> {
     conn.execute(
         "UPDATE ideas SET
            title = COALESCE(?2, title),
            kind  = COALESCE(?3, kind),
-           notes = COALESCE(?4, notes)
+           notes = COALESCE(?4, notes),
+           kind_source = COALESCE(?5, kind_source)
          WHERE id = ?1",
-        params![id, title, kind, notes],
+        params![id, title, kind, notes, kind_source],
     )?;
     Ok(())
+}
+
+/// Ideas first seen at/after `iso_utc` (curation-run delta counting).
+pub fn count_since(conn: &Connection, iso_utc: &str) -> Result<u32> {
+    let n = conn.query_row(
+        "SELECT COUNT(*) FROM ideas WHERE first_seen >= ?1",
+        [iso_utc],
+        |r| r.get::<_, u32>(0),
+    )?;
+    Ok(n)
 }
 
 /// Set an idea's status (e.g. `discarded`); the row is retained as an audit trail.
@@ -121,6 +133,54 @@ pub fn set_status(conn: &Connection, id: &str, status: &str) -> Result<()> {
         params![id, status],
     )?;
     Ok(())
+}
+
+/// What an import upsert did to the row.
+#[derive(Debug, PartialEq)]
+pub enum UpsertOutcome {
+    Inserted,
+    Updated,
+    Unchanged,
+}
+
+/// Idempotent import upsert by `id`: insert when absent, update every
+/// non-id column when different, report `Unchanged` when identical.
+pub fn upsert_imported(conn: &Connection, idea: &Idea) -> Result<UpsertOutcome> {
+    match get(conn, &idea.id)? {
+        None => {
+            create(conn, idea)?;
+            Ok(UpsertOutcome::Inserted)
+        }
+        Some(existing) if existing == *idea => Ok(UpsertOutcome::Unchanged),
+        Some(_) => {
+            conn.execute(
+                "UPDATE ideas SET type = ?2, kind = ?3, status = ?4, title = ?5,
+                   rationale = ?6, source = ?7, source_url = ?8, source_title = ?9,
+                   evidence_json = ?10, raw_signal_id = ?11, first_seen = ?12,
+                   notes = ?13, promoted_slug = ?14, kind_source = ?15, kind_why = ?16
+                 WHERE id = ?1",
+                params![
+                    idea.id,
+                    idea.r#type,
+                    idea.kind,
+                    idea.status,
+                    idea.title,
+                    idea.rationale,
+                    idea.source,
+                    idea.source_url,
+                    idea.source_title,
+                    idea.evidence_json,
+                    idea.raw_signal_id,
+                    idea.first_seen,
+                    idea.notes,
+                    idea.promoted_slug,
+                    idea.kind_source,
+                    idea.kind_why,
+                ],
+            )?;
+            Ok(UpsertOutcome::Updated)
+        }
+    }
 }
 
 /// Mark an idea promoted: `status='promoted'` and record the resulting project slug.
@@ -156,6 +216,14 @@ mod tests {
             kind_source: None,
             kind_why: None,
         }
+    }
+
+    #[test]
+    fn count_since_counts_first_seen_after_cutoff() {
+        let conn = test_db();
+        create(&conn, &sample("before", "2026-07-22 07:59:59")).unwrap();
+        create(&conn, &sample("after", "2026-07-22 08:00:01")).unwrap();
+        assert_eq!(count_since(&conn, "2026-07-22 08:00:00").unwrap(), 1);
     }
 
     #[test]
@@ -204,11 +272,12 @@ mod tests {
     fn update_patches_only_supplied_fields() {
         let conn = test_db();
         create(&conn, &sample("i1", "2026-07-09T00:00:00Z")).unwrap();
-        update(&conn, "i1", Some("Renamed"), None, Some("a note")).unwrap();
+        update(&conn, "i1", Some("Renamed"), None, Some("a note"), None).unwrap();
         let got = get(&conn, "i1").unwrap().unwrap();
         assert_eq!(got.title, "Renamed");
         assert_eq!(got.kind, "unset");
         assert_eq!(got.notes.as_deref(), Some("a note"));
+        assert_eq!(got.kind_source, None);
     }
 
     #[test]
@@ -231,5 +300,44 @@ mod tests {
             got.promoted_slug.as_deref(),
             Some("nvme-deep-dive-2026-07-09")
         );
+    }
+
+    #[test]
+    fn upsert_imported_inserts_when_absent() {
+        let conn = test_db();
+        let idea = sample("s1", "2026-07-09T00:00:00Z");
+        assert!(matches!(
+            upsert_imported(&conn, &idea).unwrap(),
+            UpsertOutcome::Inserted
+        ));
+        assert!(get(&conn, "s1").unwrap().is_some());
+    }
+
+    #[test]
+    fn upsert_imported_updates_changed_row() {
+        let conn = test_db();
+        let mut idea = sample("s1", "2026-07-09T00:00:00Z");
+        create(&conn, &idea).unwrap();
+        idea.title = "New title".into();
+        idea.status = "promoted".into();
+        idea.promoted_slug = Some("new-title-2026-07-22".into());
+        assert!(matches!(
+            upsert_imported(&conn, &idea).unwrap(),
+            UpsertOutcome::Updated
+        ));
+        let got = get(&conn, "s1").unwrap().unwrap();
+        assert_eq!(got.title, "New title");
+        assert_eq!(got.promoted_slug.as_deref(), Some("new-title-2026-07-22"));
+    }
+
+    #[test]
+    fn upsert_imported_reports_unchanged_when_identical() {
+        let conn = test_db();
+        let idea = sample("s1", "2026-07-09T00:00:00Z");
+        create(&conn, &idea).unwrap();
+        assert!(matches!(
+            upsert_imported(&conn, &idea).unwrap(),
+            UpsertOutcome::Unchanged
+        ));
     }
 }

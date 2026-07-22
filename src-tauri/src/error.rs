@@ -76,6 +76,45 @@ pub enum Error {
     #[error("{0}")]
     Relocate(String),
 
+    #[error("{0}")]
+    ClaudeMissing(String),
+
+    #[error("{0}")]
+    SessionNotFound(String),
+
+    #[error("{0}")]
+    SessionSpawn(String),
+
+    #[error("{0}")]
+    InvalidName(String),
+
+    #[error("{0}")]
+    NoSuchScheduledJob(String),
+
+    #[error("{0}")]
+    InvalidSchedule(String),
+
+    #[error("unzip failed: {0}")]
+    UnzipFailed(String),
+
+    #[error("browser unavailable: {0}")]
+    BrowserUnavailable(String),
+
+    #[error("no parked download with id {0}")]
+    DownloadMissing(String),
+
+    #[error("{0}")]
+    ResolveNotInstalled(String),
+
+    #[error("{0}")]
+    ResolveNotRunning(String),
+
+    #[error("{0}")]
+    ResolveFailed(String),
+
+    #[error("{0}")]
+    ImportFailed(String),
+
     /// The one structured variant: the relocation surface needs the fields
     /// (name a file, show its duration), not a flattened string. On the wire
     /// `message` becomes an object for this kind only; the IPC wrapper

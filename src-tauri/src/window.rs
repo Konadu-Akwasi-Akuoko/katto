@@ -4,7 +4,8 @@ use tauri::{AppHandle, ExitRequestApi, Manager, WebviewUrl, WebviewWindowBuilder
 
 use crate::tray;
 
-const MAIN: &str = "main";
+/// The main window's label; the browser host attaches child webviews to it.
+pub const MAIN: &str = "main";
 
 /// Lifecycle flag distinguishing "closed to the tray" from a genuine quit.
 ///

@@ -100,5 +100,5 @@ Update the table as phases land (link the PR that closed each).
 | 3 | SD Ingest | implemented 2026-07-22 (overnight run); pending owner hardware verification | — |
 | 4 | Cut Pipeline | implemented 2026-07-22 (overnight run); pending owner verification | — |
 | 5 | Cut Editor & Export | implemented 2026-07-22 (overnight run); pending owner verification | — |
-| 6 | Claude Dock & Automations | not started | — |
-| 7 | Browser, Thumbnails, Resolve, Import & Ship | not started | — |
+| 6 | Claude Dock & Automations | implemented 2026-07-22 (overnight run); pending owner verification | — |
+| 7 | Browser, Thumbnails, Resolve, Import & Ship | implemented 2026-07-22 (overnight run); pending owner verification | — |

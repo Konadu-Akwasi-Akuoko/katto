@@ -12,7 +12,9 @@ pub mod ideas;
 pub mod jobs;
 pub mod migrations;
 pub mod projects;
+pub mod raw_signal;
 pub mod schedule;
+pub mod scheduled_jobs;
 pub mod settings;
 
 pub use handle::DbHandle;

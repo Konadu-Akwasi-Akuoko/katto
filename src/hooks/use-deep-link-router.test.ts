@@ -10,6 +10,10 @@ describe("resolveDeepLink", () => {
 		expect(resolveDeepLink("ingest")).toEqual({ kind: "ingest" });
 	});
 
+	it("maps the dock route to the dock panel", () => {
+		expect(resolveDeepLink("dock")).toEqual({ kind: "dock" });
+	});
+
 	it("maps a project route to that project's detail", () => {
 		expect(resolveDeepLink("project/nvme-deep-dive-2026-07-09")).toEqual({
 			kind: "project",

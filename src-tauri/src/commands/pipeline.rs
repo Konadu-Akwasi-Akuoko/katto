@@ -206,17 +206,18 @@ pub async fn plan_rough_cut(
                 )
             })?;
 
-    let (claude_setting, planner_model): (Option<String>, String) = state
+    let (claude_setting, planner_model, dock_planning): (Option<String>, String, bool) = state
         .db
         .call(|conn| {
             Ok((
                 settings_repo::get(conn, "claude_path")?,
                 settings_repo::get(conn, "planner_model")?
                     .unwrap_or_else(|| katto_engine::planner::http::DEFAULT_MODEL.to_string()),
+                settings_repo::get(conn, "dock_planning")?.as_deref() != Some("false"),
             ))
         })
         .await?;
-    let planner_kind = resolve_planner(claude_setting, planner_model).await?;
+    let planner_kind = resolve_planner(claude_setting, planner_model, dock_planning).await?;
 
     let file_name = footage_canonical
         .file_name()
@@ -269,11 +270,13 @@ pub async fn plan_rough_cut(
         .await
 }
 
-/// Settings `claude_path` (or a fresh login-shell detect) -> subprocess; else a
-/// stored Anthropic key -> http; both missing -> typed error naming the fix.
+/// Settings `claude_path` (or a fresh login-shell detect) -> dock session
+/// (Phase 6 default; `dock_planning` off -> the old subprocess path); else a
+/// stored Anthropic key -> http; all missing -> typed error naming the fix.
 async fn resolve_planner(
     claude_setting: Option<String>,
     planner_model: String,
+    dock_planning: bool,
 ) -> Result<PlannerKind> {
     let detected = tauri::async_runtime::spawn_blocking(move || {
         claude_setting
@@ -284,6 +287,9 @@ async fn resolve_planner(
     .await
     .map_err(|e| Error::Io(e.to_string()))?;
     if let Some(claude_path) = detected {
+        if dock_planning {
+            return Ok(PlannerKind::Dock { claude_path });
+        }
         return Ok(PlannerKind::Subprocess { claude_path });
     }
     let anthropic =
@@ -336,20 +342,17 @@ pub async fn open_bundle(
                 .ok_or_else(|| Error::Onboarding("no studio root configured".to_string()))
         })
         .await?;
-    let (bundle, outside_source) = tauri::async_runtime::spawn_blocking(move || {
+    let bundle = tauri::async_runtime::spawn_blocking(move || {
         let canonical = validate_bundle_path(&studio_root, Path::new(&path))?;
-        let bundle = katto_engine::bundle::open(&canonical).map_err(Error::from)?;
-        // A relocated source may live outside the studio root, which the
-        // launch-time asset grant does not cover.
-        let source = &bundle.manifest.source_video_absolute_path;
-        let outside = !source.starts_with(&studio_root);
-        Ok::<_, Error>((bundle, outside))
+        katto_engine::bundle::open(&canonical).map_err(Error::from)
     })
     .await
     .map_err(|e| Error::Io(e.to_string()))??;
-    if outside_source {
-        crate::assets::allow_source_file(&app, &bundle.manifest.source_video_absolute_path);
-    }
+    // Asset-protocol grants are per-use (no blanket studio-root grant — see
+    // assets.rs): the bundle dir carries thumbs/ and cached_audio.wav, the
+    // source video may live anywhere.
+    crate::assets::allow_media_dir(&app, &bundle.root, true);
+    crate::assets::allow_source_file(&app, &bundle.manifest.source_video_absolute_path);
 
     let transcript = bundle
         .transcript

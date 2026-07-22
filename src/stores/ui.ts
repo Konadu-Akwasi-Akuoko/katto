@@ -1,6 +1,11 @@
 import { create } from "zustand";
 
-export type Surface = "dashboard" | "planner" | "projects" | "settings";
+export type Surface =
+	| "dashboard"
+	| "planner"
+	| "projects"
+	| "browser"
+	| "settings";
 
 /**
  * A palette command that needs a second step (a picker or a text prompt) opens
@@ -16,8 +21,18 @@ type UiState = {
 	paletteDialog: PaletteDialog | null;
 	/** Bundle the read-only cut editor is showing (null = project detail). */
 	editorBundlePath: string | null;
+	/** Claude dock slide-over visibility + which session tab is active. */
+	dockOpen: boolean;
+	activeSessionId: string | null;
+	/** Slug whose project card announces itself once after a promote. */
+	justPromotedSlug: string | null;
 	openCutEditor: (bundlePath: string) => void;
 	closeCutEditor: () => void;
+	toggleDock: () => void;
+	openDock: (sessionId?: string) => void;
+	closeDock: () => void;
+	setActiveSession: (id: string | null) => void;
+	setJustPromoted: (slug: string | null) => void;
 	setSurface: (surface: Surface) => void;
 	openProject: (slug: string) => void;
 	setSelectedProjectSlug: (slug: string | null) => void;
@@ -45,8 +60,20 @@ export const useUiStore = create<UiState>((set) => ({
 	paletteOpen: false,
 	paletteDialog: null,
 	editorBundlePath: null,
+	dockOpen: false,
+	activeSessionId: null,
+	justPromotedSlug: null,
 	openCutEditor: (bundlePath) => set({ editorBundlePath: bundlePath }),
 	closeCutEditor: () => set({ editorBundlePath: null }),
+	toggleDock: () => set((s) => ({ dockOpen: !s.dockOpen })),
+	openDock: (sessionId) =>
+		set((s) => ({
+			dockOpen: true,
+			activeSessionId: sessionId ?? s.activeSessionId,
+		})),
+	closeDock: () => set({ dockOpen: false }),
+	setActiveSession: (id) => set({ activeSessionId: id }),
+	setJustPromoted: (slug) => set({ justPromotedSlug: slug }),
 	setSurface: (surface) =>
 		set({ surface, selectedProjectSlug: null, editorBundlePath: null }),
 	openProject: (slug) =>

@@ -9,9 +9,10 @@ use crate::error::Result;
 use crate::keychain::{self, KeyService};
 use crate::state::AppState;
 
-/// Minutes of inactivity before a dock session is reaped (Phase 6); default when
-/// the setting is unset.
-const DEFAULT_IDLE_REAP_MINUTES: u32 = 10;
+/// Minutes of inactivity before a dock session is reaped (D15: default 5,
+/// Settings offers 2/5/10); used when the setting is unset. Shared with the
+/// pool's reaper tick.
+pub(crate) const DEFAULT_IDLE_REAP_MINUTES: u32 = 5;
 
 /// PRD-locked default model for the HTTP cut planner (single source: engine).
 const DEFAULT_PLANNER_MODEL: &str = katto_engine::planner::http::DEFAULT_MODEL;
@@ -36,6 +37,17 @@ pub struct Settings {
     pub claude_path: Option<String>,
     pub capture_shortcut: String,
     pub planner_model: String,
+    /// Nightly-curation discovery sweep toggle (`"true"`/`"false"` in the k/v
+    /// table; default off — it needs uv and a hyper-frames checkout).
+    pub discovery_enabled: bool,
+    pub hyperframes_path: Option<String>,
+    /// Cut planning through a visible dock session (default on; off = the
+    /// Phase-4 subprocess planner).
+    pub dock_planning: bool,
+    /// ISO timestamp of the last studio.db import apply (None = never run);
+    /// written by the import job, rendered as the wizard's "already
+    /// imported" note.
+    pub studio_import_last_run: Option<String>,
     pub keys_present: KeysPresent,
 }
 
@@ -48,6 +60,9 @@ pub struct SettingsPatch {
     pub onboarding_complete: Option<bool>,
     pub claude_path: Option<String>,
     pub planner_model: Option<String>,
+    pub discovery_enabled: Option<bool>,
+    pub hyperframes_path: Option<String>,
+    pub dock_planning: Option<bool>,
 }
 
 fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Settings> {
@@ -63,6 +78,10 @@ fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Setting
             .unwrap_or_else(|| crate::capture::DEFAULT_CAPTURE_SHORTCUT.to_string()),
         planner_model: repo::get(conn, "planner_model")?
             .unwrap_or_else(|| DEFAULT_PLANNER_MODEL.to_string()),
+        discovery_enabled: repo::get(conn, "discovery_enabled")?.as_deref() == Some("true"),
+        hyperframes_path: repo::get(conn, "hyperframes_path")?,
+        dock_planning: repo::get(conn, "dock_planning")?.as_deref() != Some("false"),
+        studio_import_last_run: repo::get(conn, "studio_import_last_run")?,
         keys_present,
     })
 }
@@ -90,6 +109,15 @@ fn apply_patch(conn: &Connection, patch: &SettingsPatch) -> Result<()> {
     if let Some(v) = &patch.planner_model {
         repo::set(conn, "planner_model", v)?;
     }
+    if let Some(v) = patch.discovery_enabled {
+        repo::set(conn, "discovery_enabled", if v { "true" } else { "false" })?;
+    }
+    if let Some(v) = &patch.hyperframes_path {
+        repo::set(conn, "hyperframes_path", v)?;
+    }
+    if let Some(v) = patch.dock_planning {
+        repo::set(conn, "dock_planning", if v { "true" } else { "false" })?;
+    }
     Ok(())
 }
 
@@ -116,13 +144,8 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn set_settings(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    patch: SettingsPatch,
-) -> Result<Settings> {
+pub async fn set_settings(state: State<'_, AppState>, patch: SettingsPatch) -> Result<Settings> {
     let keys = read_keys_present().await?;
-    let new_root = patch.studio_root.clone();
     let settings = state
         .db
         .call(move |conn| {
@@ -130,11 +153,6 @@ pub async fn set_settings(
             read_settings(conn, keys)
         })
         .await?;
-    // A new studio root must be reachable over the asset protocol immediately
-    // (footage playback in the review surface), not only after a relaunch.
-    if let Some(root) = new_root {
-        crate::assets::allow_studio_root(&app, &root);
-    }
     Ok(settings)
 }
 
@@ -210,6 +228,9 @@ mod tests {
             onboarding_complete: None,
             claude_path: None,
             planner_model: None,
+            discovery_enabled: None,
+            hyperframes_path: None,
+            dock_planning: None,
         }
     }
 

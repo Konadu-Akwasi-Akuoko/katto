@@ -1,19 +1,27 @@
 mod assets;
 pub mod broadcast;
+pub mod browser;
 pub mod capture;
 pub mod commands;
+pub mod curation;
 pub mod db;
 pub mod drive;
 pub mod error;
 pub mod ffprobe;
+pub mod import_studio;
 pub mod ingest;
 pub mod jobs;
 pub mod keychain;
 pub mod notify;
 pub mod paths;
 pub mod projects;
+pub mod resolve;
+pub mod scheduler;
+pub mod sessions;
 mod state;
+pub mod thumbnails;
 mod tray;
+pub mod vfx;
 mod volumes;
 mod window;
 
@@ -70,13 +78,48 @@ fn specta_builder() -> Builder<tauri::Wry> {
             commands::ideas::discard_idea,
             commands::ideas::promote_idea,
             commands::ideas::capture_submit,
+            commands::scheduler::get_scheduler_state,
+            commands::scheduler::run_scheduled_job_now,
+            commands::scheduler::set_scheduled_job,
+            commands::sessions::spawn_session,
+            commands::sessions::attach_session,
+            commands::sessions::detach_session,
+            commands::sessions::write_session,
+            commands::sessions::resize_session,
+            commands::sessions::close_session,
+            commands::sessions::list_sessions,
+            commands::sessions::set_dock_focus,
             commands::schedule::list_schedule,
             commands::schedule::upsert_schedule_entry,
             commands::schedule::delete_schedule_entry,
+            commands::vfx::create_vfx_effect,
+            commands::vfx::list_vfx_effects,
+            commands::browser::browser_open_tab,
+            commands::browser::browser_close_tab,
+            commands::browser::browser_select_tab,
+            commands::browser::browser_navigate,
+            commands::browser::browser_go,
+            commands::browser::browser_state,
+            commands::browser::browser_set_bounds,
+            commands::browser::browser_set_visible,
+            commands::browser::set_active_asset_project,
+            commands::browser::active_asset_project,
+            commands::browser::parked_downloads,
+            commands::browser::file_parked_download,
+            commands::browser::reveal_in_project,
+            commands::thumbnails::create_thumbnail,
+            commands::thumbnails::latest_thumbnail,
+            commands::thumbnails::list_latest_thumbnails,
+            commands::thumbnails::watch_thumbnails,
+            commands::thumbnails::unwatch_thumbnails,
+            commands::resolve::resolve_available,
+            commands::resolve::open_in_resolve,
+            commands::import::import_studio_db,
             commands::shell::set_autostart,
             commands::shell::get_autostart,
             commands::shell::sleep_to_tray,
             commands::shell::quit_app,
+            commands::shell::open_external_url,
         ])
         .events(collect_events![
             broadcast::EventsAppended,
@@ -88,6 +131,17 @@ fn specta_builder() -> Builder<tauri::Wry> {
             broadcast::DeepLinkOpened,
             broadcast::CardDetected,
             broadcast::CardRemoved,
+            broadcast::SessionsChanged,
+            broadcast::SessionStateChanged,
+            broadcast::VfxRenderLanded,
+            broadcast::BrowserStateChanged,
+            broadcast::DownloadNeedsProject,
+            broadcast::DownloadFiled,
+            broadcast::DownloadFallback,
+            broadcast::DownloadFailed,
+            broadcast::ThumbnailsChanged,
+            broadcast::StudioImportFinished,
+            broadcast::StudioImportFailed,
         ])
 }
 
@@ -102,10 +156,26 @@ fn bootstrap_state(app: &tauri::App) -> Result<state::AppState, Box<dyn std::err
         db.call(|conn| db::events::record(conn, "app_started", None, None)),
     )?;
     let jobs = jobs::JobRuntime::new(app.handle().clone(), db.clone());
+    let single_webview = tauri::async_runtime::block_on(
+        db.call(|conn| db::settings::get(conn, "browser_single_webview")),
+    )
+    .ok()
+    .flatten()
+    .is_some_and(|v| v == "true");
+    let browser: std::sync::Arc<dyn browser::host::BrowserTabHost> = if single_webview {
+        std::sync::Arc::new(browser::host::SingleWebviewHost::new())
+    } else {
+        std::sync::Arc::new(browser::host::MultiWebviewHost::new())
+    };
     Ok(state::AppState {
         db,
         jobs,
+        sessions: sessions::pool::SessionPool::new(),
         active_exports: std::sync::Arc::default(),
+        browser,
+        downloads: browser::host::DownloadRegistry::default(),
+        active_asset_project: std::sync::Mutex::new(None),
+        thumb_watch: std::sync::Mutex::new(None),
     })
 }
 
@@ -197,24 +267,35 @@ pub fn run() {
             keychain::init()?;
             app.manage(bootstrap_state(app)?);
             app.manage(state::IngestState::default());
-            assets::grant_at_launch(app);
             fail_interrupted_jobs(app);
             launch_reconcile(app);
 
             let handle = app.handle();
             tray::create(handle)?;
+            notify::init(handle);
             tray::refresh_planner_lines(handle);
             window::setup(handle)?;
             capture::setup(handle);
             setup_deep_links(handle);
             tauri::async_runtime::spawn(drive::watch(handle.clone()));
             volumes::start_watcher(handle.clone());
+            app.state::<state::AppState>()
+                .sessions
+                .start(handle.clone())?;
+            app.manage(scheduler::runtime::start(handle.clone()));
+            vfx::start_watch(handle.clone());
+            browser::host::sweep_staging(handle);
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { .. } => {
                 window::on_close_requested(window);
             }
+            tauri::WindowEvent::Destroyed if window.label() == window::MAIN => {
+                let state: tauri::State<state::AppState> = window.app_handle().state();
+                state.browser.on_window_destroyed();
+            }
+            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [
+tauri = { version = "~2.11", features = [
   "tray-icon",
   "image-png",
   "specta",
@@ -26,6 +26,8 @@ tauri = { version = "2", features = [
   "protocol-asset",
   # transparent capture window; pairs with `app.macOSPrivateApi` in tauri.conf.json
   "macos-private-api",
+  # Phase 7 in-app browser: Window::add_child / WebviewBuilder (multi-webview)
+  "unstable",
 ] }
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
@@ -44,7 +46,8 @@ thiserror = { workspace = true }
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 specta-typescript = "0.0.12"
-tokio = { workspace = true, features = ["time"] }
+# `process` drives the Resolve scripting bridge's python3 spawn with a timeout.
+tokio = { workspace = true, features = ["time", "process"] }
 uuid = { version = "1", features = ["v4"] }
 keyring-core = "1.0"
 fs4 = { version = "1.1", features = ["sync"] }
@@ -52,10 +55,22 @@ fs4 = { version = "1.1", features = ["sync"] }
 # in the graph transitively (via tauri → cookie), this only enables the feature.
 time = { version = "0.3", features = ["formatting"] }
 # Weekday name (`%A`) for the tray's next-shoot line; already in the graph
-# transitively (via serde_with), this makes it a direct dep. No `clock` feature —
-# the date is passed in, never read from the wall clock.
-chrono = { version = "0.4", default-features = false, features = ["std"] }
+# transitively (via serde_with), this makes it a direct dep. `clock` exists for
+# the Phase 6 scheduler's local-time due-math; everything else passes dates in.
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 notify = "8.2"
+# Phase 7 browser downloads: Envato Elements delivers deflate zips; bzip2/zstd/
+# lzma stay off. An exotic method surfaces as an unzip error in the sidecar.
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
+# Already in the graph via tauri; direct dep because browser code names its types.
+url = "2"
+# Runtime dep (not just dev): unzip extracts into a same-volume temp dir before
+# the atomic rename into assets/, and the Resolve bridge writes its script here.
+tempfile = "3.27.0"
+# Phase 6 dock sessions: PTY spawn/stream for claude sessions and the
+# localhost hooks endpoint (synchronous, own thread, mirrors the DB writer).
+portable-pty = "0.9"
+tiny_http = "0.12"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1.0", features = ["keychain"] }
@@ -69,7 +84,7 @@ block2 = "0.6"
 # NSWindow.collectionBehavior for the capture window's fullscreen-Space fix
 # (tauri#11488). 0.3.2 is already resolved transitively via tao; default
 # features off because they enable every AppKit header.
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSResponder"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSResponder", "NSWorkspace"] }
 # Move-to-Trash for project Delete. There is no Tauri 2 trash API (tauri#5680);
 # tauri-plugin-opener only reveals. Default DeleteMethod::Finder is kept so the
 # Trash item keeps its "Put Back" — "reversible" per the spec means restored to
@@ -80,4 +95,4 @@ trash = "5.2.6"
 [dev-dependencies]
 rstest = "0.26.1"
 tempfile = "3.27.0"
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "macros"] }

@@ -12,11 +12,14 @@ export function AppShell({
 	titlebar,
 	banner,
 	sidebar,
+	overlay,
 	children,
 }: {
 	titlebar: ReactNode;
 	banner?: ReactNode;
 	sidebar: ReactNode;
+	/** Absolutely-positioned layer over the content pane (the Claude dock). */
+	overlay?: ReactNode;
 	children: ReactNode;
 }) {
 	return (
@@ -25,12 +28,15 @@ export function AppShell({
 			<div>{banner}</div>
 			<div className="grid min-h-0 grid-cols-[auto_1fr]">
 				{sidebar}
-				<main
-					data-scroll-root
-					className="min-h-0 overflow-y-auto overscroll-contain"
-				>
-					{children}
-				</main>
+				<div className="relative grid min-h-0">
+					<main
+						data-scroll-root
+						className="min-h-0 overflow-y-auto overscroll-contain"
+					>
+						{children}
+					</main>
+					{overlay}
+				</div>
 			</div>
 		</div>
 	);

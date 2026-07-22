@@ -20,7 +20,8 @@ export function ActivityFeed() {
 			<CardContent>
 				{events === undefined || events.length === 0 ? (
 					<p className="text-fg-muted text-sm">
-						Quiet so far. Everything katto does lands here.
+						Quiet so far. Everything katto does lands here — ingests, cuts,
+						exports, downloads.
 					</p>
 				) : (
 					<ScrollArea className="max-h-[60dvh]">

@@ -116,7 +116,7 @@ export function PlanSteps({
 							{state === "active" && run.stageProgress > 0 && (
 								<div className="mb-1 ml-4 h-1 overflow-hidden rounded-full bg-hairline">
 									<div
-										className="h-full bg-ember transition-[width] duration-300"
+										className="h-full bg-ember transition-[width] duration-(--dur-slow) ease-(--ease)"
 										style={{ width: `${Math.round(run.stageProgress * 100)}%` }}
 									/>
 								</div>

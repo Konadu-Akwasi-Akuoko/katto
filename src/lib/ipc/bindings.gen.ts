@@ -207,6 +207,42 @@ export const commands = {
 	 *  the frontend once this resolves.
 	 */
 	captureSubmit: (title: string, note: string | null, kind: string | null) => typedError<null, Error>(__TAURI_INVOKE("capture_submit", { title, note, kind })),
+	/**  Every scheduled job row (Settings' nightly-curation section). */
+	getSchedulerState: () => typedError<ScheduledJob[], Error>(__TAURI_INVOKE("get_scheduler_state")),
+	/**  Run one scheduled job immediately (palette / Settings "Run now"). */
+	runScheduledJobNow: (name: string) => typedError<null, Error>(__TAURI_INVOKE("run_scheduled_job_now", { name })),
+	/**
+	 *  Update a job's daily time and enabled flag. The catch-up window is fixed
+	 *  (20 h) — the schedule spec is validated before it is written.
+	 */
+	setScheduledJob: (name: string, hour: number, minute: number, enabled: boolean) => typedError<null, Error>(__TAURI_INVOKE("set_scheduled_job", { name, hour, minute, enabled })),
+	/**  Spawn a new claude dock session; returns its session id. */
+	spawnSession: (task: NewSession) => typedError<string, Error>(__TAURI_INVOKE("spawn_session", { task })),
+	/**
+	 *  Attach the dock terminal to a session's output: scrollback replays first,
+	 *  then live 16 ms / 16 KB batches stream over the channel.
+	 */
+	attachSession: (id: string, onData: Channel<number[]>) => typedError<null, Error>(__TAURI_INVOKE("attach_session", { id, onData })),
+	/**
+	 *  Drop a session's output sink when its terminal unmounts (dock hidden or
+	 *  tab switched away): the backend stops streaming into a disposed terminal
+	 *  instead of waiting for a next attach. Idempotent; unknown ids are a no-op
+	 *  (the session may have closed while the panel was hidden).
+	 */
+	detachSession: (id: string) => typedError<null, Error>(__TAURI_INVOKE("detach_session", { id })),
+	/**  Forward xterm keystrokes (already encoded by xterm's onData) to the PTY. */
+	writeSession: (id: string, data: string) => typedError<null, Error>(__TAURI_INVOKE("write_session", { id, data })),
+	/**  Propagate an xterm resize to the PTY. */
+	resizeSession: (id: string, cols: number, rows: number) => typedError<null, Error>(__TAURI_INVOKE("resize_session", { id, cols, rows })),
+	/**  Close a session at the owner's request. */
+	closeSession: (id: string) => typedError<null, Error>(__TAURI_INVOKE("close_session", { id })),
+	/**  Every session the pool knows about, oldest-first. */
+	listSessions: () => typedError<SessionInfo[], Error>(__TAURI_INVOKE("list_sessions")),
+	/**
+	 *  The frontend reports dock visibility/focus: drives reap exemption and
+	 *  needs-input notification suppression.
+	 */
+	setDockFocus: (open: boolean, focusedSession: string | null) => typedError<null, Error>(__TAURI_INVOKE("set_dock_focus", { open, focusedSession })),
 	/**
 	 *  Schedule entries whose date falls within `[from, to]` (inclusive ISO bounds),
 	 *  ordered by date. Drives the calendar's month/week views.
@@ -221,6 +257,49 @@ export const commands = {
 	/**  Remove a schedule entry by id and broadcast `schedule-changed`. */
 	deleteScheduleEntry: (id: RowId) => typedError<null, Error>(__TAURI_INVOKE("delete_schedule_entry", { id })),
 	/**
+	 *  Scaffold `assets/vfx/<slug>/` for a project and open a dock session in it.
+	 *  Returns the session id so the frontend can focus the dock on it (the
+	 *  folder path is derivable from the slug).
+	 */
+	createVfxEffect: (projectSlug: string, name: string) => typedError<string, Error>(__TAURI_INVOKE("create_vfx_effect", { projectSlug, name })),
+	/**  Every effect folder of a project with its renders (folders are truth). */
+	listVfxEffects: (projectSlug: string) => typedError<VfxEffect[], Error>(__TAURI_INVOKE("list_vfx_effects", { projectSlug })),
+	browserOpenTab: (url: string | null) => typedError<number, Error>(__TAURI_INVOKE("browser_open_tab", { url })),
+	browserCloseTab: (tabId: number) => typedError<null, Error>(__TAURI_INVOKE("browser_close_tab", { tabId })),
+	browserSelectTab: (tabId: number) => typedError<null, Error>(__TAURI_INVOKE("browser_select_tab", { tabId })),
+	browserNavigate: (tabId: number, url: string) => typedError<null, Error>(__TAURI_INVOKE("browser_navigate", { tabId, url })),
+	browserGo: (tabId: number, delta: number) => typedError<null, Error>(__TAURI_INVOKE("browser_go", { tabId, delta })),
+	browserState: () => typedError<BrowserState, Error>(__TAURI_INVOKE("browser_state")),
+	browserSetBounds: (rect: BrowserRect) => typedError<null, Error>(__TAURI_INVOKE("browser_set_bounds", { rect })),
+	browserSetVisible: (visible: boolean) => typedError<null, Error>(__TAURI_INVOKE("browser_set_visible", { visible })),
+	setActiveAssetProject: (slug: string | null) => typedError<null, Error>(__TAURI_INVOKE("set_active_asset_project", { slug })),
+	/**
+	 *  The current filing target: the explicit override, else the most recently
+	 *  touched project.
+	 */
+	activeAssetProject: () => typedError<string | null, Error>(__TAURI_INVOKE("active_asset_project")),
+	parkedDownloads: () => typedError<ParkedDownload[], Error>(__TAURI_INVOKE("parked_downloads")),
+	fileParkedDownload: (downloadId: string, slug: string) => typedError<null, Error>(__TAURI_INVOKE("file_parked_download", { downloadId, slug })),
+	/**
+	 *  Reveal a filed asset in Finder. `rel_path` is project-relative; the join
+	 *  is containment-checked against the project folder so a crafted path can
+	 *  never escape the studio root.
+	 */
+	revealInProject: (slug: string, relPath: string) => typedError<null, Error>(__TAURI_INVOKE("reveal_in_project", { slug, relPath })),
+	createThumbnail: (slug: string, format: ThumbFormat) => typedError<CreateThumbnailResult, Error>(__TAURI_INVOKE("create_thumbnail", { slug, format })),
+	latestThumbnail: (slug: string) => typedError<{
+	slug: string,
+	path: string,
+	mtime_ms: number,
+} | null, Error>(__TAURI_INVOKE("latest_thumbnail", { slug })).then((v) => ((v.status === "ok" ? { ...v, data: v.data==null?v.data:v.data } : v) as typeof v)),
+	listLatestThumbnails: () => typedError<LatestThumb[], Error>(__TAURI_INVOKE("list_latest_thumbnails")).then((v) => ((v.status === "ok" ? { ...v, data: v.data.map(i=>i) } : v) as typeof v)),
+	watchThumbnails: (slug: string) => typedError<null, Error>(__TAURI_INVOKE("watch_thumbnails", { slug })),
+	unwatchThumbnails: () => typedError<null, Error>(__TAURI_INVOKE("unwatch_thumbnails")),
+	/**  Resolve is installed — gates the "Open in Resolve" button. */
+	resolveAvailable: () => typedError<boolean, Error>(__TAURI_INVOKE("resolve_available")),
+	openInResolve: (slug: string, timelineVersion: number | null) => typedError<null, Error>(__TAURI_INVOKE("open_in_resolve", { slug, timelineVersion })),
+	importStudioDb: (path: string, dryRun: boolean) => typedError<ImportOutcome, Error>(__TAURI_INVOKE("import_studio_db", { path, dryRun })),
+	/**
 	 *  Enable or disable launch-at-login, recording the change in the activity
 	 *  log. The AppleScript-backed call can block, so it runs off the runtime.
 	 */
@@ -234,19 +313,36 @@ export const commands = {
 	sleepToTray: () => typedError<null, Error>(__TAURI_INVOKE("sleep_to_tray")),
 	/**  Exit katto completely (same exit path as the tray's Quit item). */
 	quitApp: () => typedError<null, Error>(__TAURI_INVOKE("quit_app")),
+	/**
+	 *  Open a web link in the default browser. Only http(s) URLs are accepted —
+	 *  idea `source_url` values come from external tools, and anything else
+	 *  (`file:`, `javascript:`, custom schemes) must not reach the OS opener.
+	 */
+	openExternalUrl: (url: string) => typedError<null, Error>(__TAURI_INVOKE("open_external_url", { url })),
 };
 
 /** Events */
 export const events = {
+	browserStateChanged: makeEvent<BrowserStateChanged>("browser-state-changed"),
 	cardDetected: makeEvent<CardDetected>("card-detected"),
 	cardRemoved: makeEvent<CardRemoved>("card-removed"),
 	deepLinkOpened: makeEvent<DeepLinkOpened>("deep-link-opened"),
+	downloadFailed: makeEvent<DownloadFailed>("download-failed"),
+	downloadFallback: makeEvent<DownloadFallback>("download-fallback"),
+	downloadFiled: makeEvent<DownloadFiled>("download-filed"),
+	downloadNeedsProject: makeEvent<DownloadNeedsProject>("download-needs-project"),
 	driveStatusChanged: makeEvent<DriveStatusChanged>("drive-status-changed"),
 	eventsAppended: makeEvent<EventsAppended>("events-appended"),
 	ideasChanged: makeEvent<IdeasChanged>("ideas-changed"),
 	jobsChanged: makeEvent<JobsChanged>("jobs-changed"),
 	projectsChanged: makeEvent<ProjectsChanged>("projects-changed"),
 	scheduleChanged: makeEvent<ScheduleChanged>("schedule-changed"),
+	sessionStateChanged: makeEvent<SessionStateChanged>("session-state-changed"),
+	sessionsChanged: makeEvent<SessionsChanged>("sessions-changed"),
+	studioImportFailed: makeEvent<StudioImportFailed>("studio-import-failed"),
+	studioImportFinished: makeEvent<StudioImportFinished>("studio-import-finished"),
+	thumbnailsChanged: makeEvent<ThumbnailsChanged>("thumbnails-changed"),
+	vfxRenderLanded: makeEvent<VfxRenderLanded>("vfx-render-landed"),
 };
 
 /* Types */
@@ -259,6 +355,30 @@ export type BoundaryAdjustment = {
 	/**  The new edge time (any timebase; rescaled to the plan's on merge). */
 	new_time: Rational,
 };
+
+/**
+ *  CSS-pixel rect of the browser surface's content area, reported by React.
+ *  Child webview bounds are relative to the window content area the main
+ *  webview also fills, so these map 1:1 to logical position/size.
+ */
+export type BrowserRect = {
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+};
+
+/**  Wire snapshot of the whole browser for the frontend. */
+export type BrowserState = {
+	tabs: TabSnapshot[],
+	active: number | null,
+};
+
+/**
+ *  Broadcast after any tab/history mutation in the browser host; the browser
+ *  surface refetches its `browser_state` query.
+ */
+export type BrowserStateChanged = null;
 
 /**
  *  The full bundle payload for the editor — one `open_bundle` call, JSON only
@@ -350,11 +470,20 @@ export type ClipGroupDto = {
 	clips: ClipDto[],
 };
 
+/**  Why a session ended. `IdleReaped` drives the "closed after idle" tab note. */
+export type CloseReason = "exited" | "idle_reaped" | "user_closed";
+
 /**
  *  The model's confidence in a discretionary suggestion — the locked enum;
  *  never rendered as a number.
  */
 export type Confidence = "low" | "medium" | "high";
+
+/**  What `create_thumbnail` produced and how it opened. */
+export type CreateThumbnailResult = {
+	psd_path: string,
+	opened: ThumbOpen,
+};
 
 /**  One hard cut span with its reason and transcript excerpt. */
 export type Cut = {
@@ -426,6 +555,40 @@ export type Discretionary = {
 
 /**  Why a span is a discretionary (human-decided) cut candidate. */
 export type DiscretionaryReason = "filler" | "stutter" | "false_start" | "self_correction" | "long_silence" | "audio_event" | "other";
+
+/**  Broadcast when a download errored before filing. */
+export type DownloadFailed = {
+	filename: string,
+};
+
+/**
+ *  Broadcast when interception had a blind spot (blob:/data: downloads) and
+ *  the file went to ~/Downloads; the frontend shows a persistent notice.
+ */
+export type DownloadFallback = {
+	filename: string,
+};
+
+/**
+ *  Broadcast when a download filed into a project's assets folder.
+ *  `download_id` matches the id `DownloadNeedsProject` carried, so the
+ *  frontend's filing row resolves instead of sticking at "filing…".
+ */
+export type DownloadFiled = {
+	download_id: string,
+	project: string,
+	filename: string,
+	dest_rel: string,
+};
+
+/**
+ *  Broadcast when a download finished but no project could be resolved to
+ *  file into; the browser surface opens the pick-a-project sheet.
+ */
+export type DownloadNeedsProject = {
+	download_id: string,
+	filename: string,
+};
 
 /**
  *  Snapshot of the studio root's reachability. `path: None` means no root is
@@ -513,7 +676,7 @@ export type Edits_Serialize = {
  *  the command layer) types the same shape for the generated bindings, keeping
  *  Rust and TypeScript in lockstep without a hand-written impl.
  */
-export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | 
+export type Error = { kind: "db"; message: string } | { kind: "migration"; message: string } | { kind: "job_transition"; message: string } | { kind: "io"; message: string } | { kind: "db_closed"; message: string } | { kind: "keychain"; message: string } | { kind: "onboarding"; message: string } | { kind: "autostart"; message: string } | { kind: "studio_root_unmounted"; message: string } | { kind: "invalid_manifest"; message: string } | { kind: "promote_failed"; message: string } | { kind: "shortcut_invalid"; message: string } | { kind: "shortcut_unavailable"; message: string } | { kind: "engine"; message: string } | { kind: "no_such_project"; message: string } | { kind: "insufficient_space"; message: string } | { kind: "eject_failed"; message: string } | { kind: "ingest_invalid"; message: string } | { kind: "missing_key"; message: string } | { kind: "no_planner"; message: string } | { kind: "pipeline_busy"; message: string } | { kind: "relocate"; message: string } | { kind: "claude_missing"; message: string } | { kind: "session_not_found"; message: string } | { kind: "session_spawn"; message: string } | { kind: "invalid_name"; message: string } | { kind: "no_such_scheduled_job"; message: string } | { kind: "invalid_schedule"; message: string } | { kind: "unzip_failed"; message: string } | { kind: "browser_unavailable"; message: string } | { kind: "download_missing"; message: string } | { kind: "resolve_not_installed"; message: string } | { kind: "resolve_not_running"; message: string } | { kind: "resolve_failed"; message: string } | { kind: "import_failed"; message: string } | 
 /**
  *  The one structured variant: the relocation surface needs the fields
  *  (name a file, show its duration), not a flattened string. On the wire
@@ -636,11 +799,16 @@ export type IdeaCreate = {
 	notes: string | null,
 };
 
-/**  A partial edit of an idea; a `None` field leaves that column unchanged. */
+/**
+ *  A partial edit of an idea; a `None` field leaves that column unchanged.
+ *  `kind_source` flips to `"human"` when the owner changes or confirms a kind
+ *  the curation run suggested.
+ */
 export type IdeaPatch = {
 	title: string | null,
 	kind: string | null,
 	notes: string | null,
+	kind_source: string | null,
 };
 
 /**
@@ -648,6 +816,17 @@ export type IdeaPatch = {
  *  promote); the backlog surface refetches its list.
  */
 export type IdeasChanged = null;
+
+/**  What the command returned: the dry-run preview, or the spawned job. */
+export type ImportOutcome = { kind: "preview"; report: ImportReport } | { kind: "started"; job_id: string };
+
+/**  The dry-run/apply report the wizard renders. */
+export type ImportReport = {
+	imported: number,
+	updated: number,
+	skipped: number,
+	warnings: string[],
+};
 
 /**
  *  A folder whose `project.json` failed to read or validate. Surfaced in the
@@ -698,6 +877,17 @@ export type KeysPresent = {
 	anthropic: boolean,
 };
 
+/**
+ *  A project's newest exported thumbnail PNG. `mtime_ms` exists so the
+ *  frontend can cache-bust `convertFileSrc` — a re-export over the same
+ *  filename must show the new bytes.
+ */
+export type LatestThumb = {
+	slug: string,
+	path: string,
+	mtime_ms: number,
+};
+
 /**  A human-added cut span. */
 export type ManualCut = {
 	/**  Start time. */
@@ -709,11 +899,28 @@ export type ManualCut = {
 };
 
 /**
+ *  The IPC face of [`SessionTask`]: permission fields are not exposed —
+ *  UI-spawned sessions always run with default permissions; only internal
+ *  callers (curation, cut planning) set them.
+ */
+export type NewSession = {
+	label: string,
+	cwd: string,
+	initial_prompt: string | null,
+};
+
+/**
  *  Which NLE the export opens in. Stored in settings as its snake_case
  *  string; only Final Cut has an open action this phase — Resolve/Premiere
  *  export identically and fall back to reveal.
  */
 export type NleTarget = "final_cut" | "resolve" | "premiere";
+
+/**  A parked download, listed for the pick-a-project sheet. */
+export type ParkedDownload = {
+	id: string,
+	filename: string,
+};
 
 /**  Streamed pipeline progress for the footage-card step indicator. */
 export type PipelineEvent = 
@@ -852,6 +1059,45 @@ export type ScheduleEntry = {
 	note: string | null,
 };
 
+/**  A named recurring job with anacron-style catch-up semantics (Phase 6). */
+export type ScheduledJob = {
+	name: string,
+	spec: string,
+	last_success_at: string | null,
+	enabled: boolean,
+};
+
+/**  One session as the frontend sees it (tab strip + dock icon states). */
+export type SessionInfo = {
+	id: string,
+	label: string,
+	state: SessionState,
+	cwd: string,
+	started_at: string,
+	idle_since_secs: number | null,
+};
+
+/**
+ *  Observable session lifecycle. `Failed`/`Closed` are terminal — a session is
+ *  never resurrected; its tab and scrollback stay visible (D18).
+ */
+export type SessionState = { kind: "running" } | { kind: "needs_input" } | { kind: "idle" } | { kind: "failed"; error: string } | { kind: "closed"; reason: CloseReason };
+
+/**
+ *  Broadcast on every session state transition; drives tab dots, the sidebar
+ *  icon states, and the transient done-check.
+ */
+export type SessionStateChanged = {
+	id: string,
+	state: SessionState,
+};
+
+/**
+ *  Broadcast when the session set changes (spawn/close/reap); the dock
+ *  refetches its session list.
+ */
+export type SessionsChanged = null;
+
 /**
  *  The app's settings as the frontend sees them, assembled from the key/value
  *  `settings` table. `default_nle` stays `None` until the first export seeds it
@@ -866,6 +1112,23 @@ export type Settings = {
 	claude_path: string | null,
 	capture_shortcut: string,
 	planner_model: string,
+	/**
+	 *  Nightly-curation discovery sweep toggle (`"true"`/`"false"` in the k/v
+	 *  table; default off — it needs uv and a hyper-frames checkout).
+	 */
+	discovery_enabled: boolean,
+	hyperframes_path: string | null,
+	/**
+	 *  Cut planning through a visible dock session (default on; off = the
+	 *  Phase-4 subprocess planner).
+	 */
+	dock_planning: boolean,
+	/**
+	 *  ISO timestamp of the last studio.db import apply (None = never run);
+	 *  written by the import job, rendered as the wizard's "already
+	 *  imported" note.
+	 */
+	studio_import_last_run: string | null,
 	keys_present: KeysPresent,
 };
 
@@ -877,10 +1140,55 @@ export type SettingsPatch = {
 	onboarding_complete: boolean | null,
 	claude_path: string | null,
 	planner_model: string | null,
+	discovery_enabled: boolean | null,
+	hyperframes_path: string | null,
+	dock_planning: boolean | null,
 };
 
 /**  One pipeline step, as the step indicator renders it. */
 export type StageName = "extracting_audio" | "transcribing" | "detecting_cuts";
+
+/**
+ *  Broadcast when the studio.db import job fails, so the wizard leaves
+ *  "Importing…" and shows the error inline instead of wedging forever.
+ */
+export type StudioImportFailed = {
+	message: string,
+};
+
+/**
+ *  Broadcast when the studio.db import job finishes, carrying the final
+ *  report the wizard renders.
+ */
+export type StudioImportFinished = {
+	report: ImportReport,
+};
+
+/**
+ *  Wire snapshot of one tab; `title` is URL-derived (the webview API exposes
+ *  no page title).
+ */
+export type TabSnapshot = {
+	id: number,
+	title: string,
+	url: string,
+	can_go_back: boolean,
+	can_go_forward: boolean,
+};
+
+/**  Which bundled template a scaffold copies. */
+export type ThumbFormat = "landscape" | "portrait";
+
+/**  How the scaffold opened for the owner. */
+export type ThumbOpen = "photoshop" | "revealed_in_finder";
+
+/**
+ *  Broadcast when a PNG lands in (or changes inside) the watched project's
+ *  `thumbnails/` folder; the detail card and project grid refetch.
+ */
+export type ThumbnailsChanged = {
+	slug: string,
+};
 
 /**  A parsed Scribe v2 transcription response. */
 export type Transcript = {
@@ -894,6 +1202,23 @@ export type Transcript = {
 	text: string,
 	/**  Word-level tokens: words, spacing, and audio events. */
 	words: WordEntry[],
+};
+
+/**  One effect folder and its renders, newest-first by mtime. */
+export type VfxEffect = {
+	effect: string,
+	path: string,
+	renders: string[],
+};
+
+/**
+ *  Broadcast when a render lands in a project's `assets/vfx/<effect>/`; the
+ *  project detail's effects card refetches.
+ */
+export type VfxRenderLanded = {
+	slug: string,
+	effect: string,
+	file: string,
 };
 
 /**  One transcript token, discriminated by Scribe's `type` field. */

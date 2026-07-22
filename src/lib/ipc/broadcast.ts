@@ -1,10 +1,31 @@
 import type {
 	DeepLinkOpened,
+	DownloadFailed,
+	DownloadFallback,
+	DownloadFiled,
+	DownloadNeedsProject,
 	DriveStatusChanged,
+	SessionStateChanged,
+	StudioImportFailed,
+	StudioImportFinished,
+	ThumbnailsChanged,
+	VfxRenderLanded,
 } from "@/lib/ipc/bindings.gen";
 import { events } from "@/lib/ipc/bindings.gen";
 
-export type { DeepLinkOpened, DriveStatusChanged };
+export type {
+	DeepLinkOpened,
+	DownloadFailed,
+	DownloadFallback,
+	DownloadFiled,
+	DownloadNeedsProject,
+	DriveStatusChanged,
+	SessionStateChanged,
+	StudioImportFailed,
+	StudioImportFinished,
+	ThumbnailsChanged,
+	VfxRenderLanded,
+};
 
 type Unlisten = () => void;
 
@@ -41,6 +62,68 @@ export const onCardDetected = (callback: () => void): Promise<Unlisten> =>
 /** The detected card's volume was unmounted — drop the stale offer. */
 export const onCardRemoved = (callback: () => void): Promise<Unlisten> =>
 	events.cardRemoved.listen(() => callback());
+
+/** The session set changed (spawn/close/reap) — refetch the dock list. */
+export const onSessionsChanged = (callback: () => void): Promise<Unlisten> =>
+	events.sessionsChanged.listen(() => callback());
+
+/** A session's state changed — refetch the dock list (dots, icon, notes). */
+export const onSessionStateChanged = (
+	callback: (payload: SessionStateChanged) => void,
+): Promise<Unlisten> =>
+	events.sessionStateChanged.listen((event) => callback(event.payload));
+
+/** A render landed in a project's assets/vfx — refetch its effects. */
+export const onVfxRenderLanded = (
+	callback: (payload: VfxRenderLanded) => void,
+): Promise<Unlisten> =>
+	events.vfxRenderLanded.listen((event) => callback(event.payload));
+
+/** A tab or its history changed — refetch the browser state query. */
+export const onBrowserStateChanged = (
+	callback: () => void,
+): Promise<Unlisten> => events.browserStateChanged.listen(() => callback());
+
+/** A download finished with no project to file into — open the picker sheet. */
+export const onDownloadNeedsProject = (
+	callback: (payload: DownloadNeedsProject) => void,
+): Promise<Unlisten> =>
+	events.downloadNeedsProject.listen((event) => callback(event.payload));
+
+/** A download filed into a project's assets folder. */
+export const onDownloadFiled = (
+	callback: (payload: DownloadFiled) => void,
+): Promise<Unlisten> =>
+	events.downloadFiled.listen((event) => callback(event.payload));
+
+/** Interception blind spot — the file went to ~/Downloads instead. */
+export const onDownloadFallback = (
+	callback: (payload: DownloadFallback) => void,
+): Promise<Unlisten> =>
+	events.downloadFallback.listen((event) => callback(event.payload));
+
+/** A download errored before filing. */
+export const onDownloadFailed = (
+	callback: (payload: DownloadFailed) => void,
+): Promise<Unlisten> =>
+	events.downloadFailed.listen((event) => callback(event.payload));
+
+/** The studio.db import job finished — carries the final report. */
+export const onStudioImportFailed = (
+	callback: (payload: StudioImportFailed) => void,
+): Promise<Unlisten> =>
+	events.studioImportFailed.listen((event) => callback(event.payload));
+
+export const onStudioImportFinished = (
+	callback: (payload: StudioImportFinished) => void,
+): Promise<Unlisten> =>
+	events.studioImportFinished.listen((event) => callback(event.payload));
+
+/** A PNG landed in the watched project's thumbnails/ — refetch previews. */
+export const onThumbnailsChanged = (
+	callback: (payload: ThumbnailsChanged) => void,
+): Promise<Unlisten> =>
+	events.thumbnailsChanged.listen((event) => callback(event.payload));
 
 /** A `katto://` deep link was opened — navigate to its route. */
 export const onDeepLinkOpened = (

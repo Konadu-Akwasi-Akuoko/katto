@@ -2,15 +2,10 @@ import {
 	CalendarBlankIcon,
 	FilmSlateIcon,
 	GearSixIcon,
+	GlobeSimpleIcon,
 	HouseIcon,
-	RobotIcon,
 } from "@phosphor-icons/react";
-import type { ComponentType } from "react";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@/components/ui/tooltip";
+import type { ComponentType, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { Surface } from "@/stores/ui";
 import { useUiStore } from "@/stores/ui";
@@ -21,6 +16,7 @@ const studioNav: { surface: Surface; icon: IconType; label: string }[] = [
 	{ surface: "dashboard", icon: HouseIcon, label: "Dashboard" },
 	{ surface: "planner", icon: CalendarBlankIcon, label: "Planner" },
 	{ surface: "projects", icon: FilmSlateIcon, label: "Projects" },
+	{ surface: "browser", icon: GlobeSimpleIcon, label: "Browser" },
 ];
 
 function NavButton({
@@ -52,7 +48,7 @@ function NavButton({
 	);
 }
 
-export function Sidebar() {
+export function Sidebar({ dock }: { dock?: ReactNode }) {
 	return (
 		<aside className="flex w-56 flex-col gap-5 overflow-y-auto border-r p-3 select-none">
 			<div className="flex flex-col gap-0.5">
@@ -63,15 +59,7 @@ export function Sidebar() {
 			</div>
 			<div className="mt-auto flex flex-col gap-0.5">
 				<NavButton surface="settings" icon={GearSixIcon} label="Settings" />
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<div className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-fg-faint opacity-45">
-							<RobotIcon className="size-4" />
-							Claude dock
-						</div>
-					</TooltipTrigger>
-					<TooltipContent>Arrives in Phase 6</TooltipContent>
-				</Tooltip>
+				{dock}
 			</div>
 		</aside>
 	);

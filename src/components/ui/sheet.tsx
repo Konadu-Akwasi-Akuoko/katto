@@ -58,7 +58,7 @@ function SheetContent({
 				data-slot="sheet-content"
 				className={cn(
 					"grain fixed inset-y-0 right-0 z-50 flex h-full w-[380px] max-w-[calc(100%-2rem)] flex-col gap-4 border-l bg-surface p-5 shadow-[var(--shadow)] outline-none",
-					"data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right data-[state=closed]:duration-200 data-[state=open]:duration-300",
+					"data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right data-[state=closed]:duration-(--dur) data-[state=open]:duration-(--dur-slow) ease-(--ease)",
 					className,
 				)}
 				{...props}

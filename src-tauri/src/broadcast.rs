@@ -50,6 +50,86 @@ pub struct CardDetected;
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
 pub struct CardRemoved;
 
+/// Broadcast when the session set changes (spawn/close/reap); the dock
+/// refetches its session list.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct SessionsChanged;
+
+/// Broadcast on every session state transition; drives tab dots, the sidebar
+/// icon states, and the transient done-check.
+#[derive(Debug, Clone, Serialize, specta::Type, Event)]
+pub struct SessionStateChanged {
+    pub id: String,
+    pub state: crate::sessions::state::SessionState,
+}
+
+/// Broadcast when a render lands in a project's `assets/vfx/<effect>/`; the
+/// project detail's effects card refetches.
+#[derive(Debug, Clone, Serialize, specta::Type, Event)]
+pub struct VfxRenderLanded {
+    pub slug: String,
+    pub effect: String,
+    pub file: String,
+}
+
+/// Broadcast after any tab/history mutation in the browser host; the browser
+/// surface refetches its `browser_state` query.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct BrowserStateChanged;
+
+/// Broadcast when a download finished but no project could be resolved to
+/// file into; the browser surface opens the pick-a-project sheet.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct DownloadNeedsProject {
+    pub download_id: String,
+    pub filename: String,
+}
+
+/// Broadcast when a download filed into a project's assets folder.
+/// `download_id` matches the id `DownloadNeedsProject` carried, so the
+/// frontend's filing row resolves instead of sticking at "filing…".
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct DownloadFiled {
+    pub download_id: String,
+    pub project: String,
+    pub filename: String,
+    pub dest_rel: String,
+}
+
+/// Broadcast when interception had a blind spot (blob:/data: downloads) and
+/// the file went to ~/Downloads; the frontend shows a persistent notice.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct DownloadFallback {
+    pub filename: String,
+}
+
+/// Broadcast when a download errored before filing.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct DownloadFailed {
+    pub filename: String,
+}
+
+/// Broadcast when the studio.db import job finishes, carrying the final
+/// report the wizard renders.
+#[derive(Debug, Clone, Serialize, specta::Type, Event)]
+pub struct StudioImportFinished {
+    pub report: crate::import_studio::ImportReport,
+}
+
+/// Broadcast when the studio.db import job fails, so the wizard leaves
+/// "Importing…" and shows the error inline instead of wedging forever.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct StudioImportFailed {
+    pub message: String,
+}
+
+/// Broadcast when a PNG lands in (or changes inside) the watched project's
+/// `thumbnails/` folder; the detail card and project grid refetch.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Event)]
+pub struct ThumbnailsChanged {
+    pub slug: String,
+}
+
 /// Best-effort: a missed signal only delays a refetch until the next query
 /// mount, so emit failures (e.g. no live WebView) are ignored.
 pub fn events_appended(app: &AppHandle) {
@@ -88,6 +168,102 @@ pub fn card_detected(app: &AppHandle) {
 /// Best-effort, same contract as [`events_appended`].
 pub fn card_removed(app: &AppHandle) {
     let _ = CardRemoved.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn sessions_changed(app: &AppHandle) {
+    let _ = SessionsChanged.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn session_state_changed(
+    app: &AppHandle,
+    id: &str,
+    state: &crate::sessions::state::SessionState,
+) {
+    let _ = SessionStateChanged {
+        id: id.to_string(),
+        state: state.clone(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn vfx_render_landed(app: &AppHandle, slug: &str, effect: &str, file: &str) {
+    let _ = VfxRenderLanded {
+        slug: slug.to_string(),
+        effect: effect.to_string(),
+        file: file.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn studio_import_finished(app: &AppHandle, report: crate::import_studio::ImportReport) {
+    let _ = StudioImportFinished { report }.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn studio_import_failed(app: &AppHandle, message: &str) {
+    let _ = StudioImportFailed {
+        message: message.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn thumbnails_changed(app: &AppHandle, slug: &str) {
+    let _ = ThumbnailsChanged {
+        slug: slug.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn browser_state_changed(app: &AppHandle) {
+    let _ = BrowserStateChanged.emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn download_needs_project(app: &AppHandle, download_id: &str, filename: &str) {
+    let _ = DownloadNeedsProject {
+        download_id: download_id.to_string(),
+        filename: filename.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn download_filed(
+    app: &AppHandle,
+    download_id: &str,
+    project: &str,
+    filename: &str,
+    dest_rel: &str,
+) {
+    let _ = DownloadFiled {
+        download_id: download_id.to_string(),
+        project: project.to_string(),
+        filename: filename.to_string(),
+        dest_rel: dest_rel.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn download_fallback(app: &AppHandle, filename: &str) {
+    let _ = DownloadFallback {
+        filename: filename.to_string(),
+    }
+    .emit(app);
+}
+
+/// Best-effort, same contract as [`events_appended`].
+pub fn download_failed(app: &AppHandle, filename: &str) {
+    let _ = DownloadFailed {
+        filename: filename.to_string(),
+    }
+    .emit(app);
 }
 
 /// Best-effort, same contract as [`events_appended`]. Carries the parsed

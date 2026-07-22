@@ -1,4 +1,4 @@
-import { ArrowUpRightIcon, TrashIcon } from "@phosphor-icons/react";
+import { ArrowUpRightIcon, CheckIcon, TrashIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,10 @@ import {
 	updateIdea,
 } from "@/lib/ipc/ideas";
 import { projectsKeys } from "@/lib/ipc/projects";
+import { openExternalUrl } from "@/lib/ipc/shell";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/stores/ui";
+import { type Lean, parseLean, sourceDomain } from "./model/lean";
 
 const KINDS = [
 	{ value: "unset", label: "Unsorted" },
@@ -55,7 +58,8 @@ export function BacklogView() {
 	});
 	const promote = useMutation({
 		mutationFn: (id: string) => promoteIdea(id),
-		onSuccess: () => {
+		onSuccess: (result) => {
+			useUiStore.getState().setJustPromoted(result.slug);
 			void invalidateIdeas();
 			void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
 		},
@@ -73,8 +77,8 @@ export function BacklogView() {
 
 			{ideas === undefined ? null : ideas.length === 0 ? (
 				<p className="text-sm text-fg-muted">
-					Nothing in the backlog. Capture an idea above, and it lands here to
-					triage.
+					No ideas banked. Capture one from anywhere — the hotkey works in any
+					app.
 				</p>
 			) : (
 				<ul className="flex flex-col gap-2">
@@ -146,10 +150,14 @@ function IdeaRow({
 	onPromote: () => void;
 	onDiscard: () => void;
 }) {
+	const lean = parseLean(idea.evidence_json);
+	const domain = sourceDomain(idea.source_url);
+	const openSource = useMutation({ mutationFn: openExternalUrl });
+
 	return (
 		<li
 			className={cn(
-				"grain flex items-center gap-3 rounded-lg border bg-surface px-3 py-2 transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none",
+				"grain flex items-center gap-3 rounded-lg border bg-surface px-3 py-2 transition-[opacity,transform] duration-(--dur) ease-(--ease) motion-reduce:transition-none",
 				leaving === "promote" && "-translate-y-2 opacity-0",
 				leaving === "discard" && "translate-x-2 opacity-0",
 			)}
@@ -160,20 +168,54 @@ function IdeaRow({
 					label="Idea title"
 					placeholder="Untitled idea"
 					className="text-sm text-fg"
-					onCommit={(title) => onPatch({ title, kind: null, notes: null })}
+					onCommit={(title) =>
+						onPatch({ title, kind: null, notes: null, kind_source: null })
+					}
 				/>
+				{idea.rationale !== null && (
+					<p className="truncate text-xs text-fg-muted" title={idea.rationale}>
+						{idea.rationale}
+					</p>
+				)}
 				<EditableText
 					value={idea.notes ?? ""}
 					label="Idea note"
 					placeholder="Add a note"
 					className="text-xs text-fg-muted"
-					onCommit={(notes) => onPatch({ title: null, kind: null, notes })}
+					onCommit={(notes) =>
+						onPatch({ title: null, kind: null, notes, kind_source: null })
+					}
 				/>
+				{domain !== null && idea.source_url !== null && (
+					<button
+						type="button"
+						className="self-start truncate text-xs text-fg-faint hover:text-fg-muted"
+						title={idea.source_url}
+						onClick={() => {
+							if (idea.source_url !== null) openSource.mutate(idea.source_url);
+						}}
+					>
+						{domain}
+					</button>
+				)}
 			</div>
+
+			{lean !== null && <LeanNotch lean={lean} />}
+
+			{idea.kind_source === "ai" && (
+				<span
+					className="shrink-0 text-xs text-fg-faint"
+					title={idea.kind_why ?? undefined}
+				>
+					suggested
+				</span>
+			)}
 
 			<Select
 				value={idea.kind}
-				onValueChange={(kind) => onPatch({ title: null, kind, notes: null })}
+				onValueChange={(kind) =>
+					onPatch({ title: null, kind, notes: null, kind_source: "human" })
+				}
 			>
 				<SelectTrigger size="sm" aria-label="Kind" className="w-32 shrink-0">
 					<SelectValue />
@@ -186,6 +228,25 @@ function IdeaRow({
 					))}
 				</SelectContent>
 			</Select>
+
+			{idea.kind_source === "ai" && (
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label="Keep suggested kind"
+					title={idea.kind_why ?? "Keep the suggested kind"}
+					onClick={() =>
+						onPatch({
+							title: null,
+							kind: idea.kind,
+							notes: null,
+							kind_source: "human",
+						})
+					}
+				>
+					<CheckIcon />
+				</Button>
+			)}
 
 			<Button
 				variant="secondary"
@@ -206,6 +267,34 @@ function IdeaRow({
 				<TrashIcon />
 			</Button>
 		</li>
+	);
+}
+
+const LEAN_STEPS: Record<Lean, number> = { hold: 1, lean: 2, strong: 3 };
+
+/**
+ * The curation run's lean as a three-bar notch — deliberately not a number
+ * (no scoring anywhere: AI suggests, the human decides).
+ */
+function LeanNotch({ lean }: { lean: Lean }) {
+	const filled = LEAN_STEPS[lean];
+	return (
+		<div
+			role="img"
+			aria-label={`lean: ${lean}`}
+			title={`lean: ${lean}`}
+			className="flex shrink-0 flex-col-reverse gap-0.5"
+		>
+			{[0, 1, 2].map((step) => (
+				<span
+					key={step}
+					className={cn(
+						"h-1 w-3 rounded-full",
+						step < filled ? "bg-ember" : "bg-border",
+					)}
+				/>
+			))}
+		</div>
 	);
 }
 

@@ -19,6 +19,7 @@ import {
 	renderMp4,
 	revealTimeline,
 } from "@/lib/ipc/editor";
+import { openInResolve, resolveAvailable } from "@/lib/ipc/resolve";
 import { IpcError } from "@/lib/ipc/result";
 
 const NLE_LABELS: Array<{ value: NleTarget; label: string }> = [
@@ -61,6 +62,20 @@ export function ExportDialog({
 	// in whichever view is up; never silently discarded.
 	const [postError, setPostError] = useState<string | null>(null);
 	const [done, setDone] = useState<ExportResult | null>(null);
+	// One-shot probe, not app state: Resolve being installed can't change
+	// while the dialog is up, and a failed probe just hides the button.
+	const [resolveInstalled, setResolveInstalled] = useState(false);
+	useEffect(() => {
+		let cancelled = false;
+		resolveAvailable()
+			.then((available) => {
+				if (!cancelled) setResolveInstalled(available);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -230,6 +245,21 @@ export function ExportDialog({
 									}
 								>
 									Open in Final Cut
+								</Button>
+							) : target === "resolve" &&
+								resolveInstalled &&
+								preview !== null ? (
+								<Button
+									onClick={() =>
+										void openInResolve(preview.slug, preview.version).catch(
+											(e) =>
+												setPostError(
+													e instanceof Error ? e.message : String(e),
+												),
+										)
+									}
+								>
+									Open in Resolve
 								</Button>
 							) : (
 								<Button
