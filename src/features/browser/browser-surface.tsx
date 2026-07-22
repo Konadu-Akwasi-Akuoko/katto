@@ -93,11 +93,20 @@ export function BrowserSurface() {
 		};
 	}, []);
 
-	// first mount with no tabs: open the Envato default
+	// first mount with no tabs: open the Envato default. Once tabs have
+	// existed this mount, an empty list means the user closed them — land on
+	// the empty state, never silently respawn.
 	const tabs = state.data?.tabs;
+	const sawTabs = useRef(false);
+	if ((tabs?.length ?? 0) > 0) sawTabs.current = true;
 	const openMutate = openTab.mutate;
 	useEffect(() => {
-		if (tabs !== undefined && tabs.length === 0 && !openedDefault.current) {
+		if (
+			tabs !== undefined &&
+			tabs.length === 0 &&
+			!sawTabs.current &&
+			!openedDefault.current
+		) {
 			openedDefault.current = true;
 			openMutate(undefined);
 		}
@@ -128,7 +137,8 @@ export function BrowserSurface() {
 
 	const active =
 		state.data?.tabs.find((t) => t.id === state.data?.active) ?? null;
-	const showEmpty = (tabs?.length ?? 0) === 0 && openFailed;
+	const showEmpty =
+		tabs !== undefined && tabs.length === 0 && (openFailed || sawTabs.current);
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">

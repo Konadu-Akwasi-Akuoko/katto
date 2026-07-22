@@ -109,6 +109,24 @@ describe("BrowserSurface", () => {
 		await waitFor(() => expect(lastVisibleCall(calls)).toBe(true));
 	});
 
+	it("closing the last tab lands on the empty state, not a respawn", async () => {
+		const state = makeState();
+		state.tabs = [state.tabs[0] as (typeof state.tabs)[number]];
+		state.active = 1;
+		const { calls } = renderSurface(state);
+		const closeButtons = await screen.findAllByRole("button", {
+			name: /close/i,
+		});
+		calls.mockClear();
+		state.tabs = [];
+		state.active = null;
+		fireEvent.click(closeButtons[0] as HTMLElement);
+		expect(
+			await screen.findByText("The web, filed.", undefined, { timeout: 3000 }),
+		).toBeInTheDocument();
+		expect(calls).not.toHaveBeenCalledWith("browser_open_tab", { url: null });
+	});
+
 	it("hides the webview while the needs-project sheet is open", async () => {
 		const { calls } = renderSurface(makeState());
 		await screen.findAllByRole("tab");

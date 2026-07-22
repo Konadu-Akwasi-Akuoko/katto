@@ -22,13 +22,16 @@ export function Toolbar({
 }) {
 	const [draft, setDraft] = useState("");
 	const [hint, setHint] = useState(false);
+	const [editing, setEditing] = useState(false);
 	const currentUrl = activeTab?.url ?? "";
 
-	// follow navigation while the user isn't mid-edit
+	// follow navigation while the user isn't mid-edit: a page's client-side
+	// redirect must not clobber a draft being typed
 	useEffect(() => {
+		if (editing) return;
 		setDraft(currentUrl === "" ? "" : displayUrl(currentUrl));
 		setHint(false);
-	}, [currentUrl]);
+	}, [currentUrl, editing]);
 
 	function submit() {
 		const normalized = normalizeAddress(draft);
@@ -71,6 +74,8 @@ export function Toolbar({
 				onKeyDown={(e) => {
 					if (e.key === "Enter") submit();
 				}}
+				onFocus={() => setEditing(true)}
+				onBlur={() => setEditing(false)}
 				spellCheck={false}
 				autoCorrect="off"
 				autoCapitalize="off"
