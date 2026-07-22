@@ -4,6 +4,7 @@ pub mod commands;
 pub mod db;
 pub mod drive;
 pub mod error;
+pub mod ffprobe;
 pub mod jobs;
 pub mod keychain;
 pub mod notify;
