@@ -956,6 +956,11 @@ export type Settings = {
 	 */
 	discovery_enabled: boolean,
 	hyperframes_path: string | null,
+	/**
+	 *  Cut planning through a visible dock session (default on; off = the
+	 *  Phase-4 subprocess planner).
+	 */
+	dock_planning: boolean,
 	keys_present: KeysPresent,
 };
 
@@ -969,6 +974,7 @@ export type SettingsPatch = {
 	planner_model: string | null,
 	discovery_enabled: boolean | null,
 	hyperframes_path: string | null,
+	dock_planning: boolean | null,
 };
 
 /**  One pipeline step, as the step indicator renders it. */

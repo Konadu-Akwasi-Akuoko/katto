@@ -28,6 +28,7 @@ const EMPTY_PATCH: SettingsPatch = {
 	planner_model: null,
 	discovery_enabled: null,
 	hyperframes_path: null,
+	dock_planning: null,
 };
 
 /** Patch only the named fields (null in the wire patch means "leave as is"). */

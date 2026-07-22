@@ -5,6 +5,7 @@
 pub mod buffer;
 pub mod hooks_endpoint;
 pub mod launch;
+pub mod planfile;
 pub mod pool;
 pub mod pty;
 pub mod reap;

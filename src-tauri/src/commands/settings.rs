@@ -41,6 +41,9 @@ pub struct Settings {
     /// table; default off — it needs uv and a hyper-frames checkout).
     pub discovery_enabled: bool,
     pub hyperframes_path: Option<String>,
+    /// Cut planning through a visible dock session (default on; off = the
+    /// Phase-4 subprocess planner).
+    pub dock_planning: bool,
     pub keys_present: KeysPresent,
 }
 
@@ -55,6 +58,7 @@ pub struct SettingsPatch {
     pub planner_model: Option<String>,
     pub discovery_enabled: Option<bool>,
     pub hyperframes_path: Option<String>,
+    pub dock_planning: Option<bool>,
 }
 
 fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Settings> {
@@ -72,6 +76,7 @@ fn read_settings(conn: &Connection, keys_present: KeysPresent) -> Result<Setting
             .unwrap_or_else(|| DEFAULT_PLANNER_MODEL.to_string()),
         discovery_enabled: repo::get(conn, "discovery_enabled")?.as_deref() == Some("true"),
         hyperframes_path: repo::get(conn, "hyperframes_path")?,
+        dock_planning: repo::get(conn, "dock_planning")?.as_deref() != Some("false"),
         keys_present,
     })
 }
@@ -104,6 +109,9 @@ fn apply_patch(conn: &Connection, patch: &SettingsPatch) -> Result<()> {
     }
     if let Some(v) = &patch.hyperframes_path {
         repo::set(conn, "hyperframes_path", v)?;
+    }
+    if let Some(v) = patch.dock_planning {
+        repo::set(conn, "dock_planning", if v { "true" } else { "false" })?;
     }
     Ok(())
 }
@@ -227,6 +235,7 @@ mod tests {
             planner_model: None,
             discovery_enabled: None,
             hyperframes_path: None,
+            dock_planning: None,
         }
     }
 

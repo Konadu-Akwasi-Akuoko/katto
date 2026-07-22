@@ -11,5 +11,6 @@ export const settingsFixture: Settings = {
 	planner_model: "claude-sonnet-4-6",
 	discovery_enabled: false,
 	hyperframes_path: null,
+	dock_planning: true,
 	keys_present: { elevenlabs: false, anthropic: false },
 };
