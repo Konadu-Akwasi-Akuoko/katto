@@ -8,6 +8,8 @@ import { Titlebar } from "@/components/layout/titlebar";
 import { Toaster } from "@/components/ui/sonner";
 import { CaptureForm } from "@/features/capture/capture-form";
 import { Dashboard } from "@/features/dashboard/dashboard";
+import { DockIcon } from "@/features/dock/dock-icon";
+import { DockPanel } from "@/features/dock/dock-panel";
 import { EditorView } from "@/features/editor/editor-view";
 import { ImportSheet } from "@/features/ingest/components/import-sheet";
 import { OnboardingGate } from "@/features/onboarding/gate";
@@ -69,7 +71,8 @@ function MainApp() {
 				<AppShell
 					titlebar={<Titlebar dark={dark} onToggleTheme={toggleTheme} />}
 					banner={<DriveBanner />}
-					sidebar={<Sidebar />}
+					sidebar={<Sidebar dock={<DockIcon />} />}
+					overlay={<DockPanel />}
 				>
 					{surface === "dashboard" && <Dashboard />}
 					{surface === "planner" && <PlannerPage />}

@@ -1,10 +1,11 @@
 import type {
 	DeepLinkOpened,
 	DriveStatusChanged,
+	SessionStateChanged,
 } from "@/lib/ipc/bindings.gen";
 import { events } from "@/lib/ipc/bindings.gen";
 
-export type { DeepLinkOpened, DriveStatusChanged };
+export type { DeepLinkOpened, DriveStatusChanged, SessionStateChanged };
 
 type Unlisten = () => void;
 
@@ -41,6 +42,16 @@ export const onCardDetected = (callback: () => void): Promise<Unlisten> =>
 /** The detected card's volume was unmounted — drop the stale offer. */
 export const onCardRemoved = (callback: () => void): Promise<Unlisten> =>
 	events.cardRemoved.listen(() => callback());
+
+/** The session set changed (spawn/close/reap) — refetch the dock list. */
+export const onSessionsChanged = (callback: () => void): Promise<Unlisten> =>
+	events.sessionsChanged.listen(() => callback());
+
+/** A session's state changed — refetch the dock list (dots, icon, notes). */
+export const onSessionStateChanged = (
+	callback: (payload: SessionStateChanged) => void,
+): Promise<Unlisten> =>
+	events.sessionStateChanged.listen((event) => callback(event.payload));
 
 /** A `katto://` deep link was opened — navigate to its route. */
 export const onDeepLinkOpened = (
