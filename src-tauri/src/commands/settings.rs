@@ -13,8 +13,8 @@ use crate::state::AppState;
 /// the setting is unset.
 const DEFAULT_IDLE_REAP_MINUTES: u32 = 10;
 
-/// PRD-locked default model for the HTTP cut planner when the setting is unset.
-const DEFAULT_PLANNER_MODEL: &str = "claude-sonnet-4-6";
+/// PRD-locked default model for the HTTP cut planner (single source: engine).
+const DEFAULT_PLANNER_MODEL: &str = katto_engine::planner::http::DEFAULT_MODEL;
 
 /// Which credentials exist in the keychain — presence only, never values.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -116,15 +116,26 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn set_settings(state: State<'_, AppState>, patch: SettingsPatch) -> Result<Settings> {
+pub async fn set_settings(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    patch: SettingsPatch,
+) -> Result<Settings> {
     let keys = read_keys_present().await?;
-    state
+    let new_root = patch.studio_root.clone();
+    let settings = state
         .db
         .call(move |conn| {
             apply_patch(conn, &patch)?;
             read_settings(conn, keys)
         })
-        .await
+        .await?;
+    // A new studio root must be reachable over the asset protocol immediately
+    // (footage playback in the review surface), not only after a relaunch.
+    if let Some(root) = new_root {
+        crate::allow_studio_root_assets(&app, &root);
+    }
+    Ok(settings)
 }
 
 /// Rebind the quick-capture hotkey: validate, swap the OS registration, then

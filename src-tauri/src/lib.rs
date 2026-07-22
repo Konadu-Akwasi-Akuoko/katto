@@ -95,6 +95,25 @@ fn bootstrap_state(app: &tauri::App) -> Result<state::AppState, Box<dyn std::err
     Ok(state::AppState { db, jobs })
 }
 
+/// Allow the studio root through the asset protocol so footage plays in the
+/// review surface (`convertFileSrc` — media bytes never cross invoke). The
+/// root is user-chosen, so the conf scope stays empty and this runtime grant
+/// is the whole policy. Called at launch and whenever settings change the root.
+pub fn allow_studio_root_assets(app: &tauri::AppHandle, root: &str) {
+    if let Err(err) = app.asset_protocol_scope().allow_directory(root, true) {
+        eprintln!("asset scope grant failed for {root}: {err}");
+    }
+}
+
+fn grant_asset_scope_at_launch(app: &tauri::App) {
+    let db = app.state::<state::AppState>().db.clone();
+    let root =
+        tauri::async_runtime::block_on(db.call(|conn| db::settings::get(conn, "studio_root")));
+    if let Ok(Some(root)) = root {
+        allow_studio_root_assets(app.handle(), &root);
+    }
+}
+
 /// Reconcile the projects index against the studio-root folders at launch —
 /// folders are truth. Skips (and records a `reconcile_skipped_unmounted` event)
 /// when the root is configured but unreachable; does nothing pre-onboarding. Any
@@ -162,6 +181,7 @@ pub fn run() {
             keychain::init()?;
             app.manage(bootstrap_state(app)?);
             app.manage(state::IngestState::default());
+            grant_asset_scope_at_launch(app);
             launch_reconcile(app);
 
             let handle = app.handle();

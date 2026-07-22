@@ -22,6 +22,8 @@ tauri = { version = "2", features = [
   "tray-icon",
   "image-png",
   "specta",
+  # review-surface video playback via convertFileSrc (assetProtocol in tauri.conf.json)
+  "protocol-asset",
   # transparent capture window; pairs with `app.macOSPrivateApi` in tauri.conf.json
   "macos-private-api",
 ] }
