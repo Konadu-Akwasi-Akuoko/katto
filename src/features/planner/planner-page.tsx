@@ -9,18 +9,18 @@ export function PlannerPage() {
 			<h1 className="font-serif text-2xl">Planner</h1>
 			<Tabs defaultValue="backlog" className="flex min-h-0 flex-1 flex-col">
 				<TabsList variant="line" className="self-start">
+					<TabsTrigger value="backlog">Backlog</TabsTrigger>
 					<TabsTrigger value="board">Board</TabsTrigger>
 					<TabsTrigger value="calendar">Calendar</TabsTrigger>
-					<TabsTrigger value="backlog">Backlog</TabsTrigger>
 				</TabsList>
+				<TabsContent value="backlog" className="min-h-0">
+					<BacklogView />
+				</TabsContent>
 				<TabsContent value="board" className="min-h-0">
 					<BoardView />
 				</TabsContent>
 				<TabsContent value="calendar" className="min-h-0">
 					<CalendarView />
-				</TabsContent>
-				<TabsContent value="backlog" className="min-h-0">
-					<BacklogView />
 				</TabsContent>
 			</Tabs>
 		</div>
