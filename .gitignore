@@ -37,6 +37,9 @@ dist-ssr
 # committed rules; not source of truth
 /.claude/agent-memory
 
+# superpowers plugin working directory: per-machine runtime state, not source
+/.superpowers
+
 # output
 output
 
