@@ -17,17 +17,11 @@ import {
 	promoteIdea,
 } from "@/lib/ipc/ideas";
 import { projectsKeys } from "@/lib/ipc/projects";
+import { KIND_LABELS } from "@/lib/kind";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
 import { IdeaDetailModal } from "./idea-detail-modal";
 import { type Lean, parseLean, sourceDomain } from "./model/lean";
-
-const KIND_LABELS: Record<string, string> = {
-	unset: "Unsorted",
-	long: "Long-form",
-	short: "Short",
-	series: "Series",
-};
 
 export function BacklogView() {
 	const queryClient = useQueryClient();

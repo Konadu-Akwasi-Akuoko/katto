@@ -20,6 +20,7 @@ const detail: ProjectDetail = {
 		publish_date: null,
 		created_at: "2026-07-01",
 		last_touched_at: "2026-07-05",
+		kind: "unset",
 	},
 	manifest_error: null,
 	freshness: [
@@ -36,6 +37,11 @@ const invalidManifestDetail: ProjectDetail = {
 const prioritisedDetail: ProjectDetail = {
 	...detail,
 	project: { ...detail.project, priority: "high" },
+};
+
+const kindedDetail: ProjectDetail = {
+	...detail,
+	project: { ...detail.project, kind: "long" },
 };
 
 const MOUNTED: DriveStatus = {
@@ -55,6 +61,7 @@ function renderPeek(
 		if (cmd === "get_drive_status") return drive;
 		if (cmd === "reveal_project_folder") return null;
 		if (cmd === "set_project_priority") return null;
+		if (cmd === "set_project_kind") return null;
 		throw new Error(`unexpected command: ${cmd}`);
 	});
 	const client = new QueryClient({
@@ -165,6 +172,37 @@ describe("ProjectPeek", () => {
 				"set_project_priority",
 				{ slug: "nvme-deep-dive-2026-07-01", priority: "high" },
 			],
+		]);
+	});
+
+	it("shows the project kind", async () => {
+		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
+		renderPeek(kindedDetail);
+		expect(await screen.findByText("Long-form")).toBeInTheDocument();
+	});
+
+	it("shows Unsorted for an unset kind", async () => {
+		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
+		renderPeek();
+		await screen.findByText("NVMe deep dive");
+		expect(screen.getByText("Unsorted")).toBeInTheDocument();
+	});
+
+	it("sets the kind from the peek", async () => {
+		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
+		const { calls } = renderPeek();
+		await screen.findByText("NVMe deep dive");
+
+		await userEvent.click(screen.getByRole("combobox", { name: /kind/i }));
+		await userEvent.click(
+			await screen.findByRole("option", { name: "Long-form" }),
+		);
+
+		const writes = calls.mock.calls.filter(
+			([cmd]) => cmd === "set_project_kind",
+		);
+		expect(writes).toEqual([
+			["set_project_kind", { slug: "nvme-deep-dive-2026-07-01", kind: "long" }],
 		]);
 	});
 

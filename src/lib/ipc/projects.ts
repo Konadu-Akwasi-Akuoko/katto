@@ -4,6 +4,7 @@ import type {
 	PriorityLevel,
 	Project,
 	ProjectDetail,
+	ProjectKind,
 	ReconcileReport,
 } from "@/lib/ipc/bindings.gen";
 import { commands } from "@/lib/ipc/bindings.gen";
@@ -15,6 +16,7 @@ export type {
 	PriorityLevel,
 	Project,
 	ProjectDetail,
+	ProjectKind,
 	ReconcileReport,
 };
 
@@ -54,6 +56,12 @@ export const setProjectPriority = (
 	slug: string,
 	priority: PriorityLevel,
 ): Promise<null> => unwrap(commands.setProjectPriority(slug, priority));
+
+/** Set a project's kind (writes manifest + row). */
+export const setProjectKind = (
+	slug: string,
+	kind: ProjectKind,
+): Promise<null> => unwrap(commands.setProjectKind(slug, kind));
 
 /** Set or clear a project's shoot and publish dates (writes manifest + row). */
 export const setProjectDates = (

@@ -37,13 +37,20 @@ import {
 	priorityAppearance,
 } from "@/lib/appearance";
 import { formatShortDate } from "@/lib/date";
-import type { PriorityLevel, Project, ProjectDetail } from "@/lib/ipc/projects";
+import type {
+	PriorityLevel,
+	Project,
+	ProjectDetail,
+	ProjectKind,
+} from "@/lib/ipc/projects";
 import {
 	getProject,
 	projectsKeys,
 	revealProjectFolder,
+	setProjectKind,
 	setProjectPriority,
 } from "@/lib/ipc/projects";
+import { isProjectKind, KIND_LABELS, PROJECT_KINDS } from "@/lib/kind";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
 
@@ -120,6 +127,7 @@ function PeekBody({
 				<div className="flex flex-wrap items-center gap-1.5">
 					<StatusChip status={project.status} />
 					<PriorityControl project={project} />
+					<KindControl project={project} />
 				</div>
 			</SheetHeader>
 
@@ -248,6 +256,56 @@ function PriorityControl({ project }: { project: Project }) {
 							)}
 						/>
 						{PRIORITY_MENU_LABELS[level]}
+					</SelectItem>
+				))}
+			</SelectContent>
+		</Select>
+	);
+}
+
+/**
+ * The peek's kind axis, readable and writable. Mirrors `PriorityControl`: the
+ * chip is the whole trigger face, and the write sits behind the engine's
+ * require_mounted guard, so it disables on an unmounted root. Kind always reads a
+ * value — an unset project shows "Unsorted" rather than an empty control.
+ */
+function KindControl({ project }: { project: Project }) {
+	const queryClient = useQueryClient();
+	const mounted = useDriveStatus().data?.mounted ?? false;
+
+	const setKind = useMutation({
+		mutationFn: (kind: ProjectKind) => setProjectKind(project.slug, kind),
+		onSettled: () => {
+			void queryClient.invalidateQueries({ queryKey: projectsKeys.all });
+			void queryClient.invalidateQueries({
+				queryKey: projectsKeys.detail(project.slug),
+			});
+		},
+	});
+
+	return (
+		<Select
+			value={isProjectKind(project.kind) ? project.kind : undefined}
+			disabled={!mounted}
+			onValueChange={(value) => {
+				if (isProjectKind(value)) setKind.mutate(value);
+			}}
+		>
+			<SelectTrigger
+				size="sm"
+				aria-label="Kind"
+				className="border-none px-0 shadow-none"
+			>
+				<SelectValue>
+					<span className="inline-flex h-[19px] items-center rounded-md bg-surface-2 px-2 text-xs text-fg-muted">
+						{KIND_LABELS[project.kind] ?? project.kind}
+					</span>
+				</SelectValue>
+			</SelectTrigger>
+			<SelectContent>
+				{PROJECT_KINDS.map((kind) => (
+					<SelectItem key={kind} value={kind}>
+						{KIND_LABELS[kind]}
 					</SelectItem>
 				))}
 			</SelectContent>
