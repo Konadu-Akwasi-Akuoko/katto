@@ -1,36 +1,33 @@
-import { ArrowUpRightIcon, CheckIcon, TrashIcon } from "@phosphor-icons/react";
+import {
+	ArrowUpRightIcon,
+	LightbulbIcon,
+	TrashIcon,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
-import type { Idea, IdeaPatch } from "@/lib/ipc/ideas";
+import { formatShortDate } from "@/lib/date";
+import type { Idea } from "@/lib/ipc/ideas";
 import {
 	createIdea,
 	discardIdea,
 	ideasKeys,
 	listIdeas,
 	promoteIdea,
-	updateIdea,
 } from "@/lib/ipc/ideas";
 import { projectsKeys } from "@/lib/ipc/projects";
-import { openExternalUrl } from "@/lib/ipc/shell";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
+import { IdeaDetailModal } from "./idea-detail-modal";
 import { type Lean, parseLean, sourceDomain } from "./model/lean";
 
-const KINDS = [
-	{ value: "unset", label: "Unsorted" },
-	{ value: "long", label: "Long-form" },
-	{ value: "short", label: "Short" },
-	{ value: "series", label: "Series" },
-] as const;
+const KIND_LABELS: Record<string, string> = {
+	unset: "Unsorted",
+	long: "Long-form",
+	short: "Short",
+	series: "Series",
+};
 
 export function BacklogView() {
 	const queryClient = useQueryClient();
@@ -38,6 +35,7 @@ export function BacklogView() {
 		queryKey: ideasKeys.byStatus("backlog"),
 		queryFn: () => listIdeas("backlog"),
 	});
+	const [openIdea, setOpenIdea] = useState<Idea | null>(null);
 
 	const invalidateIdeas = () =>
 		queryClient.invalidateQueries({ queryKey: ideasKeys.all });
@@ -45,11 +43,6 @@ export function BacklogView() {
 	const create = useMutation({
 		mutationFn: (title: string) =>
 			createIdea({ title, kind: null, notes: null }),
-		onSuccess: () => void invalidateIdeas(),
-	});
-	const patch = useMutation({
-		mutationFn: ({ id, patch }: { id: string; patch: IdeaPatch }) =>
-			updateIdea(id, patch),
 		onSuccess: () => void invalidateIdeas(),
 	});
 	const discard = useMutation({
@@ -76,10 +69,7 @@ export function BacklogView() {
 			/>
 
 			{ideas === undefined ? null : ideas.length === 0 ? (
-				<p className="text-sm text-fg-muted">
-					No ideas banked. Capture one from anywhere — the hotkey works in any
-					app.
-				</p>
+				<EmptyState />
 			) : (
 				<ul className="flex flex-col gap-2">
 					{ideas.map((idea) => (
@@ -93,12 +83,16 @@ export function BacklogView() {
 										? "discard"
 										: null
 							}
-							onPatch={(next) => patch.mutate({ id: idea.id, patch: next })}
+							onOpen={() => setOpenIdea(idea)}
 							onPromote={() => promote.mutate(idea.id)}
 							onDiscard={() => discard.mutate(idea.id)}
 						/>
 					))}
 				</ul>
+			)}
+
+			{openIdea !== null && (
+				<IdeaDetailModal idea={openIdea} onClose={() => setOpenIdea(null)} />
 			)}
 		</div>
 	);
@@ -140,113 +134,67 @@ function CaptureRow({
 function IdeaRow({
 	idea,
 	leaving,
-	onPatch,
+	onOpen,
 	onPromote,
 	onDiscard,
 }: {
 	idea: Idea;
 	leaving: "promote" | "discard" | null;
-	onPatch: (patch: IdeaPatch) => void;
+	onOpen: () => void;
 	onPromote: () => void;
 	onDiscard: () => void;
 }) {
 	const lean = parseLean(idea.evidence_json);
 	const domain = sourceDomain(idea.source_url);
-	const openSource = useMutation({ mutationFn: openExternalUrl });
+	const secondary = idea.rationale ?? idea.notes;
+	const suggested = idea.kind_source === "ai";
 
 	return (
 		<li
 			className={cn(
-				"grain flex items-center gap-3 rounded-lg border bg-surface px-3 py-2 transition-[opacity,transform] duration-(--dur) ease-(--ease) motion-reduce:transition-none",
+				"grain group flex items-center gap-3 rounded-lg border bg-surface px-3 py-2 transition-[opacity,transform] duration-(--dur) ease-(--ease) motion-reduce:transition-none",
 				leaving === "promote" && "-translate-y-2 opacity-0",
 				leaving === "discard" && "translate-x-2 opacity-0",
 			)}
 		>
-			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-				<EditableText
-					value={idea.title}
-					label="Idea title"
-					placeholder="Untitled idea"
-					className="text-sm text-fg"
-					onCommit={(title) =>
-						onPatch({ title, kind: null, notes: null, kind_source: null })
-					}
-				/>
-				{idea.rationale !== null && (
-					<p className="truncate text-xs text-fg-muted" title={idea.rationale}>
-						{idea.rationale}
-					</p>
-				)}
-				<EditableText
-					value={idea.notes ?? ""}
-					label="Idea note"
-					placeholder="Add a note"
-					className="text-xs text-fg-muted"
-					onCommit={(notes) =>
-						onPatch({ title: null, kind: null, notes, kind_source: null })
-					}
-				/>
-				{domain !== null && idea.source_url !== null && (
-					<button
-						type="button"
-						className="self-start truncate text-xs text-fg-faint hover:text-fg-muted"
-						title={idea.source_url}
-						onClick={() => {
-							if (idea.source_url !== null) openSource.mutate(idea.source_url);
-						}}
-					>
-						{domain}
-					</button>
-				)}
+			<div className="flex w-3 shrink-0 justify-center">
+				{lean !== null && <LeanNotch lean={lean} />}
 			</div>
 
-			{lean !== null && <LeanNotch lean={lean} />}
-
-			{idea.kind_source === "ai" && (
-				<span
-					className="shrink-0 text-xs text-fg-faint"
-					title={idea.kind_why ?? undefined}
-				>
-					suggested
-				</span>
-			)}
-
-			<Select
-				value={idea.kind}
-				onValueChange={(kind) =>
-					onPatch({ title: null, kind, notes: null, kind_source: "human" })
-				}
+			<button
+				type="button"
+				onClick={onOpen}
+				className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
 			>
-				<SelectTrigger size="sm" aria-label="Kind" className="w-32 shrink-0">
-					<SelectValue />
-				</SelectTrigger>
-				<SelectContent>
-					{KINDS.map((kind) => (
-						<SelectItem key={kind.value} value={kind.value}>
-							{kind.label}
-						</SelectItem>
-					))}
-				</SelectContent>
-			</Select>
+				<span className="truncate text-sm text-fg">
+					{idea.title || <span className="text-fg-faint">Untitled idea</span>}
+				</span>
+				{secondary !== null && secondary !== "" && (
+					<span className="truncate text-xs text-fg-muted">{secondary}</span>
+				)}
+				<span className="flex min-h-4 items-center gap-2 text-xs text-fg-faint">
+					{domain !== null && <span className="truncate">{domain}</span>}
+					<span className="font-mono tabular-nums">
+						{formatShortDate(idea.first_seen)}
+					</span>
+				</span>
+			</button>
 
-			{idea.kind_source === "ai" && (
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Keep suggested kind"
-					title={idea.kind_why ?? "Keep the suggested kind"}
-					onClick={() =>
-						onPatch({
-							title: null,
-							kind: idea.kind,
-							notes: null,
-							kind_source: "human",
-						})
-					}
-				>
-					<CheckIcon />
-				</Button>
-			)}
+			<span
+				className={cn(
+					"inline-flex h-[22px] shrink-0 items-center gap-1.5 rounded-md border bg-surface-2 px-2 text-xs font-medium",
+					idea.kind === "unset" ? "text-fg-faint" : "text-fg-muted",
+				)}
+				title={suggested ? (idea.kind_why ?? undefined) : undefined}
+			>
+				<span
+					className={cn(
+						"size-1.5 rounded-full",
+						suggested ? "bg-ember" : "bg-current opacity-80",
+					)}
+				/>
+				{KIND_LABELS[idea.kind] ?? idea.kind}
+			</span>
 
 			<Button
 				variant="secondary"
@@ -261,12 +209,28 @@ function IdeaRow({
 				variant="ghost"
 				size="icon-sm"
 				aria-label={`Discard ${idea.title}`}
+				className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
 				disabled={leaving !== null}
 				onClick={onDiscard}
 			>
 				<TrashIcon />
 			</Button>
 		</li>
+	);
+}
+
+function EmptyState() {
+	return (
+		<div className="flex flex-col items-center gap-1 rounded-lg border border-dashed py-11 text-center">
+			<div className="mb-3 flex size-14 items-center justify-center rounded-[10px] border bg-surface-2 text-fg-faint">
+				<LightbulbIcon size={26} />
+			</div>
+			<p className="text-sm text-fg-muted">Nothing banked yet</p>
+			<p className="max-w-sm text-xs text-fg-faint">
+				Capture an idea above — the hotkey works in any app. The curation run
+				drops its keepers here too.
+			</p>
+		</div>
 	);
 }
 
@@ -283,7 +247,7 @@ function LeanNotch({ lean }: { lean: Lean }) {
 			role="img"
 			aria-label={`lean: ${lean}`}
 			title={`lean: ${lean}`}
-			className="flex shrink-0 flex-col-reverse gap-0.5"
+			className="flex flex-col-reverse gap-0.5"
 		>
 			{[0, 1, 2].map((step) => (
 				<span
@@ -295,74 +259,5 @@ function LeanNotch({ lean }: { lean: Lean }) {
 				/>
 			))}
 		</div>
-	);
-}
-
-function EditableText({
-	value,
-	label,
-	placeholder,
-	className,
-	onCommit,
-}: {
-	value: string;
-	label: string;
-	placeholder: string;
-	className?: string;
-	onCommit: (value: string) => void;
-}) {
-	const [editing, setEditing] = useState(false);
-	const [draft, setDraft] = useState(value);
-	const inputRef = useRef<HTMLInputElement>(null);
-	const fieldId = useId();
-
-	useEffect(() => {
-		if (editing) inputRef.current?.focus();
-	}, [editing]);
-
-	function commit() {
-		setEditing(false);
-		const next = draft.trim();
-		if (next !== value) onCommit(next);
-	}
-
-	if (editing) {
-		return (
-			<input
-				ref={inputRef}
-				id={fieldId}
-				aria-label={label}
-				value={draft}
-				onChange={(event) => setDraft(event.target.value)}
-				onBlur={commit}
-				onKeyDown={(event) => {
-					if (event.key === "Enter") {
-						event.preventDefault();
-						commit();
-					}
-					if (event.key === "Escape") {
-						setDraft(value);
-						setEditing(false);
-					}
-				}}
-				className={cn(
-					"w-full rounded-sm bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-ember",
-					className,
-				)}
-			/>
-		);
-	}
-
-	return (
-		<button
-			type="button"
-			className={cn("truncate text-left", className)}
-			onClick={() => {
-				setDraft(value);
-				setEditing(true);
-			}}
-		>
-			{value || <span className="text-fg-faint">{placeholder}</span>}
-		</button>
 	);
 }
