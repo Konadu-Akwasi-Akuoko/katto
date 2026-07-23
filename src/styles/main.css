@@ -265,6 +265,19 @@
 		cursor: default;
 	}
 
+	/* WebKit paints today's date as a ghost for an empty date input; hide the whole
+	   edit region (opacity, since each sub-field sets its own color) so the field's
+	   own —/—/— placeholder shows through cleanly (see DateInput). */
+	input[type="date"][data-empty="true"]::-webkit-datetime-edit {
+		opacity: 0;
+	}
+
+	/* Drop WebKit's picker indicator so DateInput owns the trailing edge (its
+	   hover clear button lives there); the field opens the picker via showPicker(). */
+	input[type="date"]::-webkit-calendar-picker-indicator {
+		display: none;
+	}
+
 	/* text is selectable where it belongs: inputs, and opt-in content */
 	input,
 	textarea,

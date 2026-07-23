@@ -65,6 +65,23 @@ describe("ProjectDetail", () => {
 		).toBeInTheDocument();
 	});
 
+	it("shows a placeholder for an unset date but not a set one", async () => {
+		renderDetail(
+			projectDetail(
+				project({
+					slug: "nvme-deep-dive-2026-07-08",
+					title: "NVMe deep dive",
+					shoot_date: null,
+					publish_date: "2026-07-31",
+				}),
+			),
+		);
+		await screen.findByText("NVMe deep dive");
+		expect(screen.getByText("—/—/—")).toBeInTheDocument();
+		expect(screen.getByLabelText("Shoot")).toHaveValue("");
+		expect(screen.getByLabelText("Publish")).toHaveValue("2026-07-31");
+	});
+
 	it("reveals a subfolder in Finder with the right subfolder", async () => {
 		const user = userEvent.setup();
 		const { calls } = renderDetail();
