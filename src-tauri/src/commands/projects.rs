@@ -236,16 +236,31 @@ pub async fn set_project_dates(
                 .ok_or_else(|| Error::Io(format!("no such project: {slug}")))?;
             let dir = Path::new(&project.root_path);
             let mut manifest = read_manifest(dir)?;
-            manifest.shoot_date = shoot.clone();
-            manifest.publish_date = publish.clone();
+            use crate::db::schedule::ScheduleKind;
+            crate::commands::schedule::write_pin(
+                conn,
+                &slug,
+                &mut manifest,
+                ScheduleKind::Shoot,
+                shoot.as_deref(),
+                None,
+            )?;
+            crate::commands::schedule::write_pin(
+                conn,
+                &slug,
+                &mut manifest,
+                ScheduleKind::Publish,
+                publish.as_deref(),
+                None,
+            )?;
             write_manifest(dir, &manifest)?;
-            db::projects::set_dates(conn, &slug, shoot.as_deref(), publish.as_deref())?;
             db::projects::touch(conn, &slug, &now)?;
             db::events::record(conn, "project-dates-changed", Some(&slug), None)?;
             Ok(())
         })
         .await?;
     crate::broadcast::projects_changed(&app);
+    crate::broadcast::schedule_changed(&app);
     Ok(())
 }
 
@@ -364,7 +379,7 @@ pub(crate) fn require_mounted(conn: &Connection) -> Result<String> {
 
 /// The current instant as a second-precision UTC RFC3339 string
 /// (`YYYY-MM-DDTHH:MM:SSZ`), matching the events log's precision.
-fn now_rfc3339() -> Result<String> {
+pub(crate) fn now_rfc3339() -> Result<String> {
     use time::OffsetDateTime;
     use time::format_description::well_known::Rfc3339;
     OffsetDateTime::now_utc()
@@ -378,7 +393,7 @@ fn now_rfc3339() -> Result<String> {
 /// against a tempdir and an in-memory DB without a live Tauri app. Runs entirely
 /// on the writer thread: the slug dedupe (`slug_exists`) and the row insert share
 /// one connection, so a concurrent create cannot claim the same slug.
-fn create_project_inner(
+pub(crate) fn create_project_inner(
     conn: &Connection,
     projects_root: &Path,
     title: &str,
