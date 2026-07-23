@@ -32,6 +32,11 @@ pub struct ProjectManifest {
     /// field existed — the project simply has no priority, which is `none`.
     #[serde(default)]
     pub priority: Option<String>,
+    /// `unset | long | short | series` — the video kind carried over from the
+    /// idea this project was promoted from. Absent in manifests written before
+    /// this field existed, which reads back as `unset`.
+    #[serde(default)]
+    pub kind: Option<String>,
     pub shoot_date: Option<String>,
     pub publish_date: Option<String>,
     pub created_at: String,
@@ -126,6 +131,7 @@ mod tests {
             status: "idea".to_string(),
             target_nle: "resolve".to_string(),
             priority: None,
+            kind: None,
             shoot_date: Some("2026-07-12".to_string()),
             publish_date: None,
             created_at: "2026-07-09T10:00:00Z".to_string(),

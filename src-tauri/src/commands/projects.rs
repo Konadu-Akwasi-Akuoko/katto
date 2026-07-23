@@ -366,6 +366,7 @@ fn create_project_inner(
         status: "idea".to_string(),
         target_nle: target_nle.to_string(),
         priority: None,
+        kind: Some("unset".to_string()),
         shoot_date: shoot_date.map(str::to_string),
         publish_date: None,
         created_at: now.to_string(),
@@ -384,6 +385,7 @@ fn create_project_inner(
         publish_date: None,
         created_at: now.to_string(),
         last_touched_at: Some(now.to_string()),
+        kind: "unset".to_string(),
     };
     db::projects::insert(conn, &project)?;
     db::events::record(conn, "project-created", Some(&slug), None)?;

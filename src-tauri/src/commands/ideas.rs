@@ -307,6 +307,7 @@ where
         status: "idea".to_string(),
         target_nle: default_nle.to_string(),
         priority: None,
+        kind: Some(idea.kind.clone()),
         shoot_date: None,
         publish_date: None,
         created_at: now.to_string(),
@@ -328,6 +329,7 @@ where
         publish_date: None,
         created_at: now.to_string(),
         last_touched_at: Some(now.to_string()),
+        kind: idea.kind.clone(),
     };
 
     match writes(&tx, &project, id) {
@@ -573,6 +575,40 @@ mod tests {
                 .any(|e| e.kind == "idea-promoted" && e.project_slug.as_deref() == Some(&slug)),
             "an idea-promoted event must be recorded"
         );
+    }
+
+    #[test]
+    fn promote_carries_the_ideas_kind_to_the_project() {
+        let mut conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let projects_root = root.path().join("Projects");
+        let idea = create_idea_inner(
+            &conn,
+            IdeaCreate {
+                title: "SSD myths".to_string(),
+                kind: Some("long".to_string()),
+                notes: None,
+            },
+            "2026-07-09T10:00:00Z",
+        )
+        .unwrap();
+
+        let slug = promote_inner(
+            &mut conn,
+            &projects_root,
+            "resolve",
+            &idea.id,
+            "2026-07-09T10:00:00Z",
+        )
+        .unwrap();
+
+        assert_eq!(
+            db::projects::get(&conn, &slug).unwrap().unwrap().kind,
+            "long"
+        );
+        let manifest =
+            crate::projects::manifest::read_manifest(&projects_root.join(&slug)).unwrap();
+        assert_eq!(manifest.kind.as_deref(), Some("long"));
     }
 
     #[test]

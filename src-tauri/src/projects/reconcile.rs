@@ -177,6 +177,7 @@ fn project_from(manifest: &ProjectManifest, path: &Path) -> db::projects::Projec
         publish_date: manifest.publish_date.clone(),
         created_at: manifest.created_at.clone(),
         last_touched_at: None,
+        kind: manifest.kind.clone().unwrap_or_else(|| "unset".to_string()),
     }
 }
 
@@ -194,6 +195,7 @@ mod tests {
             status: "idea".to_string(),
             target_nle: "resolve".to_string(),
             priority: None,
+            kind: None,
             shoot_date: None,
             publish_date: None,
             created_at: "2026-07-09T00:00:00Z".to_string(),
@@ -278,6 +280,7 @@ mod tests {
             publish_date: None,
             created_at: "2026-07-09T00:00:00Z".to_string(),
             last_touched_at: None,
+            kind: "unset".to_string(),
         };
         db::projects::insert(&conn, &row).unwrap();
 
@@ -323,6 +326,7 @@ mod tests {
             publish_date: None,
             created_at: "2026-07-09T00:00:00Z".to_string(),
             last_touched_at: None,
+            kind: "unset".to_string(),
         };
         db::projects::insert(&conn, &row).unwrap();
 
