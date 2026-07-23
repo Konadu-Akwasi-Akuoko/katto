@@ -3,14 +3,15 @@ import {
 	CameraIcon,
 	CaretLeftIcon,
 	CaretRightIcon,
+	CheckIcon,
 	LightbulbIcon,
+	PlusIcon,
 	UploadSimpleIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { type ComponentType, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Popover,
 	PopoverContent,
@@ -45,9 +46,11 @@ import {
 	calendarKeys,
 	listCalendar,
 } from "@/lib/ipc/calendar";
+import type { Project } from "@/lib/ipc/projects";
 import { listProjects, projectsKeys } from "@/lib/ipc/projects";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
+import { PinPopover } from "./pin-popover";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const ALL_PROJECTS = "__all__";
@@ -255,18 +258,30 @@ export function CalendarView() {
 						</Button>
 					</PopoverTrigger>
 					<PopoverContent className="w-44 p-1">
-						{ALL_PHASES.map((p) => (
-							<label
-								key={p}
-								className="flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface-2"
-							>
-								<Checkbox
-									checked={filters.phases.includes(p)}
-									onCheckedChange={() => togglePhase(p)}
-								/>
-								{statusAppearance(p).label}
-							</label>
-						))}
+						{ALL_PHASES.map((p) => {
+							const checked = filters.phases.includes(p);
+							return (
+								<button
+									key={p}
+									type="button"
+									aria-pressed={checked}
+									onClick={() => togglePhase(p)}
+									className="flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2"
+								>
+									<span
+										className={cn(
+											"flex size-4 items-center justify-center rounded border",
+											checked
+												? "border-ember bg-ember text-on-ember"
+												: "border-border",
+										)}
+									>
+										{checked && <CheckIcon className="size-3" />}
+									</span>
+									{statusAppearance(p).label}
+								</button>
+							);
+						})}
 					</PopoverContent>
 				</Popover>
 
@@ -313,6 +328,7 @@ export function CalendarView() {
 						cell={cell}
 						isToday={cell.iso === today}
 						markers={byDate.get(cell.iso) ?? []}
+						projects={projects ?? []}
 						onMarkerClick={onMarkerClick}
 					/>
 				))}
@@ -321,21 +337,36 @@ export function CalendarView() {
 	);
 }
 
+function MarkerBadge({ m }: { m: CalendarMarker }) {
+	const c = CATEGORY_BY_KIND[m.kind];
+	return (
+		<Badge
+			variant="ghost"
+			className={cn("w-full justify-start gap-1 font-normal", c.text, c.tint)}
+		>
+			<c.Icon className="size-3" />
+			<span className="truncate">{markerLabel(m)}</span>
+		</Badge>
+	);
+}
+
 function DayCell({
 	cell,
 	isToday,
 	markers,
+	projects,
 	onMarkerClick,
 }: {
 	cell: CalendarCell;
 	isToday: boolean;
 	markers: CalendarMarker[];
+	projects: Project[];
 	onMarkerClick: (m: CalendarMarker) => void;
 }) {
 	return (
 		<div
 			className={cn(
-				"grain flex min-h-20 flex-col gap-1 bg-surface p-1.5",
+				"group grain relative flex min-h-20 flex-col gap-1 bg-surface p-1.5",
 				!cell.inMonth && "bg-surface/50 text-fg-faint",
 			)}
 		>
@@ -347,13 +378,47 @@ function DayCell({
 			>
 				{cell.day}
 			</span>
+
+			<PinPopover ctx={{ mode: "add", date: cell.iso }} projects={projects}>
+				<button
+					type="button"
+					aria-label={`Add pin on ${cell.iso}`}
+					className="absolute top-1.5 right-1.5 flex size-5 cursor-default items-center justify-center rounded-md text-fg-faint opacity-0 transition-opacity hover:text-fg group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ember focus-visible:outline-none"
+				>
+					<PlusIcon className="size-3.5" />
+				</button>
+			</PinPopover>
+
 			<div className="flex flex-col gap-1">
 				{markers.map((m, i) => {
-					const c = CATEGORY_BY_KIND[m.kind];
 					const key =
 						m.kind === "backlog"
 							? `b-${m.idea_id}`
 							: `${m.kind}-${m.project_slug}-${i}`;
+					// Shoot/publish are the editable planned layer — their chip opens the
+					// pin editor. Backlog/phase are read-only history — they jump to detail.
+					if (m.kind === "shoot" || m.kind === "publish") {
+						return (
+							<PinPopover
+								key={key}
+								projects={projects}
+								ctx={{
+									mode: "edit",
+									date: m.date,
+									projectSlug: m.project_slug,
+									kind: m.kind,
+									note: m.note,
+								}}
+							>
+								<button
+									type="button"
+									className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
+								>
+									<MarkerBadge m={m} />
+								</button>
+							</PinPopover>
+						);
+					}
 					return (
 						<button
 							key={key}
@@ -361,17 +426,7 @@ function DayCell({
 							onClick={() => onMarkerClick(m)}
 							className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
 						>
-							<Badge
-								variant="ghost"
-								className={cn(
-									"w-full justify-start gap-1 font-normal",
-									c.text,
-									c.tint,
-								)}
-							>
-								<c.Icon className="size-3" />
-								<span className="truncate">{markerLabel(m)}</span>
-							</Badge>
+							<MarkerBadge m={m} />
 						</button>
 					);
 				})}
