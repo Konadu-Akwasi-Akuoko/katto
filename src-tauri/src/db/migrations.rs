@@ -12,6 +12,7 @@ pub static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
         M::up(include_str!("migrations/003_priority.sql")),
         M::up(include_str!("migrations/004_seed_nightly_curation.sql")),
         M::up(include_str!("migrations/005_project_kind.sql")),
+        M::up(include_str!("migrations/006_calendar_indexes.sql")),
     ])
 });
 

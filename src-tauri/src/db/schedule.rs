@@ -1,7 +1,26 @@
 use rusqlite::{Connection, OptionalExtension, Row, params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
+
+/// The two pinnable dates. Enum so an out-of-vocabulary kind is rejected at the
+/// IPC boundary and can never reach the schedule or manifest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ScheduleKind {
+    Shoot,
+    Publish,
+}
+
+impl ScheduleKind {
+    /// The stored column value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ScheduleKind::Shoot => "shoot",
+            ScheduleKind::Publish => "publish",
+        }
+    }
+}
 
 /// A planner schedule entry pinning a project to a date. `kind` is `shoot` or
 /// `publish`. There is at most one entry per `(project_slug, kind)` pair — see
@@ -30,10 +49,9 @@ fn from_row(row: &Row) -> rusqlite::Result<ScheduleEntry> {
     })
 }
 
-/// Insert or update the single entry for `(project_slug, kind)`. The `schedule`
-/// table has no unique constraint on that pair (its only key is the AUTOINCREMENT
-/// `id`), so the upsert is expressed manually: reuse the existing row's id on
-/// update, otherwise insert and take the new rowid.
+/// Insert or update the single entry for `(project_slug, kind)`, backed by the
+/// `idx_schedule_project_kind` unique index (a real `ON CONFLICT` upsert). Reads
+/// the row back for its id.
 pub fn upsert(
     conn: &Connection,
     project_slug: &str,
@@ -41,29 +59,16 @@ pub fn upsert(
     date: &str,
     note: Option<&str>,
 ) -> Result<ScheduleEntry> {
-    let existing: Option<i64> = conn
-        .query_row(
-            "SELECT id FROM schedule WHERE project_slug = ?1 AND kind = ?2",
-            params![project_slug, kind],
-            |row| row.get(0),
-        )
-        .optional()?;
-    let id = match existing {
-        Some(id) => {
-            conn.execute(
-                "UPDATE schedule SET date = ?2, note = ?3 WHERE id = ?1",
-                params![id, date, note],
-            )?;
-            id
-        }
-        None => {
-            conn.execute(
-                "INSERT INTO schedule (project_slug, kind, date, note) VALUES (?1, ?2, ?3, ?4)",
-                params![project_slug, kind, date, note],
-            )?;
-            conn.last_insert_rowid()
-        }
-    };
+    conn.execute(
+        "INSERT INTO schedule (project_slug, kind, date, note) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(project_slug, kind) DO UPDATE SET date = excluded.date, note = excluded.note",
+        params![project_slug, kind, date, note],
+    )?;
+    let id: i64 = conn.query_row(
+        "SELECT id FROM schedule WHERE project_slug = ?1 AND kind = ?2",
+        params![project_slug, kind],
+        |row| row.get(0),
+    )?;
     Ok(ScheduleEntry {
         id,
         project_slug: project_slug.to_string(),
@@ -104,6 +109,15 @@ pub fn list_for_project(conn: &Connection, project_slug: &str) -> Result<Vec<Sch
 /// Delete a schedule entry by id.
 pub fn delete(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM schedule WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+/// Remove the single pin for `(project_slug, kind)`, if any.
+pub fn delete_for(conn: &Connection, project_slug: &str, kind: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM schedule WHERE project_slug = ?1 AND kind = ?2",
+        params![project_slug, kind],
+    )?;
     Ok(())
 }
 
@@ -149,6 +163,18 @@ mod tests {
             },
         )
         .unwrap();
+    }
+
+    #[test]
+    fn delete_for_clears_only_that_kind() {
+        let conn = test_db();
+        seed_project(&conn, "p-2026-07-09");
+        upsert(&conn, "p-2026-07-09", "shoot", "2026-08-01", None).unwrap();
+        upsert(&conn, "p-2026-07-09", "publish", "2026-08-20", None).unwrap();
+        delete_for(&conn, "p-2026-07-09", "shoot").unwrap();
+        let rows = list_range(&conn, "2026-08-01", "2026-08-31").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, "publish");
     }
 
     #[test]
