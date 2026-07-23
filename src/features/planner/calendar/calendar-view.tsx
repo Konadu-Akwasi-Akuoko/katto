@@ -1,32 +1,108 @@
 import {
+	ArrowRightIcon,
 	CameraIcon,
 	CaretLeftIcon,
 	CaretRightIcon,
+	LightbulbIcon,
 	UploadSimpleIcon,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { type ComponentType, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import type {
+	CalendarCategory,
 	CalendarCell,
+	CalendarFilters,
 	CalendarMode,
 } from "@/features/planner/model/calendar";
 import {
+	ALL_PHASES,
 	addDaysIso,
 	addMonthsIso,
-	chipsByDate,
+	applyCalendarFilters,
+	markersByDate,
 	monthGrid,
 	periodLabel,
 	weekRow,
 } from "@/features/planner/model/calendar";
+import { statusAppearance } from "@/lib/appearance";
+import {
+	type CalendarMarker,
+	calendarKeys,
+	listCalendar,
+} from "@/lib/ipc/calendar";
 import { listProjects, projectsKeys } from "@/lib/ipc/projects";
-import type { ScheduleEntry } from "@/lib/ipc/schedule";
-import { listSchedule, scheduleKeys } from "@/lib/ipc/schedule";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const ALL_PROJECTS = "__all__";
+
+/** Legend/color metadata per category. Class names are literals so Tailwind keeps them. */
+const CATEGORIES: ReadonlyArray<{
+	key: CalendarCategory;
+	label: string;
+	Icon: ComponentType<{ className?: string }>;
+	text: string;
+	tint: string;
+	dot: string;
+}> = [
+	{
+		key: "shoot",
+		label: "Shoot",
+		Icon: CameraIcon,
+		text: "text-cal-shoot",
+		tint: "bg-cal-shoot/15",
+		dot: "bg-cal-shoot",
+	},
+	{
+		key: "publish",
+		label: "Publish",
+		Icon: UploadSimpleIcon,
+		text: "text-cal-publish",
+		tint: "bg-cal-publish/15",
+		dot: "bg-cal-publish",
+	},
+	{
+		key: "backlog",
+		label: "Backlog",
+		Icon: LightbulbIcon,
+		text: "text-cal-backlog",
+		tint: "bg-cal-backlog/15",
+		dot: "bg-cal-backlog",
+	},
+	{
+		key: "phase",
+		label: "Phase",
+		Icon: ArrowRightIcon,
+		text: "text-cal-phase",
+		tint: "bg-cal-phase/15",
+		dot: "bg-cal-phase",
+	},
+];
+const CATEGORY_BY_KIND = Object.fromEntries(
+	CATEGORIES.map((c) => [c.key, c]),
+) as Record<CalendarCategory, (typeof CATEGORIES)[number]>;
+
+const DEFAULT_FILTERS: CalendarFilters = {
+	categories: { shoot: true, publish: true, backlog: true, phase: true },
+	phases: ALL_PHASES,
+	project: null,
+};
 
 /** Today as a local calendar date (`YYYY-MM-DD`), matching the schedule's dates. */
 function todayIso(): string {
@@ -35,10 +111,18 @@ function todayIso(): string {
 	return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/** A marker's day-chip label — phase markers lead with their destination phase. */
+function markerLabel(m: CalendarMarker): string {
+	if (m.kind === "phase") return `${statusAppearance(m.to).label} · ${m.title}`;
+	return m.title;
+}
+
 export function CalendarView() {
-	const openProject = useUiStore((s) => s.openProject);
+	const openPeek = useUiStore((s) => s.openPeek);
+	const openIdea = useUiStore((s) => s.openIdea);
 	const [mode, setMode] = useState<CalendarMode>("month");
 	const [anchor, setAnchor] = useState(todayIso);
+	const [filters, setFilters] = useState<CalendarFilters>(DEFAULT_FILTERS);
 	const today = todayIso();
 
 	const weeks = useMemo<CalendarCell[][]>(() => {
@@ -51,20 +135,19 @@ export function CalendarView() {
 	const from = cells[0]?.iso ?? anchor;
 	const to = cells[cells.length - 1]?.iso ?? anchor;
 
-	const { data: entries } = useQuery({
-		queryKey: scheduleKeys.range(from, to),
-		queryFn: () => listSchedule(from, to),
+	const { data: markers } = useQuery({
+		queryKey: calendarKeys.range(from, to),
+		queryFn: () => listCalendar(from, to),
 	});
 	const { data: projects } = useQuery({
 		queryKey: projectsKeys.all,
 		queryFn: listProjects,
 	});
 
-	const chips = useMemo(() => chipsByDate(entries ?? []), [entries]);
-	const titleOf = useMemo(() => {
-		const map = new Map(projects?.map((p) => [p.slug, p.title]));
-		return (slug: string) => map.get(slug) ?? slug;
-	}, [projects]);
+	const byDate = useMemo(
+		() => markersByDate(applyCalendarFilters(markers ?? [], filters)),
+		[markers, filters],
+	);
 
 	function step(delta: number) {
 		setAnchor((current) =>
@@ -72,6 +155,27 @@ export function CalendarView() {
 				? addDaysIso(current, delta * 7)
 				: addMonthsIso(current, delta),
 		);
+	}
+
+	function toggleCategory(key: CalendarCategory) {
+		setFilters((f) => ({
+			...f,
+			categories: { ...f.categories, [key]: !f.categories[key] },
+		}));
+	}
+
+	function togglePhase(phase: string) {
+		setFilters((f) => ({
+			...f,
+			phases: f.phases.includes(phase)
+				? f.phases.filter((p) => p !== phase)
+				: [...f.phases, phase],
+		}));
+	}
+
+	function onMarkerClick(m: CalendarMarker) {
+		if (m.kind === "backlog") openIdea(m.idea_id);
+		else openPeek(m.project_slug);
 	}
 
 	return (
@@ -123,6 +227,72 @@ export function CalendarView() {
 				</div>
 			</header>
 
+			<div className="flex flex-wrap items-center gap-2">
+				{CATEGORIES.map((c) => {
+					const on = filters.categories[c.key];
+					return (
+						<button
+							key={c.key}
+							type="button"
+							aria-pressed={on}
+							aria-label={c.label}
+							onClick={() => toggleCategory(c.key)}
+							className={cn(
+								"inline-flex h-7 cursor-default items-center gap-1.5 rounded-md border px-2.5 text-xs transition-opacity",
+								on ? "text-fg" : "text-fg-faint opacity-45",
+							)}
+						>
+							<span className={cn("size-2 rounded-full", c.dot)} />
+							{c.label}
+						</button>
+					);
+				})}
+
+				<Popover>
+					<PopoverTrigger asChild>
+						<Button variant="secondary" size="sm">
+							Phases · {filters.phases.length}
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent className="w-44 p-1">
+						{ALL_PHASES.map((p) => (
+							<label
+								key={p}
+								className="flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface-2"
+							>
+								<Checkbox
+									checked={filters.phases.includes(p)}
+									onCheckedChange={() => togglePhase(p)}
+								/>
+								{statusAppearance(p).label}
+							</label>
+						))}
+					</PopoverContent>
+				</Popover>
+
+				<Select
+					value={filters.project ?? ALL_PROJECTS}
+					onValueChange={(v) =>
+						setFilters((f) => ({
+							...f,
+							project: v === ALL_PROJECTS ? null : v,
+						}))
+					}
+				>
+					<SelectTrigger size="sm" aria-label="Project" className="w-44">
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value={ALL_PROJECTS}>All projects</SelectItem>
+						{projects?.map((p) => (
+							<SelectItem key={p.slug} value={p.slug}>
+								{p.title}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+
 			<div className="grid grid-cols-7 gap-px">
 				{WEEKDAYS.map((label) => (
 					<div key={label} className="px-2 py-1 text-xs text-fg-faint">
@@ -142,9 +312,8 @@ export function CalendarView() {
 						key={cell.iso}
 						cell={cell}
 						isToday={cell.iso === today}
-						entries={chips.get(cell.iso) ?? []}
-						titleOf={titleOf}
-						onOpen={openProject}
+						markers={byDate.get(cell.iso) ?? []}
+						onMarkerClick={onMarkerClick}
 					/>
 				))}
 			</div>
@@ -155,15 +324,13 @@ export function CalendarView() {
 function DayCell({
 	cell,
 	isToday,
-	entries,
-	titleOf,
-	onOpen,
+	markers,
+	onMarkerClick,
 }: {
 	cell: CalendarCell;
 	isToday: boolean;
-	entries: ScheduleEntry[];
-	titleOf: (slug: string) => string;
-	onOpen: (slug: string) => void;
+	markers: CalendarMarker[];
+	onMarkerClick: (m: CalendarMarker) => void;
 }) {
 	return (
 		<div
@@ -181,22 +348,33 @@ function DayCell({
 				{cell.day}
 			</span>
 			<div className="flex flex-col gap-1">
-				{entries.map((entry) => (
-					<button
-						key={entry.id}
-						type="button"
-						onClick={() => onOpen(entry.project_slug)}
-						className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
-					>
-						<Badge
-							variant="secondary"
-							className="w-full justify-start gap-1 font-normal"
+				{markers.map((m, i) => {
+					const c = CATEGORY_BY_KIND[m.kind];
+					const key =
+						m.kind === "backlog"
+							? `b-${m.idea_id}`
+							: `${m.kind}-${m.project_slug}-${i}`;
+					return (
+						<button
+							key={key}
+							type="button"
+							onClick={() => onMarkerClick(m)}
+							className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember"
 						>
-							{entry.kind === "publish" ? <UploadSimpleIcon /> : <CameraIcon />}
-							<span className="truncate">{titleOf(entry.project_slug)}</span>
-						</Badge>
-					</button>
-				))}
+							<Badge
+								variant="ghost"
+								className={cn(
+									"w-full justify-start gap-1 font-normal",
+									c.text,
+									c.tint,
+								)}
+							>
+								<c.Icon className="size-3" />
+								<span className="truncate">{markerLabel(m)}</span>
+							</Badge>
+						</button>
+					);
+				})}
 			</div>
 		</div>
 	);
