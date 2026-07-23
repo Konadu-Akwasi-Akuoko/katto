@@ -140,7 +140,7 @@ function IdeaRow({
 }) {
 	const lean = parseLean(idea.evidence_json);
 	const domain = sourceDomain(idea.source_url);
-	const secondary = idea.rationale ?? idea.notes;
+	const secondary = idea.notes;
 	const suggested = idea.kind_source === "ai";
 
 	return (

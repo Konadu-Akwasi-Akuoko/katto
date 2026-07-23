@@ -110,20 +110,36 @@ describe("BacklogView", () => {
 		expect(await screen.findByText("Nothing banked yet")).toBeInTheDocument();
 	});
 
-	it("shows curation provenance: rationale, lean, source, suggested kind", async () => {
+	it("shows curation provenance: lean, source, suggested kind", async () => {
 		renderBacklog(curatedFixture);
 		await screen.findByText("SSD endurance myths");
 
 		const row = rowFor("SSD endurance myths");
-		expect(
-			within(row).getByText("Three strong QLC endurance signals in one week"),
-		).toBeInTheDocument();
 		expect(within(row).getByLabelText("lean: strong")).toBeInTheDocument();
 		expect(within(row).getByText("news.ycombinator.com")).toBeInTheDocument();
 		// suggested kind: chip carries the AI reason as its title
 		expect(
 			within(row).getByTitle(
 				"Benchmark-heavy storage topics have run long-form",
+			),
+		).toBeInTheDocument();
+	});
+
+	it("shows the description as the secondary line, never the rationale", async () => {
+		// curatedFixture[0] carries a rationale but no note — the row shows neither.
+		renderBacklog(curatedFixture);
+		await screen.findByText("SSD endurance myths");
+		expect(
+			screen.queryByText("Three strong QLC endurance signals in one week"),
+		).not.toBeInTheDocument();
+	});
+
+	it("shows the note as the secondary line", async () => {
+		renderBacklog();
+		await screen.findByText("NVMe deep dive");
+		expect(
+			within(rowFor("NVMe deep dive")).getByText(
+				"The controller thermal story",
 			),
 		).toBeInTheDocument();
 	});
