@@ -178,29 +178,25 @@ export function IdeaDetailModal({
 						/>
 					</div>
 
-					<div className="grid grid-cols-2 gap-4">
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="idea-kind">Kind</Label>
-							<Select value={form.kind} onValueChange={(kind) => set({ kind })}>
-								<SelectTrigger id="idea-kind" size="sm">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{KINDS.map((kind) => (
-										<SelectItem key={kind.value} value={kind.value}>
-											{kind.label}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label>Signal</Label>
-							<SignalField
-								value={form.lean}
-								onChange={(lean) => set({ lean })}
-							/>
-						</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="idea-kind">Kind</Label>
+						<Select value={form.kind} onValueChange={(kind) => set({ kind })}>
+							<SelectTrigger id="idea-kind" size="sm" className="w-40">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{KINDS.map((kind) => (
+									<SelectItem key={kind.value} value={kind.value}>
+										{kind.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+
+					<div className="flex flex-col gap-1.5">
+						<Label>Signal</Label>
+						<SignalField value={form.lean} onChange={(lean) => set({ lean })} />
 					</div>
 
 					<div className="flex flex-col gap-1.5">
