@@ -124,6 +124,13 @@ export const commands = {
 	 */
 	setProjectPriority: (slug: string, priority: PriorityLevel) => typedError<null, Error>(__TAURI_INVOKE("set_project_priority", { slug, priority })),
 	/**
+	 *  Set a project's kind. Writes both the manifest (atomic) and the row — folders
+	 *  are truth — then touches the row, records an event, and broadcasts.
+	 *  `ProjectKind` is an enum, so an out-of-vocabulary value is rejected at the IPC
+	 *  boundary and never reaches the manifest.
+	 */
+	setProjectKind: (slug: string, kind: ProjectKind) => typedError<null, Error>(__TAURI_INVOKE("set_project_kind", { slug, kind })),
+	/**
 	 *  Set (or clear) a project's shoot and publish dates. Writes the manifest
 	 *  (atomic) and the row, touches, records an event, and broadcasts.
 	 */
@@ -972,6 +979,11 @@ export type Project = {
 	publish_date: string | null,
 	created_at: string,
 	last_touched_at: string | null,
+	/**
+	 *  `unset | long | short | series`. Read leniently: an unrecognised value is
+	 *  carried verbatim and renders no kind chrome.
+	 */
+	kind: string,
 };
 
 /**
@@ -985,6 +997,15 @@ export type ProjectDetail = {
 	manifest_error: string | null,
 	freshness: FolderFreshness[],
 };
+
+/**
+ *  The video kind carried over from the idea a project was promoted from. Same
+ *  closed vocabulary as the idea `kind`, so promotion maps 1:1. This is the write
+ *  boundary: rows are read back as a lenient `String` (an unrecognised value
+ *  renders verbatim rather than dropping the project), but nothing can *persist*
+ *  a value outside this set.
+ */
+export type ProjectKind = "unset" | "long" | "short" | "series";
 
 /**
  *  Broadcast after any project row is created or mutated (status, dates,

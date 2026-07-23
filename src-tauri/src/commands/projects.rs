@@ -6,7 +6,7 @@ use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::db;
-use crate::db::projects::{PriorityLevel, Project};
+use crate::db::projects::{PriorityLevel, Project, ProjectKind};
 use crate::error::{Error, Result};
 use crate::paths;
 use crate::projects::anatomy::{PROJECT_SUBFOLDERS, create_project_skeleton};
@@ -176,6 +176,39 @@ pub async fn set_project_priority(
             db::projects::set_priority(conn, &slug, &priority)?;
             db::projects::touch(conn, &slug, &now)?;
             db::events::record(conn, "project-priority-changed", Some(&slug), None)?;
+            Ok(())
+        })
+        .await?;
+    crate::broadcast::projects_changed(&app);
+    Ok(())
+}
+
+/// Set a project's kind. Writes both the manifest (atomic) and the row — folders
+/// are truth — then touches the row, records an event, and broadcasts.
+/// `ProjectKind` is an enum, so an out-of-vocabulary value is rejected at the IPC
+/// boundary and never reaches the manifest.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_project_kind(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    slug: String,
+    kind: ProjectKind,
+) -> Result<()> {
+    let now = now_rfc3339()?;
+    state
+        .db
+        .call(move |conn| {
+            require_mounted(conn)?;
+            let project = db::projects::get(conn, &slug)?
+                .ok_or_else(|| Error::Io(format!("no such project: {slug}")))?;
+            let dir = Path::new(&project.root_path);
+            let mut manifest = read_manifest(dir)?;
+            manifest.kind = Some(kind.as_str().to_string());
+            write_manifest(dir, &manifest)?;
+            db::projects::set_kind(conn, &slug, &kind)?;
+            db::projects::touch(conn, &slug, &now)?;
+            db::events::record(conn, "project-kind-changed", Some(&slug), None)?;
             Ok(())
         })
         .await?;
