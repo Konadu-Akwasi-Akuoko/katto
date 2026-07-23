@@ -240,6 +240,15 @@
 	animation: promote-arrival var(--dur-slow) var(--ease) forwards;
 }
 
+/* Scrollable region with no visible scrollbar (dense calendar cells, chip
+   strips). The area still scrolls by wheel/trackpad/keyboard. */
+@utility scrollbar-hide {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
 @layer base {
 	* {
 		border-color: var(--border);

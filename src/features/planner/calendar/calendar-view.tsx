@@ -366,7 +366,7 @@ function DayCell({
 	return (
 		<div
 			className={cn(
-				"group grain relative flex min-h-20 flex-col gap-1 bg-surface p-1.5",
+				"group grain relative flex min-h-20 flex-col gap-1 overflow-hidden bg-surface p-1.5",
 				!cell.inMonth && "bg-surface/50 text-fg-faint",
 			)}
 		>
@@ -389,7 +389,7 @@ function DayCell({
 				</button>
 			</PinPopover>
 
-			<div className="flex flex-col gap-1">
+			<div className="scrollbar-hide flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
 				{markers.map((m, i) => {
 					const key =
 						m.kind === "backlog"
