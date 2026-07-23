@@ -94,24 +94,37 @@ pub fn get(conn: &Connection, id: &str) -> Result<Option<Idea>> {
     Ok(conn.query_row(&sql, [id], from_row).optional()?)
 }
 
-/// Patch an idea's editable fields. A `None` argument leaves that column
-/// unchanged (COALESCE keeps the existing value).
+/// Overwrite an idea's editable columns with the modal's saved state. Unlike a
+/// partial patch, every editable column is set to the provided value; `None`
+/// clears a nullable column. `title`/`kind` are NOT NULL and always carry a
+/// value. `evidence_json` is passed pre-merged by the command layer.
+#[allow(clippy::too_many_arguments)]
 pub fn update(
     conn: &Connection,
     id: &str,
-    title: Option<&str>,
-    kind: Option<&str>,
+    title: &str,
+    kind: &str,
     notes: Option<&str>,
+    rationale: Option<&str>,
+    source_url: Option<&str>,
+    evidence_json: Option<&str>,
     kind_source: Option<&str>,
 ) -> Result<()> {
     conn.execute(
         "UPDATE ideas SET
-           title = COALESCE(?2, title),
-           kind  = COALESCE(?3, kind),
-           notes = COALESCE(?4, notes),
-           kind_source = COALESCE(?5, kind_source)
+           title = ?2, kind = ?3, notes = ?4, rationale = ?5,
+           source_url = ?6, evidence_json = ?7, kind_source = ?8
          WHERE id = ?1",
-        params![id, title, kind, notes, kind_source],
+        params![
+            id,
+            title,
+            kind,
+            notes,
+            rationale,
+            source_url,
+            evidence_json,
+            kind_source
+        ],
     )?;
     Ok(())
 }
@@ -269,15 +282,44 @@ mod tests {
     }
 
     #[test]
-    fn update_patches_only_supplied_fields() {
+    fn update_sets_and_clears_editable_columns() {
         let conn = test_db();
-        create(&conn, &sample("i1", "2026-07-09T00:00:00Z")).unwrap();
-        update(&conn, "i1", Some("Renamed"), None, Some("a note"), None).unwrap();
-        let got = get(&conn, "i1").unwrap().unwrap();
-        assert_eq!(got.title, "Renamed");
-        assert_eq!(got.kind, "unset");
-        assert_eq!(got.notes.as_deref(), Some("a note"));
-        assert_eq!(got.kind_source, None);
+        let mut idea = sample("u1", "2026-07-09T10:00:00Z");
+        idea.r#type = "curated".to_string();
+        idea.rationale = Some("old why".to_string());
+        idea.source = Some("hn".to_string());
+        idea.source_url = Some("https://example.com".to_string());
+        idea.evidence_json = Some(r#"{"lean":"hold","quotes":["q"]}"#.to_string());
+        idea.notes = Some("old note".to_string());
+        idea.kind_source = Some("ai".to_string());
+        idea.kind_why = Some("why".to_string());
+        create(&conn, &idea).unwrap();
+
+        // set title/kind, clear notes + source_url, keep merged evidence_json
+        update(
+            &conn,
+            "u1",
+            "New",
+            "long",
+            None,
+            Some("new why"),
+            None,
+            Some(r#"{"lean":"strong","quotes":["q"]}"#),
+            Some("human"),
+        )
+        .unwrap();
+
+        let got = get(&conn, "u1").unwrap().unwrap();
+        assert_eq!(got.title, "New");
+        assert_eq!(got.kind, "long");
+        assert_eq!(got.notes, None);
+        assert_eq!(got.rationale.as_deref(), Some("new why"));
+        assert_eq!(got.source_url, None);
+        assert_eq!(got.kind_source.as_deref(), Some("human"));
+        assert_eq!(
+            got.evidence_json.as_deref(),
+            Some(r#"{"lean":"strong","quotes":["q"]}"#)
+        );
     }
 
     #[test]

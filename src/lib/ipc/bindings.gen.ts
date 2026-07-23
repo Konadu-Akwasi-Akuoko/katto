@@ -800,14 +800,19 @@ export type IdeaCreate = {
 };
 
 /**
- *  A partial edit of an idea; a `None` field leaves that column unchanged.
- *  `kind_source` flips to `"human"` when the owner changes or confirms a kind
- *  the curation run suggested.
+ *  The complete editable state of an idea, saved from the detail modal. `title`
+ *  and `kind` always carry a value; the nullable fields are set as given (`None`
+ *  clears the column). `lean` is the categorical signal — never a number —
+ *  merged into `evidence_json`, preserving that blob's other keys.
+ *  `kind_source` flips to `"human"` when the owner changes the suggested kind.
  */
 export type IdeaPatch = {
-	title: string | null,
-	kind: string | null,
+	title: string,
+	kind: string,
 	notes: string | null,
+	rationale: string | null,
+	source_url: string | null,
+	lean: string | null,
 	kind_source: string | null,
 };
 

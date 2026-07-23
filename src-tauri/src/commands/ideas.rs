@@ -23,14 +23,19 @@ pub struct IdeaCreate {
     pub notes: Option<String>,
 }
 
-/// A partial edit of an idea; a `None` field leaves that column unchanged.
-/// `kind_source` flips to `"human"` when the owner changes or confirms a kind
-/// the curation run suggested.
+/// The complete editable state of an idea, saved from the detail modal. `title`
+/// and `kind` always carry a value; the nullable fields are set as given (`None`
+/// clears the column). `lean` is the categorical signal — never a number —
+/// merged into `evidence_json`, preserving that blob's other keys.
+/// `kind_source` flips to `"human"` when the owner changes the suggested kind.
 #[derive(Debug, Deserialize, specta::Type)]
 pub struct IdeaPatch {
-    pub title: Option<String>,
-    pub kind: Option<String>,
+    pub title: String,
+    pub kind: String,
     pub notes: Option<String>,
+    pub rationale: Option<String>,
+    pub source_url: Option<String>,
+    pub lean: Option<String>,
     pub kind_source: Option<String>,
 }
 
@@ -192,14 +197,43 @@ fn capture_submit_inner(
     )
 }
 
-/// Apply a patch and return the resulting row.
+/// Merge the categorical `lean` into an idea's `evidence_json` object, leaving
+/// every other key intact. `None` removes the `lean` key; an object that ends up
+/// empty collapses to `None` (a NULL column).
+fn merge_lean(existing: Option<&str>, lean: Option<&str>) -> Result<Option<String>> {
+    let mut map = existing
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    match lean {
+        Some(l) => {
+            map.insert("lean".into(), serde_json::Value::String(l.to_string()));
+        }
+        None => {
+            map.remove("lean");
+        }
+    }
+    if map.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(serde_json::Value::Object(map).to_string()))
+    }
+}
+
+/// Apply the modal's saved state and return the resulting row.
 fn update_idea_inner(conn: &Connection, id: &str, patch: IdeaPatch) -> Result<Idea> {
+    let existing =
+        db::ideas::get(conn, id)?.ok_or_else(|| Error::Io(format!("no such idea: {id}")))?;
+    let evidence_json = merge_lean(existing.evidence_json.as_deref(), patch.lean.as_deref())?;
     db::ideas::update(
         conn,
         id,
-        patch.title.as_deref(),
-        patch.kind.as_deref(),
+        &patch.title,
+        &patch.kind,
         patch.notes.as_deref(),
+        patch.rationale.as_deref(),
+        patch.source_url.as_deref(),
+        evidence_json.as_deref(),
         patch.kind_source.as_deref(),
     )?;
     db::ideas::get(conn, id)?.ok_or_else(|| Error::Io(format!("no such idea: {id}")))
@@ -408,15 +442,19 @@ mod tests {
             &conn,
             &idea.id,
             IdeaPatch {
-                title: Some("Renamed".to_string()),
-                kind: Some("long".to_string()),
+                title: "Renamed".to_string(),
+                kind: "long".to_string(),
                 notes: None,
-                kind_source: None,
+                rationale: Some("fresh angle".to_string()),
+                source_url: None,
+                lean: None,
+                kind_source: Some("human".to_string()),
             },
         )
         .unwrap();
         assert_eq!(patched.title, "Renamed");
         assert_eq!(patched.kind, "long");
+        assert_eq!(patched.rationale.as_deref(), Some("fresh angle"));
     }
 
     #[test]
@@ -433,9 +471,12 @@ mod tests {
             &conn,
             &idea.id,
             IdeaPatch {
-                title: None,
-                kind: Some("long".to_string()),
+                title: "Curated one".to_string(),
+                kind: "long".to_string(),
                 notes: None,
+                rationale: None,
+                source_url: None,
+                lean: None,
                 kind_source: Some("human".to_string()),
             },
         )
@@ -445,6 +486,56 @@ mod tests {
         assert_eq!(patched.kind_source.as_deref(), Some("human"));
         // kind_why is provenance of the AI suggestion; it survives the flip.
         assert_eq!(patched.kind_why.as_deref(), Some("past long-form wins"));
+    }
+
+    #[test]
+    fn update_idea_inner_merges_lean_without_dropping_other_keys() {
+        let conn = test_db();
+        let idea = seed_backlog(&conn, "Signal idea");
+        db::ideas::update(
+            &conn,
+            &idea.id,
+            "Signal idea",
+            "unset",
+            None,
+            None,
+            None,
+            Some(r#"{"lean":"hold","quotes":["a"]}"#),
+            None,
+        )
+        .unwrap();
+
+        let patched = update_idea_inner(
+            &conn,
+            &idea.id,
+            IdeaPatch {
+                title: "Signal idea".to_string(),
+                kind: "unset".to_string(),
+                notes: None,
+                rationale: None,
+                source_url: None,
+                lean: Some("strong".to_string()),
+                kind_source: None,
+            },
+        )
+        .unwrap();
+
+        let ev = patched.evidence_json.unwrap();
+        assert!(ev.contains(r#""lean":"strong""#));
+        assert!(ev.contains(r#""quotes":["a"]"#));
+    }
+
+    #[test]
+    fn merge_lean_clears_only_the_lean_key() {
+        assert_eq!(merge_lean(Some(r#"{"lean":"hold"}"#), None).unwrap(), None);
+        assert_eq!(
+            merge_lean(Some(r#"{"lean":"hold","quotes":["a"]}"#), None).unwrap(),
+            Some(r#"{"quotes":["a"]}"#.to_string())
+        );
+        assert_eq!(
+            merge_lean(None, Some("lean")).unwrap(),
+            Some(r#"{"lean":"lean"}"#.to_string())
+        );
     }
 
     #[test]
