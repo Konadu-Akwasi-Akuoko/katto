@@ -12,6 +12,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PriorityChip } from "@/components/ui/priority-chip";
 import {
@@ -297,9 +298,9 @@ function KindControl({ project }: { project: Project }) {
 				className="border-none px-0 shadow-none"
 			>
 				<SelectValue>
-					<span className="inline-flex h-[19px] items-center rounded-md bg-surface-2 px-2 text-xs text-fg-muted">
+					<Badge variant="ghost" className="bg-surface-2 text-fg-muted">
 						{KIND_LABELS[project.kind] ?? project.kind}
-					</span>
+					</Badge>
 				</SelectValue>
 			</SelectTrigger>
 			<SelectContent>
