@@ -57,9 +57,9 @@ describe("ExportDialog", () => {
 			doneResult,
 		);
 		render(<ExportDialog bundlePath="/b" onClose={noop} onExported={noop} />);
-		expect(
-			await screen.findByRole("radio", { name: /Final Cut/ }),
-		).toBeChecked();
+		await waitFor(() =>
+			expect(screen.getByRole("radio", { name: /Final Cut/ })).toBeChecked(),
+		);
 		fireEvent.click(screen.getByRole("button", { name: "Export" }));
 		await waitFor(() =>
 			expect(exportSpy).toHaveBeenCalledWith("/b", "final_cut", false),
