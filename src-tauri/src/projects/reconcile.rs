@@ -131,6 +131,15 @@ pub fn apply(conn: &mut Connection, disk: &[ScanEntry], report: &ReconcileReport
             && let Ok(manifest) = &entry.manifest
         {
             db::projects::upsert(&tx, &project_from(manifest, &entry.path))?;
+            // Rebuild the schedule index from the manifest (folders are truth):
+            // a Finder restore brings the folder + its dates back, and the pins
+            // must reappear on the calendar with it.
+            if let Some(date) = &manifest.shoot_date {
+                db::schedule::upsert(&tx, slug, "shoot", date, None)?;
+            }
+            if let Some(date) = &manifest.publish_date {
+                db::schedule::upsert(&tx, slug, "publish", date, None)?;
+            }
         }
     }
     for slug in &report.removed {
@@ -217,6 +226,25 @@ mod tests {
             path: PathBuf::from(format!("/tmp/Projects/{slug}")),
             manifest: Err("malformed project.json".to_string()),
         }
+    }
+
+    #[test]
+    fn apply_rebuilds_schedule_pins_from_a_restored_manifest() {
+        let mut conn = test_db();
+        let mut m = manifest("nvme-2026-07-09");
+        m.shoot_date = Some("2026-08-01".to_string());
+        let entry = ScanEntry {
+            slug: m.slug.clone(),
+            path: PathBuf::from("/tmp/Projects/nvme-2026-07-09"),
+            manifest: Ok(m),
+        };
+        let report = diff(&[], std::slice::from_ref(&entry));
+        apply(&mut conn, std::slice::from_ref(&entry), &report).unwrap();
+
+        let rows = db::schedule::list_range(&conn, "2026-08-01", "2026-08-01").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, "shoot");
+        assert_eq!(rows[0].project_slug, "nvme-2026-07-09");
     }
 
     #[test]
