@@ -1,13 +1,87 @@
 import { describe, expect, it } from "vitest";
 import {
+	ALL_PHASES,
 	addDaysIso,
 	addMonthsIso,
+	applyCalendarFilters,
+	type CalendarFilters,
 	chipsByDate,
+	markersByDate,
 	monthGrid,
 	periodLabel,
 	weekRow,
 } from "@/features/planner/model/calendar";
+import type { CalendarMarker } from "@/lib/ipc/calendar";
 import { scheduleEntry } from "@/test/fixtures/schedule";
+
+const MARKERS: CalendarMarker[] = [
+	{
+		kind: "shoot",
+		project_slug: "a",
+		title: "A",
+		date: "2026-07-10",
+		note: null,
+	},
+	{
+		kind: "publish",
+		project_slug: "b",
+		title: "B",
+		date: "2026-07-11",
+		note: null,
+	},
+	{ kind: "backlog", idea_id: "i1", title: "Idea", date: "2026-07-12" },
+	{
+		kind: "phase",
+		project_slug: "a",
+		title: "A",
+		date: "2026-07-13",
+		to: "editing",
+	},
+];
+
+const ALL_ON: CalendarFilters["categories"] = {
+	shoot: true,
+	publish: true,
+	backlog: true,
+	phase: true,
+};
+
+describe("applyCalendarFilters", () => {
+	it("hides categories that are toggled off", () => {
+		const out = applyCalendarFilters(MARKERS, {
+			categories: { ...ALL_ON, publish: false },
+			phases: ALL_PHASES,
+			project: null,
+		});
+		expect(out.map((m) => m.kind)).toEqual(["shoot", "backlog", "phase"]);
+	});
+
+	it("keeps phase moves only for the selected destination phases", () => {
+		const out = applyCalendarFilters(MARKERS, {
+			categories: ALL_ON,
+			phases: ["shooting"],
+			project: null,
+		});
+		expect(out.some((m) => m.kind === "phase")).toBe(false);
+	});
+
+	it("filters by project and drops project-less backlog markers", () => {
+		const out = applyCalendarFilters(MARKERS, {
+			categories: ALL_ON,
+			phases: ALL_PHASES,
+			project: "a",
+		});
+		expect(out.map((m) => m.kind)).toEqual(["shoot", "phase"]);
+	});
+});
+
+describe("markersByDate", () => {
+	it("groups markers by their ISO day", () => {
+		const map = markersByDate(MARKERS);
+		expect(map.get("2026-07-10")).toHaveLength(1);
+		expect(map.get("2026-07-99")).toBeUndefined();
+	});
+});
 
 describe("monthGrid", () => {
 	// month is 0-indexed, matching Date.getUTCMonth (0 = January, 1 = February).
