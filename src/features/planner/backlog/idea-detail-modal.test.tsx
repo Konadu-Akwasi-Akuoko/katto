@@ -9,7 +9,8 @@ import { curatedFixture } from "@/test/fixtures/ideas";
 afterEach(() => clearMocks());
 
 function renderModal() {
-	const idea = curatedFixture[0]!;
+	const idea = curatedFixture[0];
+	if (idea === undefined) throw new Error("curatedFixture is empty");
 	const calls = vi.fn();
 	mockIPC((cmd, payload) => {
 		calls(cmd, payload);
