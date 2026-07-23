@@ -1,3 +1,4 @@
+import { ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -19,10 +20,12 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatShortDate } from "@/lib/date";
-import type { Idea } from "@/lib/ipc/ideas";
+import { browserKeys, browserOpenTab } from "@/lib/ipc/browser";
+import type { Idea, IdeaPatch } from "@/lib/ipc/ideas";
 import { ideasKeys, updateIdea } from "@/lib/ipc/ideas";
 import { cn } from "@/lib/utils";
-import { type Lean, parseLean, sourceDomain } from "./model/lean";
+import { useUiStore } from "@/stores/ui";
+import { isHttpUrl, type Lean, parseLean, sourceDomain } from "./model/lean";
 
 const KINDS = [
 	{ value: "unset", label: "Unsorted" },
@@ -117,19 +120,38 @@ export function IdeaDetailModal({
 	const domain = sourceDomain(form.sourceUrl || null);
 	const provenance = idea.kind_source === "ai" || idea.type !== "manual";
 
+	const buildPatch = (): IdeaPatch => ({
+		title: form.title.trim(),
+		kind: form.kind,
+		notes: form.notes.trim() || null,
+		rationale: form.rationale.trim() || null,
+		source_url: form.sourceUrl.trim() || null,
+		lean: form.lean === "none" ? null : form.lean,
+		kind_source: form.kind !== idea.kind ? "human" : idea.kind_source,
+	});
+
 	const save = useMutation({
-		mutationFn: () =>
-			updateIdea(idea.id, {
-				title: form.title.trim(),
-				kind: form.kind,
-				notes: form.notes.trim() || null,
-				rationale: form.rationale.trim() || null,
-				source_url: form.sourceUrl.trim() || null,
-				lean: form.lean === "none" ? null : form.lean,
-				kind_source: form.kind !== idea.kind ? "human" : idea.kind_source,
-			}),
+		mutationFn: () => updateIdea(idea.id, buildPatch()),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: ideasKeys.all });
+			onClose();
+		},
+	});
+
+	// Persist any pending edits (when the title is valid), then hand the URL to
+	// the in-app browser and jump to that surface. The modal unmounts on the
+	// surface switch, so saving first is what keeps edits from being lost.
+	const openSource = useMutation({
+		mutationFn: async () => {
+			if (dirty && form.title.trim() !== "") {
+				await updateIdea(idea.id, buildPatch());
+				await queryClient.invalidateQueries({ queryKey: ideasKeys.all });
+			}
+			await browserOpenTab(form.sourceUrl.trim());
+			await queryClient.invalidateQueries({ queryKey: browserKeys.state });
+		},
+		onSuccess: () => {
+			useUiStore.getState().setSurface("browser");
 			onClose();
 		},
 	});
@@ -201,15 +223,29 @@ export function IdeaDetailModal({
 
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="idea-src">Source</Label>
-						<Input
-							id="idea-src"
-							placeholder="https://…"
-							value={form.sourceUrl}
-							onChange={(event) => set({ sourceUrl: event.target.value })}
-						/>
+						<div className="relative">
+							<Input
+								id="idea-src"
+								placeholder="https://…"
+								value={form.sourceUrl}
+								onChange={(event) => set({ sourceUrl: event.target.value })}
+								className="pr-9"
+							/>
+							<button
+								type="button"
+								aria-label="Open source in browser"
+								disabled={
+									!isHttpUrl(form.sourceUrl.trim()) || openSource.isPending
+								}
+								onClick={() => openSource.mutate()}
+								className="absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 cursor-default items-center justify-center rounded-md text-fg-faint transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-ember focus-visible:outline-none disabled:opacity-45 disabled:hover:text-fg-faint"
+							>
+								<ArrowSquareOutIcon />
+							</button>
+						</div>
 						<span className="text-xs text-fg-faint">
 							{domain !== null
-								? `Shows as ${domain} on the row.`
+								? `Shows as ${domain} on the row — the arrow opens it in the Browser.`
 								: "Clear it to make this a plain idea."}
 						</span>
 					</div>
