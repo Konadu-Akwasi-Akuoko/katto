@@ -145,6 +145,7 @@ mod tests {
                 publish_date: None,
                 created_at: "2026-07-09T00:00:00Z".to_string(),
                 last_touched_at: None,
+                kind: "unset".to_string(),
             },
         )
         .unwrap();

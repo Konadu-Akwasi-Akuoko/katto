@@ -29,6 +29,32 @@ impl PriorityLevel {
     }
 }
 
+/// The video kind carried over from the idea a project was promoted from. Same
+/// closed vocabulary as the idea `kind`, so promotion maps 1:1. This is the write
+/// boundary: rows are read back as a lenient `String` (an unrecognised value
+/// renders verbatim rather than dropping the project), but nothing can *persist*
+/// a value outside this set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectKind {
+    Unset,
+    Long,
+    Short,
+    Series,
+}
+
+impl ProjectKind {
+    /// The stored column value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ProjectKind::Unset => "unset",
+            ProjectKind::Long => "long",
+            ProjectKind::Short => "short",
+            ProjectKind::Series => "series",
+        }
+    }
+}
+
 /// A project row. The folder on disk is the source of truth; this row is an index
 /// reconciled on launch. `last_touched_at` records the most recent interaction and
 /// drives the tray's current-project line.
@@ -46,9 +72,12 @@ pub struct Project {
     pub publish_date: Option<String>,
     pub created_at: String,
     pub last_touched_at: Option<String>,
+    /// `unset | long | short | series`. Read leniently: an unrecognised value is
+    /// carried verbatim and renders no kind chrome.
+    pub kind: String,
 }
 
-const SELECT_COLUMNS: &str = "slug, title, root_path, status, target_nle, priority, shoot_date, publish_date, created_at, last_touched_at";
+const SELECT_COLUMNS: &str = "slug, title, root_path, status, target_nle, priority, shoot_date, publish_date, created_at, last_touched_at, kind";
 
 fn from_row(row: &Row) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -62,6 +91,7 @@ fn from_row(row: &Row) -> rusqlite::Result<Project> {
         publish_date: row.get("publish_date")?,
         created_at: row.get("created_at")?,
         last_touched_at: row.get("last_touched_at")?,
+        kind: row.get("kind")?,
     })
 }
 
@@ -69,8 +99,8 @@ fn from_row(row: &Row) -> rusqlite::Result<Project> {
 pub fn insert(conn: &Connection, p: &Project) -> Result<()> {
     conn.execute(
         "INSERT INTO projects
-           (slug, title, root_path, status, target_nle, priority, shoot_date, publish_date, created_at, last_touched_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+           (slug, title, root_path, status, target_nle, priority, shoot_date, publish_date, created_at, last_touched_at, kind)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             p.slug,
             p.title,
@@ -82,6 +112,7 @@ pub fn insert(conn: &Connection, p: &Project) -> Result<()> {
             p.publish_date,
             p.created_at,
             p.last_touched_at,
+            p.kind,
         ],
     )?;
     Ok(())
@@ -91,8 +122,8 @@ pub fn insert(conn: &Connection, p: &Project) -> Result<()> {
 pub fn upsert(conn: &Connection, p: &Project) -> Result<()> {
     conn.execute(
         "INSERT INTO projects
-           (slug, title, root_path, status, target_nle, priority, shoot_date, publish_date, created_at, last_touched_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+           (slug, title, root_path, status, target_nle, priority, shoot_date, publish_date, created_at, last_touched_at, kind)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
          ON CONFLICT(slug) DO UPDATE SET
            title = excluded.title,
            root_path = excluded.root_path,
@@ -102,7 +133,8 @@ pub fn upsert(conn: &Connection, p: &Project) -> Result<()> {
            shoot_date = excluded.shoot_date,
            publish_date = excluded.publish_date,
            created_at = excluded.created_at,
-           last_touched_at = excluded.last_touched_at",
+           last_touched_at = excluded.last_touched_at,
+           kind = excluded.kind",
         params![
             p.slug,
             p.title,
@@ -114,6 +146,7 @@ pub fn upsert(conn: &Connection, p: &Project) -> Result<()> {
             p.publish_date,
             p.created_at,
             p.last_touched_at,
+            p.kind,
         ],
     )?;
     Ok(())
@@ -155,6 +188,15 @@ pub fn set_priority(conn: &Connection, slug: &str, priority: &PriorityLevel) -> 
     conn.execute(
         "UPDATE projects SET priority = ?2 WHERE slug = ?1",
         params![slug, priority.as_str()],
+    )?;
+    Ok(())
+}
+
+/// Update a project's kind.
+pub fn set_kind(conn: &Connection, slug: &str, kind: &ProjectKind) -> Result<()> {
+    conn.execute(
+        "UPDATE projects SET kind = ?2 WHERE slug = ?1",
+        params![slug, kind.as_str()],
     )?;
     Ok(())
 }
@@ -217,6 +259,7 @@ mod tests {
             publish_date: None,
             created_at: "2026-07-09T00:00:00Z".to_string(),
             last_touched_at: None,
+            kind: "unset".to_string(),
         }
     }
 
@@ -271,6 +314,31 @@ mod tests {
         insert(&conn, &p).unwrap();
         set_status(&conn, &p.slug, "shooting").unwrap();
         assert_eq!(get(&conn, &p.slug).unwrap().unwrap().status, "shooting");
+    }
+
+    #[test]
+    fn kind_defaults_to_unset_on_insert() {
+        let conn = test_db();
+        // A row inserted before the kind column existed defaults via the schema.
+        conn.execute(
+            "INSERT INTO projects (slug, title, root_path, status, target_nle, priority, created_at)
+             VALUES ('legacy-2026-07-09', 'Legacy', '/p', 'idea', 'fcp', 'none', '2026-07-09T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            get(&conn, "legacy-2026-07-09").unwrap().unwrap().kind,
+            "unset"
+        );
+    }
+
+    #[test]
+    fn set_kind_updates() {
+        let conn = test_db();
+        let p = sample("k-2026-07-09");
+        insert(&conn, &p).unwrap();
+        set_kind(&conn, &p.slug, &ProjectKind::Long).unwrap();
+        assert_eq!(get(&conn, &p.slug).unwrap().unwrap().kind, "long");
     }
 
     #[test]
