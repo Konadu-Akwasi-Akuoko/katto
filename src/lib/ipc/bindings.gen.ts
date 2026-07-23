@@ -190,6 +190,11 @@ export const commands = {
 	importFiles: (projectSlug: string, paths: string[]) => typedError<Job, Error>(__TAURI_INVOKE("import_files", { projectSlug, paths })),
 	/**  Ideas with the given status, newest-first. */
 	listIdeas: (status: string) => typedError<Idea[], Error>(__TAURI_INVOKE("list_ideas", { status })),
+	/**
+	 *  Fetch one idea by id. The calendar opens the idea detail modal from outside
+	 *  the Backlog tab, so it needs a by-id lookup.
+	 */
+	getIdea: (id: string) => typedError<Idea, Error>(__TAURI_INVOKE("get_idea", { id })),
 	/**  Capture a new idea into the backlog and broadcast. */
 	createIdea: (input: IdeaCreate) => typedError<Idea, Error>(__TAURI_INVOKE("create_idea", { input })),
 	/**  Patch an idea's editable fields and return the updated row. */
@@ -251,18 +256,31 @@ export const commands = {
 	 */
 	setDockFocus: (open: boolean, focusedSession: string | null) => typedError<null, Error>(__TAURI_INVOKE("set_dock_focus", { open, focusedSession })),
 	/**
+	 *  All calendar markers whose day falls in `[from, to]` (inclusive ISO dates):
+	 *  shoot/publish pins from the `schedule` table, backlog-added from
+	 *  `ideas.first_seen`, and phase moves from `project-status-changed` events (the
+	 *  destination phase). One round-trip; the frontend does the category/project
+	 *  filtering client-side.
+	 */
+	listCalendar: (from: string, to: string) => typedError<CalendarMarker[], Error>(__TAURI_INVOKE("list_calendar", { from, to })),
+	/**
 	 *  Schedule entries whose date falls within `[from, to]` (inclusive ISO bounds),
 	 *  ordered by date. Drives the calendar's month/week views.
 	 */
 	listSchedule: (from: string, to: string) => typedError<ScheduleEntry[], Error>(__TAURI_INVOKE("list_schedule", { from, to })),
 	/**
-	 *  Pin a project to a date. There is at most one entry per `(project_slug, kind)`
-	 *  pair, so this inserts or updates in place. Broadcasts `schedule-changed`, which
-	 *  also refreshes the tray's next-shoot line.
+	 *  Pin a project to a date (shoot or publish). Writes the schedule index, mirrors
+	 *  the date into `project.json` and the project row, touches, records an event,
+	 *  and broadcasts. `ScheduleKind` is an enum, so a bad kind is rejected at the IPC
+	 *  boundary. Guarded by the studio-root mount like every other folder write.
 	 */
-	upsertScheduleEntry: (projectSlug: string, kind: string, date: string, note: string | null) => typedError<ScheduleEntry, Error>(__TAURI_INVOKE("upsert_schedule_entry", { projectSlug, kind, date, note })),
-	/**  Remove a schedule entry by id and broadcast `schedule-changed`. */
-	deleteScheduleEntry: (id: RowId) => typedError<null, Error>(__TAURI_INVOKE("delete_schedule_entry", { id })),
+	upsertScheduleEntry: (projectSlug: string, kind: ScheduleKind, date: string, note: string | null) => typedError<ScheduleEntry, Error>(__TAURI_INVOKE("upsert_schedule_entry", { projectSlug, kind, date, note })),
+	/**
+	 *  Clear a project's shoot or publish pin. Removes the schedule row and the
+	 *  mirrored date from the manifest and row, touches, records an event, and
+	 *  broadcasts.
+	 */
+	deleteScheduleEntry: (projectSlug: string, kind: ScheduleKind) => typedError<null, Error>(__TAURI_INVOKE("delete_schedule_entry", { projectSlug, kind })),
 	/**
 	 *  Scaffold `assets/vfx/<slug>/` for a project and open a dock session in it.
 	 *  Returns the session id so the frontend can focus the dock on it (the
@@ -430,6 +448,12 @@ export type BundleSummary = {
 	has_transcript: boolean,
 	has_cuts: boolean,
 };
+
+/**
+ *  One dot on the calendar. `date` is always `YYYY-MM-DD` (the day the marker
+ *  lands on); historical markers derive it from the event/idea timestamp.
+ */
+export type CalendarMarker = { kind: "shoot"; project_slug: string; title: string; date: string; note: string | null } | { kind: "publish"; project_slug: string; title: string; date: string; note: string | null } | { kind: "backlog"; idea_id: string; title: string; date: string } | { kind: "phase"; project_slug: string; title: string; date: string; to: string };
 
 /**
  *  Broadcast when a camera card is detected and enumerated. Carries no payload:
@@ -1084,6 +1108,12 @@ export type ScheduleEntry = {
 	date: string,
 	note: string | null,
 };
+
+/**
+ *  The two pinnable dates. Enum so an out-of-vocabulary kind is rejected at the
+ *  IPC boundary and can never reach the schedule or manifest.
+ */
+export type ScheduleKind = "shoot" | "publish";
 
 /**  A named recurring job with anacron-style catch-up semantics (Phase 6). */
 export type ScheduledJob = {

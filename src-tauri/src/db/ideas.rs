@@ -28,6 +28,25 @@ pub struct Idea {
 
 const SELECT_COLUMNS: &str = "id, type, kind, status, title, rationale, source, source_url, source_title, evidence_json, raw_signal_id, first_seen, notes, promoted_slug, kind_source, kind_why";
 
+/// Ideas whose `first_seen` falls in the half-open range `[from, to_exclusive)`,
+/// as `(id, title, first_seen)` — the calendar's "added to backlog" markers. Uses
+/// `idx_ideas_first_seen`.
+pub fn list_added_between(
+    conn: &Connection,
+    from: &str,
+    to_exclusive: &str,
+) -> Result<Vec<(String, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, first_seen FROM ideas
+         WHERE first_seen >= ?1 AND first_seen < ?2
+         ORDER BY first_seen ASC",
+    )?;
+    let rows = stmt.query_map(params![from, to_exclusive], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+    })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 fn from_row(row: &Row) -> rusqlite::Result<Idea> {
     Ok(Idea {
         id: row.get("id")?,
@@ -229,6 +248,16 @@ mod tests {
             kind_source: None,
             kind_why: None,
         }
+    }
+
+    #[test]
+    fn list_added_between_returns_ideas_in_the_half_open_range() {
+        let conn = test_db();
+        create(&conn, &sample("in", "2026-07-10T09:00:00Z")).unwrap();
+        create(&conn, &sample("out", "2026-08-02T09:00:00Z")).unwrap();
+        let rows = list_added_between(&conn, "2026-07-01", "2026-08-01").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "in");
     }
 
     #[test]

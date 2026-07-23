@@ -1,8 +1,12 @@
-import type { RowId, ScheduleEntry } from "@/lib/ipc/bindings.gen";
+import type {
+	RowId,
+	ScheduleEntry,
+	ScheduleKind,
+} from "@/lib/ipc/bindings.gen";
 import { commands } from "@/lib/ipc/bindings.gen";
 import { unwrap } from "@/lib/ipc/result";
 
-export type { RowId, ScheduleEntry };
+export type { RowId, ScheduleEntry, ScheduleKind };
 
 export const scheduleKeys = {
 	all: ["schedule"] as const,
@@ -16,17 +20,19 @@ export const listSchedule = (
 ): Promise<ScheduleEntry[]> => unwrap(commands.listSchedule(from, to));
 
 /**
- * Pin a project to a date. At most one entry exists per `(projectSlug, kind)`
- * pair, so this inserts or updates in place. `kind` is `shoot` or `publish`.
+ * Pin a project to a shoot/publish date. One pin per `(projectSlug, kind)`, so
+ * this inserts or moves it in place, mirroring the date into the manifest + row.
  */
 export const upsertScheduleEntry = (
 	projectSlug: string,
-	kind: string,
+	kind: ScheduleKind,
 	date: string,
 	note: string | null = null,
 ): Promise<ScheduleEntry> =>
 	unwrap(commands.upsertScheduleEntry(projectSlug, kind, date, note));
 
-/** Remove a schedule entry by id. */
-export const deleteScheduleEntry = (id: RowId): Promise<null> =>
-	unwrap(commands.deleteScheduleEntry(id));
+/** Clear a project's shoot or publish pin. */
+export const deleteScheduleEntry = (
+	projectSlug: string,
+	kind: ScheduleKind,
+): Promise<null> => unwrap(commands.deleteScheduleEntry(projectSlug, kind));

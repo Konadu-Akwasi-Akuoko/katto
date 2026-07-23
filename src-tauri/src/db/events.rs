@@ -55,6 +55,25 @@ pub fn list(conn: &Connection, limit: u32, before_id: Option<RowId>) -> Result<V
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+/// Events of `kind` whose `ts` falls in the half-open range `[from, to_exclusive)`.
+/// `ts` is an RFC3339 datetime; passing plain `YYYY-MM-DD` bounds selects whole
+/// days (a date sorts before any timestamp on that day). Uses `idx_events_kind_ts`.
+pub fn list_range_by_kind(
+    conn: &Connection,
+    kind: &str,
+    from: &str,
+    to_exclusive: &str,
+) -> Result<Vec<Event>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, ts, kind, project_slug, payload_json
+         FROM events
+         WHERE kind = ?1 AND ts >= ?2 AND ts < ?3
+         ORDER BY ts ASC",
+    )?;
+    let rows = stmt.query_map(params![kind, from, to_exclusive], from_row)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,6 +85,24 @@ mod tests {
         let a = record(&conn, "app_started", None, None).unwrap();
         let b = record(&conn, "onboarding_complete", None, None).unwrap();
         assert!(b > a);
+    }
+
+    #[test]
+    fn list_range_by_kind_filters_kind_and_day() {
+        let conn = test_db();
+        // ts is stamped by SQLite; write explicit rows to control the dates.
+        conn.execute(
+            "INSERT INTO events (ts, kind, project_slug) VALUES
+               ('2026-07-10T09:00:00Z', 'project-status-changed', 'p'),
+               ('2026-08-02T09:00:00Z', 'project-status-changed', 'p'),
+               ('2026-07-11T09:00:00Z', 'project-created', 'p')",
+            [],
+        )
+        .unwrap();
+        let rows = list_range_by_kind(&conn, "project-status-changed", "2026-07-01", "2026-08-01")
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].ts, "2026-07-10T09:00:00Z");
     }
 
     #[test]

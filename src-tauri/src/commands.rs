@@ -1,4 +1,5 @@
 pub mod browser;
+pub mod calendar;
 pub mod drive;
 pub mod editor;
 pub mod events;

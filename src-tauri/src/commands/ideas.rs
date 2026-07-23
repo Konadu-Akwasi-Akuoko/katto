@@ -55,6 +55,19 @@ pub async fn list_ideas(state: State<'_, AppState>, status: String) -> Result<Ve
         .await
 }
 
+/// Fetch one idea by id. The calendar opens the idea detail modal from outside
+/// the Backlog tab, so it needs a by-id lookup.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_idea(state: State<'_, AppState>, id: String) -> Result<Idea> {
+    state
+        .db
+        .call(move |conn| {
+            db::ideas::get(conn, &id)?.ok_or_else(|| Error::Io(format!("no such idea: {id}")))
+        })
+        .await
+}
+
 /// Capture a new idea into the backlog and broadcast.
 #[tauri::command]
 #[specta::specta]
