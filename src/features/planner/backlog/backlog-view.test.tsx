@@ -152,14 +152,14 @@ describe("BacklogView", () => {
 		expect(within(row).queryByLabelText(/^lean:/)).not.toBeInTheDocument();
 	});
 
-	it("opens the detail modal when a row is clicked", async () => {
+	it("opens the shared idea modal by id when a row is clicked", async () => {
+		useUiStore.setState({ openIdeaId: null });
 		const user = userEvent.setup();
 		renderBacklog();
 		await screen.findByText("NVMe deep dive");
 
 		await user.click(screen.getByText("NVMe deep dive"));
 
-		expect(await screen.findByRole("dialog")).toBeInTheDocument();
-		expect(screen.getByLabelText("Name")).toHaveValue("NVMe deep dive");
+		expect(useUiStore.getState().openIdeaId).toBe("idea-1");
 	});
 });

@@ -20,7 +20,6 @@ import { projectsKeys } from "@/lib/ipc/projects";
 import { KIND_LABELS } from "@/lib/kind";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui";
-import { IdeaDetailModal } from "./idea-detail-modal";
 import { type Lean, parseLean, sourceDomain } from "./model/lean";
 
 export function BacklogView() {
@@ -29,7 +28,6 @@ export function BacklogView() {
 		queryKey: ideasKeys.byStatus("backlog"),
 		queryFn: () => listIdeas("backlog"),
 	});
-	const [openIdea, setOpenIdea] = useState<Idea | null>(null);
 
 	const invalidateIdeas = () =>
 		queryClient.invalidateQueries({ queryKey: ideasKeys.all });
@@ -77,16 +75,12 @@ export function BacklogView() {
 										? "discard"
 										: null
 							}
-							onOpen={() => setOpenIdea(idea)}
+							onOpen={() => useUiStore.getState().openIdea(idea.id)}
 							onPromote={() => promote.mutate(idea.id)}
 							onDiscard={() => discard.mutate(idea.id)}
 						/>
 					))}
 				</ul>
-			)}
-
-			{openIdea !== null && (
-				<IdeaDetailModal idea={openIdea} onClose={() => setOpenIdea(null)} />
 			)}
 		</div>
 	);
