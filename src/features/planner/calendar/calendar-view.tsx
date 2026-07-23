@@ -116,7 +116,7 @@ function todayIso(): string {
 
 /** A marker's day-chip label — phase markers lead with their destination phase. */
 function markerLabel(m: CalendarMarker): string {
-	if (m.kind === "phase") return `${statusAppearance(m.to).label} · ${m.title}`;
+	if (m.kind === "phase") return `${statusAppearance(m.to).label}: ${m.title}`;
 	return m.title;
 }
 
@@ -254,7 +254,7 @@ export function CalendarView() {
 				<Popover>
 					<PopoverTrigger asChild>
 						<Button variant="secondary" size="sm">
-							Phases · {filters.phases.length}
+							Phases ({filters.phases.length})
 						</Button>
 					</PopoverTrigger>
 					<PopoverContent className="w-44 p-1">
