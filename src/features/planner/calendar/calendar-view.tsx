@@ -17,13 +17,6 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import type {
 	CalendarCategory,
 	CalendarCell,
@@ -53,7 +46,6 @@ import { useUiStore } from "@/stores/ui";
 import { PinPopover } from "./pin-popover";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const ALL_PROJECTS = "__all__";
 
 /** Legend/color metadata per category. Class names are literals so Tailwind keeps them. */
 const CATEGORIES: ReadonlyArray<{
@@ -104,7 +96,6 @@ const CATEGORY_BY_KIND = Object.fromEntries(
 const DEFAULT_FILTERS: CalendarFilters = {
 	categories: { shoot: true, publish: true, backlog: true, phase: true },
 	phases: ALL_PHASES,
-	project: null,
 };
 
 /** Today as a local calendar date (`YYYY-MM-DD`), matching the schedule's dates. */
@@ -284,28 +275,6 @@ export function CalendarView() {
 						})}
 					</PopoverContent>
 				</Popover>
-
-				<Select
-					value={filters.project ?? ALL_PROJECTS}
-					onValueChange={(v) =>
-						setFilters((f) => ({
-							...f,
-							project: v === ALL_PROJECTS ? null : v,
-						}))
-					}
-				>
-					<SelectTrigger size="sm" aria-label="Project" className="w-44">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value={ALL_PROJECTS}>All projects</SelectItem>
-						{projects?.map((p) => (
-							<SelectItem key={p.slug} value={p.slug}>
-								{p.title}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
 			</div>
 
 			<div className="grid grid-cols-7 gap-px">

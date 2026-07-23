@@ -51,7 +51,6 @@ describe("applyCalendarFilters", () => {
 		const out = applyCalendarFilters(MARKERS, {
 			categories: { ...ALL_ON, publish: false },
 			phases: ALL_PHASES,
-			project: null,
 		});
 		expect(out.map((m) => m.kind)).toEqual(["shoot", "backlog", "phase"]);
 	});
@@ -60,18 +59,8 @@ describe("applyCalendarFilters", () => {
 		const out = applyCalendarFilters(MARKERS, {
 			categories: ALL_ON,
 			phases: ["shooting"],
-			project: null,
 		});
 		expect(out.some((m) => m.kind === "phase")).toBe(false);
-	});
-
-	it("filters by project and drops project-less backlog markers", () => {
-		const out = applyCalendarFilters(MARKERS, {
-			categories: ALL_ON,
-			phases: ALL_PHASES,
-			project: "a",
-		});
-		expect(out.map((m) => m.kind)).toEqual(["shoot", "phase"]);
 	});
 });
 

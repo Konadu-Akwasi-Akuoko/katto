@@ -11,17 +11,15 @@ export type CalendarCategory = CalendarMarker["kind"];
 /** The status vocabulary, used by the phase multiselect. */
 export const ALL_PHASES = ["idea", "shooting", "editing", "published"] as const;
 
-/** The legend + phase + project filter state applied client-side. */
+/** The legend + phase filter state applied client-side. */
 export interface CalendarFilters {
 	categories: Record<CalendarCategory, boolean>;
 	phases: readonly string[];
-	project: string | null;
 }
 
 /**
- * Filter the fetched marker set: hide toggled-off categories, restrict phase
- * moves to the selected destination phases, and (when set) keep one project's
- * markers. Backlog markers have no `project_slug`, so a project filter drops them.
+ * Filter the fetched marker set: hide toggled-off categories and restrict phase
+ * moves to the selected destination phases.
  */
 export function applyCalendarFilters(
 	markers: CalendarMarker[],
@@ -30,10 +28,6 @@ export function applyCalendarFilters(
 	return markers.filter((m) => {
 		if (!f.categories[m.kind]) return false;
 		if (m.kind === "phase" && !f.phases.includes(m.to)) return false;
-		if (f.project !== null) {
-			if (!("project_slug" in m)) return false;
-			if (m.project_slug !== f.project) return false;
-		}
 		return true;
 	});
 }
