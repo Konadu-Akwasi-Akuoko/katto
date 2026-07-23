@@ -134,19 +134,29 @@ pub async fn set_project_status(
         .db
         .call(move |conn| {
             require_mounted(conn)?;
-            let project = db::projects::get(conn, &slug)?
-                .ok_or_else(|| Error::Io(format!("no such project: {slug}")))?;
-            let dir = Path::new(&project.root_path);
-            let mut manifest = read_manifest(dir)?;
-            manifest.status = status.clone();
-            write_manifest(dir, &manifest)?;
-            db::projects::set_status(conn, &slug, &status)?;
-            db::projects::touch(conn, &slug, &now)?;
-            db::events::record(conn, "project-status-changed", Some(&slug), None)?;
-            Ok(())
+            set_status_inner(conn, &slug, &status, &now)
         })
         .await?;
     crate::broadcast::projects_changed(&app);
+    Ok(())
+}
+
+/// The manifest + row + event half of `set_project_status`, factored out so the
+/// `{from, to}` event payload is testable against an in-memory DB. The event
+/// carries both phases; the calendar reads `to` (the destination) to plot the
+/// move.
+fn set_status_inner(conn: &Connection, slug: &str, status: &str, now: &str) -> Result<()> {
+    let project = db::projects::get(conn, slug)?
+        .ok_or_else(|| Error::Io(format!("no such project: {slug}")))?;
+    let dir = Path::new(&project.root_path);
+    let mut manifest = read_manifest(dir)?;
+    let from = project.status.clone();
+    manifest.status = status.to_string();
+    write_manifest(dir, &manifest)?;
+    db::projects::set_status(conn, slug, status)?;
+    db::projects::touch(conn, slug, now)?;
+    let payload = serde_json::json!({ "from": from, "to": status }).to_string();
+    db::events::record(conn, "project-status-changed", Some(slug), Some(&payload))?;
     Ok(())
 }
 
@@ -616,6 +626,31 @@ mod tests {
         std::fs::write(victim.join("footage/clip.mov"), b"not really a movie").unwrap();
         trash::delete(&victim).unwrap();
         assert!(!victim.exists());
+    }
+
+    #[test]
+    fn status_change_records_from_and_to_in_the_event() {
+        let conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let project = create_project_inner(
+            &conn,
+            &root.path().join("Projects"),
+            "NVMe",
+            None,
+            "resolve",
+            "2026-07-09T10:00:00Z",
+        )
+        .unwrap();
+        set_status_inner(&conn, &project.slug, "shooting", "2026-07-10T00:00:00Z").unwrap();
+        let events = db::events::list(&conn, 10, None).unwrap();
+        let e = events
+            .iter()
+            .find(|e| e.kind == "project-status-changed")
+            .expect("a project-status-changed event must be recorded");
+        let payload: serde_json::Value =
+            serde_json::from_str(e.payload_json.as_deref().unwrap()).unwrap();
+        assert_eq!(payload["from"], "idea");
+        assert_eq!(payload["to"], "shooting");
     }
 
     #[test]
