@@ -139,5 +139,11 @@ mod tests {
         let audio = fresh.iter().find(|f| f.subfolder == "audio").unwrap();
         assert_eq!(audio.file_count, 0);
         assert_eq!(audio.latest_mtime, None);
+        for sub in ["assets/music", "assets/sfx"] {
+            assert!(
+                fresh.iter().any(|f| f.subfolder == sub),
+                "freshness must cover {sub}"
+            );
+        }
     }
 }

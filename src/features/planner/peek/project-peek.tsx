@@ -161,7 +161,7 @@ function PeekBody({
 					</dl>
 
 					{freshness.length > 0 ? (
-						<div className="flex flex-col gap-1">
+						<div className="scrollbar-hide flex min-h-0 flex-col gap-1 overflow-y-auto">
 							{freshness.map((folder) => (
 								<div
 									key={folder.subfolder}

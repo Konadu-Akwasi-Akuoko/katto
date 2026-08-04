@@ -5,6 +5,7 @@ use serde::Serialize;
 
 use crate::db;
 use crate::error::{Error, Result};
+use crate::projects::anatomy;
 use crate::projects::manifest::{ProjectManifest, read_manifest};
 
 /// One project-candidate folder found under the studio root's `Projects/` dir.
@@ -150,13 +151,69 @@ pub fn apply(conn: &mut Connection, disk: &[ScanEntry], report: &ReconcileReport
     Ok(())
 }
 
+/// Bring every scanned project folder up to the current D6 anatomy (see
+/// [`anatomy::ensure_subfolders`]): folders are truth, so a project created
+/// before an anatomy entry existed gains it on the next reconcile instead of
+/// waiting for the owner to make the folder by hand.
+///
+/// Deliberately best-effort per project — a departure from this module's
+/// otherwise all-or-nothing style. One unwritable folder (read-only mount, a
+/// file squatting a subfolder name) must not abort the pass for the other
+/// projects, and must never cost the index update, which is why this runs after
+/// [`apply`] and collects instead of `?`. Folders whose manifest is invalid are
+/// skipped: reconcile never touches them, and one may simply be a stray
+/// directory the owner dropped under `Projects/`.
+///
+/// Failures land in a single aggregate event, not one per project: `events` is
+/// append-only, and a read-only drive with 40 projects would otherwise flood the
+/// log on every boot.
+///
+/// Infallible by design. It runs after [`apply`] has committed, so returning an
+/// error here would fail a reconcile that already succeeded and throw away its
+/// report. A failure of the aggregate event write itself — the one reporting
+/// channel left — goes to stderr, as everywhere else the recorder is the thing
+/// that broke.
+fn backfill_anatomy(conn: &Connection, disk: &[ScanEntry]) {
+    let mut failures: Vec<(String, String)> = Vec::new();
+    for entry in disk {
+        if entry.manifest.is_err() {
+            continue;
+        }
+        if let Err(err) = anatomy::ensure_subfolders(&entry.path) {
+            failures.push((entry.slug.clone(), err.to_string()));
+        }
+    }
+    if failures.is_empty() {
+        return;
+    }
+    let payload = serde_json::json!({
+        "failed": failures.len(),
+        "projects": failures
+            .iter()
+            .take(10)
+            .map(|(slug, error)| serde_json::json!({ "slug": slug, "error": error }))
+            .collect::<Vec<_>>(),
+    });
+    if let Err(err) = db::events::record(
+        conn,
+        "anatomy_backfill_failed",
+        None,
+        Some(&payload.to_string()),
+    ) {
+        eprintln!("failed to record anatomy_backfill_failed event: {err}");
+    }
+}
+
 /// Full reconcile against a known-mounted studio `root`: scan `<root>/Projects`,
 /// diff against the index, apply, and return the report. The caller is
 /// responsible for the mount check (folder-touching commands reject an unmounted
-/// root before reaching here).
+/// root before reaching here). It also brings each scanned folder up to the
+/// current D6 anatomy, best-effort (see [`backfill_anatomy`]).
 ///
 /// # Errors
-/// Propagates scan/DB failures from [`scan`] and [`apply`].
+/// Propagates scan/DB failures from [`scan`] and [`apply`], both of which run
+/// before anything is committed. The backfill that follows the commit cannot
+/// fail the call, so an `Err` here always means nothing was written.
 pub fn reconcile_root(conn: &mut Connection, root: &str) -> Result<ReconcileReport> {
     let projects_root = Path::new(root).join("Projects");
     let disk = scan(&projects_root)?;
@@ -166,6 +223,7 @@ pub fn reconcile_root(conn: &mut Connection, root: &str) -> Result<ReconcileRepo
         .collect();
     let report = diff(&db_slugs, &disk);
     apply(conn, &disk, &report)?;
+    backfill_anatomy(conn, &disk);
     Ok(report)
 }
 
@@ -413,6 +471,142 @@ mod tests {
         let m = manifest("old-2026-07-16");
         let p = project_from(&m, Path::new("/studio/Projects/old-2026-07-16"));
         assert_eq!(p.priority, "none");
+    }
+
+    #[test]
+    fn reconcile_root_backfills_missing_subfolders() {
+        use crate::projects::anatomy::create_project_skeleton;
+        let mut conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let projects_root = root.path().join("Projects");
+        std::fs::create_dir_all(&projects_root).unwrap();
+        let dir = create_project_skeleton(&projects_root, &manifest("old-2026-07-09")).unwrap();
+        // A project created before `assets/music` + `assets/sfx` joined the anatomy.
+        std::fs::remove_dir(dir.join("assets").join("music")).unwrap();
+        std::fs::remove_dir(dir.join("assets").join("sfx")).unwrap();
+
+        reconcile_root(&mut conn, &root.path().to_string_lossy()).unwrap();
+
+        assert!(dir.join("assets").join("music").is_dir());
+        assert!(dir.join("assets").join("sfx").is_dir());
+    }
+
+    #[test]
+    fn reconcile_root_leaves_invalid_manifest_folders_untouched() {
+        let mut conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let projects_root = root.path().join("Projects");
+        std::fs::create_dir_all(&projects_root).unwrap();
+        let bad = projects_root.join("bad-2026-07-09");
+        std::fs::create_dir(&bad).unwrap();
+        std::fs::write(bad.join("project.json"), b"{ not json").unwrap();
+
+        reconcile_root(&mut conn, &root.path().to_string_lossy()).unwrap();
+
+        assert!(
+            !bad.join("assets").exists(),
+            "katto must not materialise anatomy inside a folder it does not own"
+        );
+    }
+
+    #[test]
+    fn backfill_continues_past_a_failing_project() {
+        use crate::projects::anatomy::create_project_skeleton;
+        let mut conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let projects_root = root.path().join("Projects");
+        std::fs::create_dir_all(&projects_root).unwrap();
+
+        let a = create_project_skeleton(&projects_root, &manifest("aaa-2026-07-09")).unwrap();
+        let b = create_project_skeleton(&projects_root, &manifest("bbb-2026-07-09")).unwrap();
+        for dir in [&a, &b] {
+            std::fs::remove_dir(dir.join("assets").join("music")).unwrap();
+            std::fs::remove_dir(dir.join("assets").join("sfx")).unwrap();
+        }
+        // A regular file squatting `assets/music` makes create_dir_all fail.
+        std::fs::write(a.join("assets").join("music"), b"not a dir").unwrap();
+
+        let report = reconcile_root(&mut conn, &root.path().to_string_lossy()).unwrap();
+
+        assert_eq!(report.added.len(), 2, "both rows must still be applied");
+        assert!(
+            db::projects::get(&conn, "bbb-2026-07-09")
+                .unwrap()
+                .is_some()
+        );
+        assert!(b.join("assets").join("music").is_dir());
+        assert!(b.join("assets").join("sfx").is_dir());
+    }
+
+    #[test]
+    fn backfill_failure_records_an_anatomy_backfill_failed_event() {
+        use crate::projects::anatomy::create_project_skeleton;
+        let mut conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let projects_root = root.path().join("Projects");
+        std::fs::create_dir_all(&projects_root).unwrap();
+        let a = create_project_skeleton(&projects_root, &manifest("aaa-2026-07-09")).unwrap();
+        std::fs::remove_dir(a.join("assets").join("music")).unwrap();
+        std::fs::write(a.join("assets").join("music"), b"not a dir").unwrap();
+
+        reconcile_root(&mut conn, &root.path().to_string_lossy()).unwrap();
+
+        let events = db::events::list(&conn, 50, None).unwrap();
+        let failed = events
+            .iter()
+            .find(|e| e.kind == "anatomy_backfill_failed")
+            .expect("a failing backfill must record an event");
+        assert!(
+            failed
+                .payload_json
+                .as_deref()
+                .unwrap_or_default()
+                .contains("aaa-2026-07-09"),
+            "payload must name the failing slug: {:?}",
+            failed.payload_json
+        );
+        assert_eq!(failed.project_slug, None);
+    }
+
+    #[test]
+    fn backfill_does_not_resurrect_a_deleted_project_dir() {
+        let conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let gone = root.path().join("gone-2026-07-09");
+        let entry = ScanEntry {
+            slug: "gone-2026-07-09".to_string(),
+            path: gone.clone(),
+            manifest: Ok(manifest("gone-2026-07-09")),
+        };
+
+        backfill_anatomy(&conn, std::slice::from_ref(&entry));
+
+        assert!(!gone.exists(), "a vanished project dir must stay gone");
+    }
+
+    #[test]
+    fn reconcile_root_survives_a_failed_backfill_event_write() {
+        use crate::projects::anatomy::create_project_skeleton;
+        let mut conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let projects_root = root.path().join("Projects");
+        std::fs::create_dir_all(&projects_root).unwrap();
+        let a = create_project_skeleton(&projects_root, &manifest("aaa-2026-07-09")).unwrap();
+        std::fs::remove_dir(a.join("assets").join("music")).unwrap();
+        std::fs::write(a.join("assets").join("music"), b"not a dir").unwrap();
+        // Read-only studio drive (every launch fails the backfill) meeting a
+        // broken events table: the index update already committed, so the
+        // report must still reach the caller.
+        conn.execute("DROP TABLE events", []).unwrap();
+
+        let report = reconcile_root(&mut conn, &root.path().to_string_lossy()).unwrap();
+
+        assert_eq!(report.added, vec!["aaa-2026-07-09".to_string()]);
+        assert!(
+            db::projects::get(&conn, "aaa-2026-07-09")
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[test]

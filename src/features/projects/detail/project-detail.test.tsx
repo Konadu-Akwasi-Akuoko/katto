@@ -93,4 +93,18 @@ describe("ProjectDetail", () => {
 			subfolder: "footage",
 		});
 	});
+
+	it("reveals a nested assets subfolder", async () => {
+		const user = userEvent.setup();
+		const { calls } = renderDetail();
+		await user.click(
+			await screen.findByRole("button", {
+				name: /reveal assets\/music in finder/i,
+			}),
+		);
+		expect(calls).toHaveBeenCalledWith("reveal_project_folder", {
+			slug: "nvme-deep-dive-2026-07-08",
+			subfolder: "assets/music",
+		});
+	});
 });

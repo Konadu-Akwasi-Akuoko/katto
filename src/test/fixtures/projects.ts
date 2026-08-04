@@ -34,6 +34,12 @@ export const freshnessFixture: FolderFreshness[] = [
 		file_count: 3,
 		latest_mtime: "2026-07-08T09:00:00.000Z",
 	},
+	{
+		subfolder: "assets/music",
+		file_count: 5,
+		latest_mtime: "2026-07-07T12:00:00.000Z",
+	},
+	{ subfolder: "assets/sfx", file_count: 0, latest_mtime: null },
 	{ subfolder: "thumbnails", file_count: 0, latest_mtime: null },
 	{ subfolder: "exports", file_count: 0, latest_mtime: null },
 ];

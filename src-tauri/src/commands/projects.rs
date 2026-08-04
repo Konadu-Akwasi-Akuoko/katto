@@ -9,7 +9,7 @@ use crate::db;
 use crate::db::projects::{PriorityLevel, Project, ProjectKind};
 use crate::error::{Error, Result};
 use crate::paths;
-use crate::projects::anatomy::{PROJECT_SUBFOLDERS, create_project_skeleton};
+use crate::projects::anatomy::{create_project_skeleton, is_project_subfolder};
 use crate::projects::freshness::{FolderFreshness, folder_freshness};
 use crate::projects::manifest::{
     MANIFEST_SCHEMA_VERSION, ProjectManifest, read_manifest, write_manifest,
@@ -286,7 +286,7 @@ pub async fn reveal_project_folder(
     subfolder: Option<String>,
 ) -> Result<()> {
     if let Some(sub) = &subfolder
-        && !PROJECT_SUBFOLDERS.contains(&sub.as_str())
+        && !is_project_subfolder(sub)
     {
         return Err(Error::Io(format!("unknown project subfolder: {sub}")));
     }

@@ -7,26 +7,21 @@ import { ProjectPeek } from "@/features/planner/peek/project-peek";
 import type { DriveStatus } from "@/lib/ipc/drive";
 import type { ProjectDetail } from "@/lib/ipc/projects";
 import { useUiStore } from "@/stores/ui";
+import {
+	freshnessFixture,
+	project,
+	projectDetail,
+} from "@/test/fixtures/projects";
 
-const detail: ProjectDetail = {
-	project: {
+const detail: ProjectDetail = projectDetail(
+	project({
 		slug: "nvme-deep-dive-2026-07-01",
 		title: "NVMe deep dive",
-		root_path: "/studio/Projects/nvme-deep-dive-2026-07-01",
 		status: "editing",
-		target_nle: "resolve",
-		priority: "none",
 		shoot_date: "2026-07-03",
-		publish_date: null,
-		created_at: "2026-07-01",
-		last_touched_at: "2026-07-05",
-		kind: "unset",
-	},
-	manifest_error: null,
-	freshness: [
-		{ subfolder: "footage", file_count: 12, latest_mtime: "2026-07-05" },
-	],
-};
+		last_touched_at: "2026-07-05T00:00:00.000Z",
+	}),
+);
 
 const invalidManifestDetail: ProjectDetail = {
 	...detail,
@@ -95,6 +90,18 @@ describe("ProjectPeek", () => {
 		expect(await screen.findByText("NVMe deep dive")).toBeInTheDocument();
 		expect(screen.getByText("Editing")).toBeInTheDocument();
 		expect(screen.getByText("footage")).toBeInTheDocument();
+	});
+
+	it("lists every freshness folder, nested assets ones included", async () => {
+		useUiStore.setState({ peekSlug: "nvme-deep-dive-2026-07-01" });
+		renderPeek();
+		await screen.findByText("NVMe deep dive");
+		// The grid scrolls rather than truncating, so a long anatomy must still
+		// render whole — this is what the peek's scroller has to hold.
+		for (const folder of freshnessFixture) {
+			expect(screen.getByText(folder.subfolder)).toBeInTheDocument();
+		}
+		expect(screen.getByText("assets/music")).toBeInTheDocument();
 	});
 
 	it("routes to full detail and closes on Open full detail", async () => {
