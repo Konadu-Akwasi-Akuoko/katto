@@ -131,6 +131,15 @@ pub fn apply(conn: &mut Connection, disk: &[ScanEntry], report: &ReconcileReport
             && let Ok(manifest) = &entry.manifest
         {
             db::projects::upsert(&tx, &project_from(manifest, &entry.path))?;
+            // Rebuild the schedule index from the manifest (folders are truth):
+            // a Finder restore brings the folder + its dates back, and the pins
+            // must reappear on the calendar with it.
+            if let Some(date) = &manifest.shoot_date {
+                db::schedule::upsert(&tx, slug, "shoot", date, None)?;
+            }
+            if let Some(date) = &manifest.publish_date {
+                db::schedule::upsert(&tx, slug, "publish", date, None)?;
+            }
         }
     }
     for slug in &report.removed {
@@ -177,6 +186,7 @@ fn project_from(manifest: &ProjectManifest, path: &Path) -> db::projects::Projec
         publish_date: manifest.publish_date.clone(),
         created_at: manifest.created_at.clone(),
         last_touched_at: None,
+        kind: manifest.kind.clone().unwrap_or_else(|| "unset".to_string()),
     }
 }
 
@@ -194,6 +204,7 @@ mod tests {
             status: "idea".to_string(),
             target_nle: "resolve".to_string(),
             priority: None,
+            kind: None,
             shoot_date: None,
             publish_date: None,
             created_at: "2026-07-09T00:00:00Z".to_string(),
@@ -215,6 +226,25 @@ mod tests {
             path: PathBuf::from(format!("/tmp/Projects/{slug}")),
             manifest: Err("malformed project.json".to_string()),
         }
+    }
+
+    #[test]
+    fn apply_rebuilds_schedule_pins_from_a_restored_manifest() {
+        let mut conn = test_db();
+        let mut m = manifest("nvme-2026-07-09");
+        m.shoot_date = Some("2026-08-01".to_string());
+        let entry = ScanEntry {
+            slug: m.slug.clone(),
+            path: PathBuf::from("/tmp/Projects/nvme-2026-07-09"),
+            manifest: Ok(m),
+        };
+        let report = diff(&[], std::slice::from_ref(&entry));
+        apply(&mut conn, std::slice::from_ref(&entry), &report).unwrap();
+
+        let rows = db::schedule::list_range(&conn, "2026-08-01", "2026-08-01").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, "shoot");
+        assert_eq!(rows[0].project_slug, "nvme-2026-07-09");
     }
 
     #[test]
@@ -278,6 +308,7 @@ mod tests {
             publish_date: None,
             created_at: "2026-07-09T00:00:00Z".to_string(),
             last_touched_at: None,
+            kind: "unset".to_string(),
         };
         db::projects::insert(&conn, &row).unwrap();
 
@@ -323,6 +354,7 @@ mod tests {
             publish_date: None,
             created_at: "2026-07-09T00:00:00Z".to_string(),
             last_touched_at: None,
+            kind: "unset".to_string(),
         };
         db::projects::insert(&conn, &row).unwrap();
 

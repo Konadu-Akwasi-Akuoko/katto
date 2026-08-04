@@ -6,7 +6,7 @@ use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::db;
-use crate::db::projects::{PriorityLevel, Project};
+use crate::db::projects::{PriorityLevel, Project, ProjectKind};
 use crate::error::{Error, Result};
 use crate::paths;
 use crate::projects::anatomy::{PROJECT_SUBFOLDERS, create_project_skeleton};
@@ -134,19 +134,29 @@ pub async fn set_project_status(
         .db
         .call(move |conn| {
             require_mounted(conn)?;
-            let project = db::projects::get(conn, &slug)?
-                .ok_or_else(|| Error::Io(format!("no such project: {slug}")))?;
-            let dir = Path::new(&project.root_path);
-            let mut manifest = read_manifest(dir)?;
-            manifest.status = status.clone();
-            write_manifest(dir, &manifest)?;
-            db::projects::set_status(conn, &slug, &status)?;
-            db::projects::touch(conn, &slug, &now)?;
-            db::events::record(conn, "project-status-changed", Some(&slug), None)?;
-            Ok(())
+            set_status_inner(conn, &slug, &status, &now)
         })
         .await?;
     crate::broadcast::projects_changed(&app);
+    Ok(())
+}
+
+/// The manifest + row + event half of `set_project_status`, factored out so the
+/// `{from, to}` event payload is testable against an in-memory DB. The event
+/// carries both phases; the calendar reads `to` (the destination) to plot the
+/// move.
+fn set_status_inner(conn: &Connection, slug: &str, status: &str, now: &str) -> Result<()> {
+    let project = db::projects::get(conn, slug)?
+        .ok_or_else(|| Error::Io(format!("no such project: {slug}")))?;
+    let dir = Path::new(&project.root_path);
+    let mut manifest = read_manifest(dir)?;
+    let from = project.status.clone();
+    manifest.status = status.to_string();
+    write_manifest(dir, &manifest)?;
+    db::projects::set_status(conn, slug, status)?;
+    db::projects::touch(conn, slug, now)?;
+    let payload = serde_json::json!({ "from": from, "to": status }).to_string();
+    db::events::record(conn, "project-status-changed", Some(slug), Some(&payload))?;
     Ok(())
 }
 
@@ -183,6 +193,39 @@ pub async fn set_project_priority(
     Ok(())
 }
 
+/// Set a project's kind. Writes both the manifest (atomic) and the row — folders
+/// are truth — then touches the row, records an event, and broadcasts.
+/// `ProjectKind` is an enum, so an out-of-vocabulary value is rejected at the IPC
+/// boundary and never reaches the manifest.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_project_kind(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    slug: String,
+    kind: ProjectKind,
+) -> Result<()> {
+    let now = now_rfc3339()?;
+    state
+        .db
+        .call(move |conn| {
+            require_mounted(conn)?;
+            let project = db::projects::get(conn, &slug)?
+                .ok_or_else(|| Error::Io(format!("no such project: {slug}")))?;
+            let dir = Path::new(&project.root_path);
+            let mut manifest = read_manifest(dir)?;
+            manifest.kind = Some(kind.as_str().to_string());
+            write_manifest(dir, &manifest)?;
+            db::projects::set_kind(conn, &slug, &kind)?;
+            db::projects::touch(conn, &slug, &now)?;
+            db::events::record(conn, "project-kind-changed", Some(&slug), None)?;
+            Ok(())
+        })
+        .await?;
+    crate::broadcast::projects_changed(&app);
+    Ok(())
+}
+
 /// Set (or clear) a project's shoot and publish dates. Writes the manifest
 /// (atomic) and the row, touches, records an event, and broadcasts.
 #[tauri::command]
@@ -203,16 +246,31 @@ pub async fn set_project_dates(
                 .ok_or_else(|| Error::Io(format!("no such project: {slug}")))?;
             let dir = Path::new(&project.root_path);
             let mut manifest = read_manifest(dir)?;
-            manifest.shoot_date = shoot.clone();
-            manifest.publish_date = publish.clone();
+            use crate::db::schedule::ScheduleKind;
+            crate::commands::schedule::write_pin(
+                conn,
+                &slug,
+                &mut manifest,
+                ScheduleKind::Shoot,
+                shoot.as_deref(),
+                None,
+            )?;
+            crate::commands::schedule::write_pin(
+                conn,
+                &slug,
+                &mut manifest,
+                ScheduleKind::Publish,
+                publish.as_deref(),
+                None,
+            )?;
             write_manifest(dir, &manifest)?;
-            db::projects::set_dates(conn, &slug, shoot.as_deref(), publish.as_deref())?;
             db::projects::touch(conn, &slug, &now)?;
             db::events::record(conn, "project-dates-changed", Some(&slug), None)?;
             Ok(())
         })
         .await?;
     crate::broadcast::projects_changed(&app);
+    crate::broadcast::schedule_changed(&app);
     Ok(())
 }
 
@@ -331,7 +389,7 @@ pub(crate) fn require_mounted(conn: &Connection) -> Result<String> {
 
 /// The current instant as a second-precision UTC RFC3339 string
 /// (`YYYY-MM-DDTHH:MM:SSZ`), matching the events log's precision.
-fn now_rfc3339() -> Result<String> {
+pub(crate) fn now_rfc3339() -> Result<String> {
     use time::OffsetDateTime;
     use time::format_description::well_known::Rfc3339;
     OffsetDateTime::now_utc()
@@ -345,7 +403,7 @@ fn now_rfc3339() -> Result<String> {
 /// against a tempdir and an in-memory DB without a live Tauri app. Runs entirely
 /// on the writer thread: the slug dedupe (`slug_exists`) and the row insert share
 /// one connection, so a concurrent create cannot claim the same slug.
-fn create_project_inner(
+pub(crate) fn create_project_inner(
     conn: &Connection,
     projects_root: &Path,
     title: &str,
@@ -366,6 +424,7 @@ fn create_project_inner(
         status: "idea".to_string(),
         target_nle: target_nle.to_string(),
         priority: None,
+        kind: Some("unset".to_string()),
         shoot_date: shoot_date.map(str::to_string),
         publish_date: None,
         created_at: now.to_string(),
@@ -384,6 +443,7 @@ fn create_project_inner(
         publish_date: None,
         created_at: now.to_string(),
         last_touched_at: Some(now.to_string()),
+        kind: "unset".to_string(),
     };
     db::projects::insert(conn, &project)?;
     db::events::record(conn, "project-created", Some(&slug), None)?;
@@ -566,6 +626,31 @@ mod tests {
         std::fs::write(victim.join("footage/clip.mov"), b"not really a movie").unwrap();
         trash::delete(&victim).unwrap();
         assert!(!victim.exists());
+    }
+
+    #[test]
+    fn status_change_records_from_and_to_in_the_event() {
+        let conn = test_db();
+        let root = tempfile::tempdir().unwrap();
+        let project = create_project_inner(
+            &conn,
+            &root.path().join("Projects"),
+            "NVMe",
+            None,
+            "resolve",
+            "2026-07-09T10:00:00Z",
+        )
+        .unwrap();
+        set_status_inner(&conn, &project.slug, "shooting", "2026-07-10T00:00:00Z").unwrap();
+        let events = db::events::list(&conn, 10, None).unwrap();
+        let e = events
+            .iter()
+            .find(|e| e.kind == "project-status-changed")
+            .expect("a project-status-changed event must be recorded");
+        let payload: serde_json::Value =
+            serde_json::from_str(e.payload_json.as_deref().unwrap()).unwrap();
+        assert_eq!(payload["from"], "idea");
+        assert_eq!(payload["to"], "shooting");
     }
 
     #[test]

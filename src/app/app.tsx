@@ -17,6 +17,7 @@ import { ImportSheet } from "@/features/ingest/components/import-sheet";
 import { OnboardingGate } from "@/features/onboarding/gate";
 import { Palette } from "@/features/palette/palette";
 import { PaletteDialogs } from "@/features/palette/palette-dialogs";
+import { IdeaPeek } from "@/features/planner/peek/idea-peek";
 import { ProjectPeek } from "@/features/planner/peek/project-peek";
 import { PlannerPage } from "@/features/planner/planner-page";
 import { ProjectDetail } from "@/features/projects/detail/project-detail";
@@ -93,6 +94,7 @@ function MainApp() {
 				<Palette />
 				<PaletteDialogs />
 				<ProjectPeek />
+				<IdeaPeek />
 				<ImportSheet />
 			</OnboardingGate>
 			<Toaster theme={dark ? "dark" : "light"} position="bottom-right" />

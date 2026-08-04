@@ -26,7 +26,6 @@ function renderBacklog(initial: Idea[] = backlogFixture) {
 		}
 		if (cmd === "create_idea") return initial[0];
 		if (cmd === "update_idea") return initial[0];
-		if (cmd === "open_external_url") return null;
 		throw new Error(`unexpected command: ${cmd}`);
 	});
 	const client = new QueryClient({
@@ -106,87 +105,61 @@ describe("BacklogView", () => {
 		useUiStore.setState({ justPromotedSlug: null });
 	});
 
-	it("shows an empty state when the backlog is clear", async () => {
+	it("shows the character-marked empty state when there are no ideas", async () => {
 		renderBacklog([]);
-		expect(await screen.findByText(/no ideas banked/i)).toBeInTheDocument();
+		expect(await screen.findByText("Nothing banked yet")).toBeInTheDocument();
 	});
 
-	it("shows curation provenance: rationale, suggested kind, lean, source", async () => {
+	it("shows curation provenance: lean, source, suggested kind", async () => {
 		renderBacklog(curatedFixture);
 		await screen.findByText("SSD endurance myths");
 
 		const row = rowFor("SSD endurance myths");
-		expect(
-			within(row).getByText("Three strong QLC endurance signals in one week"),
-		).toBeInTheDocument();
-		expect(within(row).getByText("suggested")).toBeInTheDocument();
 		expect(within(row).getByLabelText("lean: strong")).toBeInTheDocument();
 		expect(within(row).getByText("news.ycombinator.com")).toBeInTheDocument();
+		// suggested kind: chip carries the AI reason as its title
+		expect(
+			within(row).getByTitle(
+				"Benchmark-heavy storage topics have run long-form",
+			),
+		).toBeInTheDocument();
 	});
 
-	it("hides provenance chrome on plain manual ideas", async () => {
+	it("shows the description as the secondary line, never the rationale", async () => {
+		// curatedFixture[0] carries a rationale but no note — the row shows neither.
+		renderBacklog(curatedFixture);
+		await screen.findByText("SSD endurance myths");
+		expect(
+			screen.queryByText("Three strong QLC endurance signals in one week"),
+		).not.toBeInTheDocument();
+	});
+
+	it("shows the note as the secondary line", async () => {
+		renderBacklog();
+		await screen.findByText("NVMe deep dive");
+		expect(
+			within(rowFor("NVMe deep dive")).getByText(
+				"The controller thermal story",
+			),
+		).toBeInTheDocument();
+	});
+
+	it("hides the lean signal on plain manual ideas", async () => {
 		renderBacklog();
 		await screen.findByText("NVMe deep dive");
 
 		const row = rowFor("NVMe deep dive");
-		expect(within(row).queryByText("suggested")).not.toBeInTheDocument();
 		expect(within(row).queryByLabelText(/^lean:/)).not.toBeInTheDocument();
 	});
 
-	it("changing a suggested kind patches kind_source to human", async () => {
+	it("opens the shared idea modal by id when a row is clicked", async () => {
+		useUiStore.setState({ openIdeaId: null });
 		const user = userEvent.setup();
-		const { calls } = renderBacklog(curatedFixture);
-		await screen.findByText("SSD endurance myths");
+		renderBacklog();
+		await screen.findByText("NVMe deep dive");
 
-		const row = rowFor("SSD endurance myths");
-		await user.click(within(row).getByRole("combobox", { name: "Kind" }));
-		await user.click(screen.getByRole("option", { name: "Short" }));
+		await user.click(screen.getByText("NVMe deep dive"));
 
-		await waitFor(() =>
-			expect(calls).toHaveBeenCalledWith("update_idea", {
-				id: "idea-ai",
-				patch: {
-					title: null,
-					kind: "short",
-					notes: null,
-					kind_source: "human",
-				},
-			}),
-		);
-	});
-
-	it("keeping a suggested kind confirms it as human-decided", async () => {
-		const user = userEvent.setup();
-		const { calls } = renderBacklog(curatedFixture);
-		await screen.findByText("SSD endurance myths");
-
-		await user.click(
-			within(rowFor("SSD endurance myths")).getByRole("button", {
-				name: "Keep suggested kind",
-			}),
-		);
-
-		await waitFor(() =>
-			expect(calls).toHaveBeenCalledWith("update_idea", {
-				id: "idea-ai",
-				patch: { title: null, kind: "long", notes: null, kind_source: "human" },
-			}),
-		);
-	});
-
-	it("opens the source link through the shell opener", async () => {
-		const user = userEvent.setup();
-		const { calls } = renderBacklog(curatedFixture);
-		await screen.findByText("SSD endurance myths");
-
-		await user.click(
-			within(rowFor("SSD endurance myths")).getByText("news.ycombinator.com"),
-		);
-
-		await waitFor(() =>
-			expect(calls).toHaveBeenCalledWith("open_external_url", {
-				url: "https://news.ycombinator.com/item?id=1",
-			}),
-		);
+		expect(useUiStore.getState().openIdeaId).toBe("idea-1");
 	});
 });

@@ -17,6 +17,8 @@ type UiState = {
 	surface: Surface;
 	selectedProjectSlug: string | null;
 	peekSlug: string | null;
+	/** Idea id the shared idea detail modal is showing (opened from backlog or calendar). */
+	openIdeaId: string | null;
 	paletteOpen: boolean;
 	paletteDialog: PaletteDialog | null;
 	/** Bundle the read-only cut editor is showing (null = project detail). */
@@ -38,6 +40,8 @@ type UiState = {
 	setSelectedProjectSlug: (slug: string | null) => void;
 	openPeek: (slug: string) => void;
 	closePeek: () => void;
+	openIdea: (id: string) => void;
+	closeIdea: () => void;
 	setPaletteOpen: (open: boolean) => void;
 	togglePalette: () => void;
 	openPaletteDialog: (dialog: PaletteDialog) => void;
@@ -57,6 +61,7 @@ export const useUiStore = create<UiState>((set) => ({
 	surface: "dashboard",
 	selectedProjectSlug: null,
 	peekSlug: null,
+	openIdeaId: null,
 	paletteOpen: false,
 	paletteDialog: null,
 	editorBundlePath: null,
@@ -86,6 +91,8 @@ export const useUiStore = create<UiState>((set) => ({
 		set({ selectedProjectSlug: slug, editorBundlePath: null }),
 	openPeek: (slug) => set({ peekSlug: slug }),
 	closePeek: () => set({ peekSlug: null }),
+	openIdea: (id) => set({ openIdeaId: id }),
+	closeIdea: () => set({ openIdeaId: null }),
 	setPaletteOpen: (open) => set({ paletteOpen: open }),
 	togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
 	openPaletteDialog: (dialog) => set({ paletteDialog: dialog }),

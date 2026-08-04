@@ -1,0 +1,1 @@
+ALTER TABLE projects ADD COLUMN kind TEXT NOT NULL DEFAULT 'unset';

@@ -12,11 +12,16 @@ export type { Idea, IdeaCreate, IdeaPatch, PromoteResult };
 export const ideasKeys = {
 	all: ["ideas"] as const,
 	byStatus: (status: string) => ["ideas", status] as const,
+	detail: (id: string) => ["ideas", "detail", id] as const,
 };
 
 /** Ideas with the given status (e.g. `backlog`), newest-first by capture time. */
 export const listIdeas = (status: string): Promise<Idea[]> =>
 	unwrap(commands.listIdeas(status));
+
+/** Fetch one idea by id (for opening the detail modal outside the Backlog tab). */
+export const getIdea = (id: string): Promise<Idea> =>
+	unwrap(commands.getIdea(id));
 
 /** Capture a new idea into the backlog (`type='manual'`, `status='backlog'`). */
 export const createIdea = (input: IdeaCreate): Promise<Idea> =>

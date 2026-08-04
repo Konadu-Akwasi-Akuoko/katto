@@ -4,7 +4,7 @@ import { useId } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { StatusChip } from "@/components/ui/status-chip";
 import { FootageCard } from "@/features/projects/detail/footage-card";
@@ -206,13 +206,12 @@ function DateField({
 	return (
 		<div className="flex flex-col gap-1">
 			<Label htmlFor={id}>{label}</Label>
-			<Input
+			<DateInput
 				id={id}
-				type="date"
-				className="w-40 font-mono tabular-nums"
-				value={value ?? ""}
+				label={label}
+				value={value}
+				onValueChange={onChange}
 				disabled={disabled}
-				onChange={(event) => onChange(event.target.value || null)}
 			/>
 		</div>
 	);

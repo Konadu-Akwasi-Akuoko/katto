@@ -1,8 +1,49 @@
 import { formatShortDate } from "@/lib/date";
+import type { CalendarMarker } from "@/lib/ipc/calendar";
 import type { ScheduleEntry } from "@/lib/ipc/schedule";
 
 /** Whether the calendar shows a whole month or a single Monday-first week. */
 export type CalendarMode = "month" | "week";
+
+/** The four legend/color categories a marker belongs to (its `kind`). */
+export type CalendarCategory = CalendarMarker["kind"];
+
+/** The status vocabulary, used by the phase multiselect. */
+export const ALL_PHASES = ["idea", "shooting", "editing", "published"] as const;
+
+/** The legend + phase filter state applied client-side. */
+export interface CalendarFilters {
+	categories: Record<CalendarCategory, boolean>;
+	phases: readonly string[];
+}
+
+/**
+ * Filter the fetched marker set: hide toggled-off categories and restrict phase
+ * moves to the selected destination phases.
+ */
+export function applyCalendarFilters(
+	markers: CalendarMarker[],
+	f: CalendarFilters,
+): CalendarMarker[] {
+	return markers.filter((m) => {
+		if (!f.categories[m.kind]) return false;
+		if (m.kind === "phase" && !f.phases.includes(m.to)) return false;
+		return true;
+	});
+}
+
+/** Group markers by their ISO day (`YYYY-MM-DD`) for cell rendering. */
+export function markersByDate(
+	markers: CalendarMarker[],
+): Map<string, CalendarMarker[]> {
+	const map = new Map<string, CalendarMarker[]>();
+	for (const m of markers) {
+		const list = map.get(m.date) ?? [];
+		list.push(m);
+		map.set(m.date, list);
+	}
+	return map;
+}
 
 /** One day cell in a calendar grid. */
 export interface CalendarCell {

@@ -124,6 +124,13 @@ export const commands = {
 	 */
 	setProjectPriority: (slug: string, priority: PriorityLevel) => typedError<null, Error>(__TAURI_INVOKE("set_project_priority", { slug, priority })),
 	/**
+	 *  Set a project's kind. Writes both the manifest (atomic) and the row — folders
+	 *  are truth — then touches the row, records an event, and broadcasts.
+	 *  `ProjectKind` is an enum, so an out-of-vocabulary value is rejected at the IPC
+	 *  boundary and never reaches the manifest.
+	 */
+	setProjectKind: (slug: string, kind: ProjectKind) => typedError<null, Error>(__TAURI_INVOKE("set_project_kind", { slug, kind })),
+	/**
 	 *  Set (or clear) a project's shoot and publish dates. Writes the manifest
 	 *  (atomic) and the row, touches, records an event, and broadcasts.
 	 */
@@ -183,6 +190,11 @@ export const commands = {
 	importFiles: (projectSlug: string, paths: string[]) => typedError<Job, Error>(__TAURI_INVOKE("import_files", { projectSlug, paths })),
 	/**  Ideas with the given status, newest-first. */
 	listIdeas: (status: string) => typedError<Idea[], Error>(__TAURI_INVOKE("list_ideas", { status })),
+	/**
+	 *  Fetch one idea by id. The calendar opens the idea detail modal from outside
+	 *  the Backlog tab, so it needs a by-id lookup.
+	 */
+	getIdea: (id: string) => typedError<Idea, Error>(__TAURI_INVOKE("get_idea", { id })),
 	/**  Capture a new idea into the backlog and broadcast. */
 	createIdea: (input: IdeaCreate) => typedError<Idea, Error>(__TAURI_INVOKE("create_idea", { input })),
 	/**  Patch an idea's editable fields and return the updated row. */
@@ -244,18 +256,31 @@ export const commands = {
 	 */
 	setDockFocus: (open: boolean, focusedSession: string | null) => typedError<null, Error>(__TAURI_INVOKE("set_dock_focus", { open, focusedSession })),
 	/**
+	 *  All calendar markers whose day falls in `[from, to]` (inclusive ISO dates):
+	 *  shoot/publish pins from the `schedule` table, backlog-added from
+	 *  `ideas.first_seen`, and phase moves from `project-status-changed` events (the
+	 *  destination phase). One round-trip; the frontend does the category/project
+	 *  filtering client-side.
+	 */
+	listCalendar: (from: string, to: string) => typedError<CalendarMarker[], Error>(__TAURI_INVOKE("list_calendar", { from, to })),
+	/**
 	 *  Schedule entries whose date falls within `[from, to]` (inclusive ISO bounds),
 	 *  ordered by date. Drives the calendar's month/week views.
 	 */
 	listSchedule: (from: string, to: string) => typedError<ScheduleEntry[], Error>(__TAURI_INVOKE("list_schedule", { from, to })),
 	/**
-	 *  Pin a project to a date. There is at most one entry per `(project_slug, kind)`
-	 *  pair, so this inserts or updates in place. Broadcasts `schedule-changed`, which
-	 *  also refreshes the tray's next-shoot line.
+	 *  Pin a project to a date (shoot or publish). Writes the schedule index, mirrors
+	 *  the date into `project.json` and the project row, touches, records an event,
+	 *  and broadcasts. `ScheduleKind` is an enum, so a bad kind is rejected at the IPC
+	 *  boundary. Guarded by the studio-root mount like every other folder write.
 	 */
-	upsertScheduleEntry: (projectSlug: string, kind: string, date: string, note: string | null) => typedError<ScheduleEntry, Error>(__TAURI_INVOKE("upsert_schedule_entry", { projectSlug, kind, date, note })),
-	/**  Remove a schedule entry by id and broadcast `schedule-changed`. */
-	deleteScheduleEntry: (id: RowId) => typedError<null, Error>(__TAURI_INVOKE("delete_schedule_entry", { id })),
+	upsertScheduleEntry: (projectSlug: string, kind: ScheduleKind, date: string, note: string | null) => typedError<ScheduleEntry, Error>(__TAURI_INVOKE("upsert_schedule_entry", { projectSlug, kind, date, note })),
+	/**
+	 *  Clear a project's shoot or publish pin. Removes the schedule row and the
+	 *  mirrored date from the manifest and row, touches, records an event, and
+	 *  broadcasts.
+	 */
+	deleteScheduleEntry: (projectSlug: string, kind: ScheduleKind) => typedError<null, Error>(__TAURI_INVOKE("delete_schedule_entry", { projectSlug, kind })),
 	/**
 	 *  Scaffold `assets/vfx/<slug>/` for a project and open a dock session in it.
 	 *  Returns the session id so the frontend can focus the dock on it (the
@@ -423,6 +448,12 @@ export type BundleSummary = {
 	has_transcript: boolean,
 	has_cuts: boolean,
 };
+
+/**
+ *  One dot on the calendar. `date` is always `YYYY-MM-DD` (the day the marker
+ *  lands on); historical markers derive it from the event/idea timestamp.
+ */
+export type CalendarMarker = { kind: "shoot"; project_slug: string; title: string; date: string; note: string | null } | { kind: "publish"; project_slug: string; title: string; date: string; note: string | null } | { kind: "backlog"; idea_id: string; title: string; date: string } | { kind: "phase"; project_slug: string; title: string; date: string; to: string };
 
 /**
  *  Broadcast when a camera card is detected and enumerated. Carries no payload:
@@ -800,14 +831,19 @@ export type IdeaCreate = {
 };
 
 /**
- *  A partial edit of an idea; a `None` field leaves that column unchanged.
- *  `kind_source` flips to `"human"` when the owner changes or confirms a kind
- *  the curation run suggested.
+ *  The complete editable state of an idea, saved from the detail modal. `title`
+ *  and `kind` always carry a value; the nullable fields are set as given (`None`
+ *  clears the column). `lean` is the categorical signal — never a number —
+ *  merged into `evidence_json`, preserving that blob's other keys.
+ *  `kind_source` flips to `"human"` when the owner changes the suggested kind.
  */
 export type IdeaPatch = {
-	title: string | null,
-	kind: string | null,
+	title: string,
+	kind: string,
 	notes: string | null,
+	rationale: string | null,
+	source_url: string | null,
+	lean: string | null,
 	kind_source: string | null,
 };
 
@@ -967,6 +1003,11 @@ export type Project = {
 	publish_date: string | null,
 	created_at: string,
 	last_touched_at: string | null,
+	/**
+	 *  `unset | long | short | series`. Read leniently: an unrecognised value is
+	 *  carried verbatim and renders no kind chrome.
+	 */
+	kind: string,
 };
 
 /**
@@ -980,6 +1021,15 @@ export type ProjectDetail = {
 	manifest_error: string | null,
 	freshness: FolderFreshness[],
 };
+
+/**
+ *  The video kind carried over from the idea a project was promoted from. Same
+ *  closed vocabulary as the idea `kind`, so promotion maps 1:1. This is the write
+ *  boundary: rows are read back as a lenient `String` (an unrecognised value
+ *  renders verbatim rather than dropping the project), but nothing can *persist*
+ *  a value outside this set.
+ */
+export type ProjectKind = "unset" | "long" | "short" | "series";
 
 /**
  *  Broadcast after any project row is created or mutated (status, dates,
@@ -1058,6 +1108,12 @@ export type ScheduleEntry = {
 	date: string,
 	note: string | null,
 };
+
+/**
+ *  The two pinnable dates. Enum so an out-of-vocabulary kind is rejected at the
+ *  IPC boundary and can never reach the schedule or manifest.
+ */
+export type ScheduleKind = "shoot" | "publish";
 
 /**  A named recurring job with anacron-style catch-up semantics (Phase 6). */
 export type ScheduledJob = {

@@ -35,6 +35,12 @@
 	--queued: oklch(0.6 0.012 68);
 	--warn: oklch(0.64 0.13 78);
 
+	/* ---- calendar marker categories (legend + day chips) ---- */
+	--cal-shoot: var(--ember);
+	--cal-publish: oklch(0.62 0.12 240);
+	--cal-backlog: oklch(0.62 0.13 310);
+	--cal-phase: oklch(0.66 0.12 155);
+
 	/* ---- planner status (columns, calendar pills, peek chip) ---- */
 	/* gold, not amber: --warn owns the 78 hue and the drive banner sits above the board */
 	--status-idea: oklch(0.72 0.15 92);
@@ -118,6 +124,11 @@
 	--queued: oklch(0.56 0.01 76);
 	--warn: oklch(0.81 0.13 82);
 
+	--cal-shoot: var(--ember);
+	--cal-publish: oklch(0.7 0.12 240);
+	--cal-backlog: oklch(0.7 0.13 310);
+	--cal-phase: oklch(0.72 0.12 155);
+
 	--status-idea: oklch(0.82 0.15 92);
 	--status-idea-tint: oklch(0.32 0.05 92);
 	--status-shooting: oklch(0.7 0.12 245);
@@ -173,6 +184,10 @@
 	--color-failed: var(--failed);
 	--color-queued: var(--queued);
 	--color-warn: var(--warn);
+	--color-cal-shoot: var(--cal-shoot);
+	--color-cal-publish: var(--cal-publish);
+	--color-cal-backlog: var(--cal-backlog);
+	--color-cal-phase: var(--cal-phase);
 	--color-term-bg: var(--term-bg);
 	--color-term-fg: var(--term-fg);
 
@@ -225,6 +240,15 @@
 	animation: promote-arrival var(--dur-slow) var(--ease) forwards;
 }
 
+/* Scrollable region with no visible scrollbar (dense calendar cells, chip
+   strips). The area still scrolls by wheel/trackpad/keyboard. */
+@utility scrollbar-hide {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
 @layer base {
 	* {
 		border-color: var(--border);
@@ -263,6 +287,19 @@
 	[role="button"],
 	[role="menuitem"] {
 		cursor: default;
+	}
+
+	/* WebKit paints today's date as a ghost for an empty date input; hide the whole
+	   edit region (opacity, since each sub-field sets its own color) so the field's
+	   own —/—/— placeholder shows through cleanly (see DateInput). */
+	input[type="date"][data-empty="true"]::-webkit-datetime-edit {
+		opacity: 0;
+	}
+
+	/* Drop WebKit's picker indicator so DateInput owns the trailing edge (its
+	   hover clear button lives there); the field opens the picker via showPicker(). */
+	input[type="date"]::-webkit-calendar-picker-indicator {
+		display: none;
 	}
 
 	/* text is selectable where it belongs: inputs, and opt-in content */

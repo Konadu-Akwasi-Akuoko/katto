@@ -54,6 +54,7 @@ const project: Project = {
 	status: "shooting",
 	target_nle: "resolve",
 	priority: "none",
+	kind: "unset",
 	shoot_date: "2026-07-21",
 	publish_date: null,
 	created_at: "2026-07-20T10:00:00Z",

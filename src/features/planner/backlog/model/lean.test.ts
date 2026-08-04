@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseLean, sourceDomain } from "./lean";
+import { isHttpUrl, parseLean, sourceDomain } from "./lean";
 
 describe("parseLean", () => {
 	it("returns null for absent evidence", () => {
@@ -36,5 +36,20 @@ describe("sourceDomain", () => {
 	it("returns null for absent or invalid urls", () => {
 		expect(sourceDomain(null)).toBeNull();
 		expect(sourceDomain("not a url")).toBeNull();
+	});
+});
+
+describe("isHttpUrl", () => {
+	it("accepts http and https urls", () => {
+		expect(isHttpUrl("https://www.youtube.com/watch?v=abc")).toBe(true);
+		expect(isHttpUrl("http://example.com")).toBe(true);
+	});
+
+	it("rejects non-web schemes, blanks, and scheme-less input", () => {
+		expect(isHttpUrl("ftp://host.com/x")).toBe(false);
+		expect(isHttpUrl("javascript:alert(1)")).toBe(false);
+		expect(isHttpUrl("")).toBe(false);
+		expect(isHttpUrl("just a word")).toBe(false);
+		expect(isHttpUrl("www.example.com")).toBe(false);
 	});
 });
