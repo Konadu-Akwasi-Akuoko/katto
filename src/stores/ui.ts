@@ -21,6 +21,14 @@ type UiState = {
 	openIdeaId: string | null;
 	paletteOpen: boolean;
 	paletteDialog: PaletteDialog | null;
+	/**
+	 * Titlebar surface switcher. Lives here rather than in the component because
+	 * its popover hangs over the browser's content rect, so the browser surface
+	 * has to know in order to hide the native child webview underneath it.
+	 */
+	switcherOpen: boolean;
+	/** Sidebar collapsed to nothing; the switcher carries navigation instead. */
+	sidebarCollapsed: boolean;
 	/** Bundle the read-only cut editor is showing (null = project detail). */
 	editorBundlePath: string | null;
 	/** Claude dock slide-over visibility + which session tab is active. */
@@ -44,6 +52,8 @@ type UiState = {
 	closeIdea: () => void;
 	setPaletteOpen: (open: boolean) => void;
 	togglePalette: () => void;
+	setSwitcherOpen: (open: boolean) => void;
+	toggleSidebar: () => void;
 	openPaletteDialog: (dialog: PaletteDialog) => void;
 	closePaletteDialog: () => void;
 };
@@ -63,6 +73,8 @@ export const useUiStore = create<UiState>((set) => ({
 	peekSlug: null,
 	openIdeaId: null,
 	paletteOpen: false,
+	switcherOpen: false,
+	sidebarCollapsed: false,
 	paletteDialog: null,
 	editorBundlePath: null,
 	dockOpen: false,
@@ -95,6 +107,8 @@ export const useUiStore = create<UiState>((set) => ({
 	closeIdea: () => set({ openIdeaId: null }),
 	setPaletteOpen: (open) => set({ paletteOpen: open }),
 	togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
+	setSwitcherOpen: (switcherOpen) => set({ switcherOpen }),
+	toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 	openPaletteDialog: (dialog) => set({ paletteDialog: dialog }),
 	closePaletteDialog: () => set({ paletteDialog: null }),
 }));

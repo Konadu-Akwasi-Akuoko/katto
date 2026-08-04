@@ -6,11 +6,15 @@ import { deriveDockIconState } from "./model/dock-state";
 import { useDoneFlash } from "./use-done-flash";
 
 /**
- * The sidebar Claude entry (the PRD's "dock icon"): running → pulsing ember
- * ring, needs-input → warn badge dot (one encoding at a time), and a ~3 s
- * check flash when a previously-running session settles.
+ * The Claude entry (the PRD's "dock icon"): running → pulsing ember ring,
+ * needs-input → warn badge dot (one encoding at a time), and a ~3 s check flash
+ * when a previously-running session settles.
+ *
+ * `compact` drops the text label for the titlebar, where this has to appear
+ * whenever the sidebar is collapsed — a background session asking for input is
+ * the one thing that must never go unannounced because a panel is hidden.
  */
-export function DockIcon() {
+export function DockIcon({ compact = false }: { compact?: boolean }) {
 	const dockOpen = useUiStore((s) => s.dockOpen);
 	const toggleDock = useUiStore((s) => s.toggleDock);
 	const { data: sessions = [] } = useSessions();
@@ -22,9 +26,11 @@ export function DockIcon() {
 		<button
 			type="button"
 			aria-pressed={dockOpen}
+			aria-label={compact ? "Claude dock" : undefined}
 			onClick={toggleDock}
 			className={cn(
-				"flex cursor-default items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+				"flex cursor-default items-center rounded-md transition-colors",
+				compact ? "size-8 justify-center" : "gap-2.5 px-2 py-1.5 text-sm",
 				dockOpen
 					? "bg-surface-2 text-fg"
 					: "text-fg-muted hover:bg-surface-2 hover:text-fg",
@@ -52,7 +58,7 @@ export function DockIcon() {
 					/>
 				)}
 			</span>
-			Claude dock
+			{!compact && "Claude dock"}
 		</button>
 	);
 }

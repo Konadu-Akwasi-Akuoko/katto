@@ -1,23 +1,11 @@
-import {
-	CalendarBlankIcon,
-	FilmSlateIcon,
-	GearSixIcon,
-	GlobeSimpleIcon,
-	HouseIcon,
-} from "@phosphor-icons/react";
-import type { ComponentType, ReactNode } from "react";
+import { GearSixIcon } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
+import { STUDIO_NAV, type SurfaceIcon } from "@/components/layout/surfaces";
 import { cn } from "@/lib/utils";
 import type { Surface } from "@/stores/ui";
 import { useUiStore } from "@/stores/ui";
 
-type IconType = ComponentType<{ className?: string }>;
-
-const studioNav: { surface: Surface; icon: IconType; label: string }[] = [
-	{ surface: "dashboard", icon: HouseIcon, label: "Dashboard" },
-	{ surface: "planner", icon: CalendarBlankIcon, label: "Planner" },
-	{ surface: "projects", icon: FilmSlateIcon, label: "Projects" },
-	{ surface: "browser", icon: GlobeSimpleIcon, label: "Browser" },
-];
+type IconType = SurfaceIcon;
 
 function NavButton({
 	surface,
@@ -49,11 +37,16 @@ function NavButton({
 }
 
 export function Sidebar({ dock }: { dock?: ReactNode }) {
+	const collapsed = useUiStore((s) => s.sidebarCollapsed);
+	// Collapsed means gone, not narrow: the titlebar switcher already names the
+	// current surface, so an icon rail would be a second, redundant indicator
+	// still charging rent on the page width the browser needs.
+	if (collapsed) return null;
 	return (
-		<aside className="flex w-56 flex-col gap-5 overflow-y-auto border-r p-3 select-none">
+		<aside className="flex w-56 shrink-0 flex-col gap-5 overflow-y-auto border-r p-3 select-none">
 			<div className="flex flex-col gap-0.5">
 				<span className="px-2 pb-1 text-xs text-fg-faint">Studio</span>
-				{studioNav.map((item) => (
+				{STUDIO_NAV.map((item) => (
 					<NavButton key={item.surface} {...item} />
 				))}
 			</div>

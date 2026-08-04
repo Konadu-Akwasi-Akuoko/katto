@@ -6,7 +6,9 @@ import type { ReactNode } from "react";
  * a fixed sidebar and a single scrollable content pane. `min-h-0` on the grid
  * tracks is what lets the content pane actually scroll instead of growing the
  * frame. The banner wrapper keeps the row count stable whether or not a banner
- * renders — an empty `auto` row is 0px.
+ * renders — an empty `auto` row is 0px. The body is flex, not grid, because the
+ * sidebar renders nothing when collapsed and a two-column grid would leave the
+ * content pane stranded in the auto-sized first column.
  */
 export function AppShell({
 	titlebar,
@@ -26,9 +28,9 @@ export function AppShell({
 		<div className="grid h-dvh grid-rows-[auto_auto_1fr] overflow-hidden">
 			{titlebar}
 			<div>{banner}</div>
-			<div className="grid min-h-0 grid-cols-[auto_1fr]">
+			<div className="flex min-h-0">
 				{sidebar}
-				<div className="relative grid min-h-0">
+				<div className="relative grid min-h-0 flex-1">
 					<main
 						data-scroll-root
 						className="min-h-0 overflow-y-auto overscroll-contain"

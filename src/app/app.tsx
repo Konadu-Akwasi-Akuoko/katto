@@ -73,7 +73,13 @@ function MainApp() {
 			<DownloadsBridge />
 			<OnboardingGate>
 				<AppShell
-					titlebar={<Titlebar dark={dark} onToggleTheme={toggleTheme} />}
+					titlebar={
+						<Titlebar
+							dark={dark}
+							onToggleTheme={toggleTheme}
+							dock={<DockIcon compact />}
+						/>
+					}
 					banner={<DriveBanner />}
 					sidebar={<Sidebar dock={<DockIcon />} />}
 					overlay={<DockPanel />}

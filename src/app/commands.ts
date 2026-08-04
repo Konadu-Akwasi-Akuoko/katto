@@ -121,6 +121,13 @@ export function registerAppCommands(queryClient: QueryClient): void {
 		run: () => useUiStore.getState().closeCutEditor(),
 	});
 	registerCommand({
+		id: "app.toggle-sidebar",
+		title: "Toggle sidebar",
+		keywords: ["sidebar", "collapse", "hide", "expand", "nav", "width"],
+		group: "App",
+		run: () => useUiStore.getState().toggleSidebar(),
+	});
+	registerCommand({
 		id: "app.open-studio-root",
 		title: "Open studio root",
 		keywords: ["finder", "folder", "reveal", "studio", "root"],
