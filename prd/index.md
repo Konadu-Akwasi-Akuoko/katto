@@ -61,7 +61,7 @@ Every feature from the approved design (§3–§9), mapped. Nothing dropped.
 | §7 | Dock icon states; slide-over xterm.js panel; push API; idle reaping | 6 |
 | §7 | Cut planning re-routed through a dock session | 6 |
 | §7 | VFX cockpit (`assets/vfx/<effect>/` sessions + render folder watch) | 6 |
-| §8 Browser | Multi-tab in-app browser, persistent session, Envato preload | 7 |
+| §8 Browser | Multi-tab in-app browser, persistent session, start page (search + site tiles), searching address bar | 7 |
 | §8 | Download interception → `assets/` filing + license sidecar + unzip + fallback | 7 |
 | §9 Thumbnails | PSD scaffold from bundled templates; open Photoshop; PNG folder watch | 7 |
 | §10 Shell | Tray (live state) · hide-to-tray · launch-at-login · single instance | 1 |

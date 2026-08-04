@@ -28,7 +28,7 @@ already works.
 
 | Feature | Acceptance criteria |
 |---|---|
-| Browser shell | In-app surface: tab strip, address bar, back/forward, new/close tab; multi-webview (`unstable` feature): one `Window`, app UI webview + one child `WebviewBuilder` per tab, **only the active tab's webview visible** (sidesteps open macOS multi-visible bug tauri#11376); implemented behind a `BrowserTabHost` trait — fallback impl = single reused webview with per-tab serialized URL/history; persistent session partition (Envato login survives restarts); Envato Elements preloaded as the default tab; explicitly no extensions/profiles (D16) |
+| Browser shell | In-app surface: tab strip, address bar, back/forward, new/close tab; multi-webview (`unstable` feature): one `Window`, app UI webview + one child `WebviewBuilder` per tab, **only the active tab's webview visible** (sidesteps open macOS multi-visible bug tauri#11376); implemented behind a `BrowserTabHost` trait — fallback impl = single reused webview with per-tab serialized URL/history; persistent session partition (Envato login survives restarts); no preloaded home site — an empty pane and every new tab land on a **start page** (search field → Google, plus fixed tiles: Envato Elements, Dribbble, Pinterest, TestMyThumbnails, YouTube Studio, Unsplash, Freesound, Coolors), so a tab may hold no URL at all; the address bar also searches (non-URL input → Google); explicitly no extensions/profiles (D16) |
 | Download interception | `WebviewBuilder::on_download`: `Requested` rewrites `destination` into `<active project>/assets/` (`assets/envato/` when the source URL is an Envato domain); `Finished{success}` → archive? unzip into a folder named for the item, remove the archive; sidecar `<name>.license.json = {item_url, page_url, downloaded_at, project}`; events row; **no active project** → sheet asks which project before accepting; interception failure/blob edge cases → file goes to `~/Downloads` + notice banner (test blob: downloads against Envato specifically) |
 | Thumbnails | "New thumbnail" on project detail: template picker (1280×720 / 1080×1920 vertical) → copy bundled PSD (Tauri resource with guide layers + safe zones) to `thumbnails/<slug>-thumb-<letter>.psd` (letter increments) → `open -a "Adobe Photoshop"`; `notify` watch on `thumbnails/` shows the newest exported PNG on the project card (D17 — no design intelligence in katto) |
 | Resolve import | "Open in Resolve": drives Resolve Studio's scripting API (spawn its Python with `DaVinciResolveScript`) to create a project, import the exported FCPXML, and populate the media pool; requires Resolve **Studio** running (free Resolve explicitly unsupported — D12); clear typed errors for not-running/not-Studio/scripting-disabled |
@@ -49,18 +49,20 @@ unstable API may shift). Bundled resources: `resources/thumbnail-templates/*.psd
 
 ## Frontend (React)
 
-`src/features/browser/` (tab strip, address bar, nav buttons — the page itself renders in the
-child webview, not React; React draws only chrome and reserves the content rect), download
-notices; `src/features/thumbnails/` section on project detail (template picker, PNG preview
-grid); import wizard in settings (path picker → dry-run report → confirm); polish-pass
-changes across `styles/main.css` tokens + `components/ui/`.
+`src/features/browser/` (tab strip, address bar, nav buttons, start page — a loaded page
+renders in the child webview, not React; React draws only chrome and reserves the content
+rect, except while the active tab has no URL, when the child webview is hidden and React
+renders the start page into that rect), download notices; `src/features/thumbnails/` section
+on project detail (template picker, PNG preview grid); import wizard in settings (path picker
+→ dry-run report → confirm); polish-pass changes across `styles/main.css` tokens +
+`components/ui/`.
 
 ## Wiring / IPC
 
 | Command | Notes |
 |---|---|
 | `browser_open_tab(url?) -> tab_id` / `browser_close_tab` / `browser_select_tab` / `browser_navigate(tab_id, url)` / `browser_go(tab_id, delta)` | chrome ↔ host |
-| `browser_state() -> {tabs: [{id, title, url, can_go_back, can_go_forward}], active}` | + `browser-state-changed` broadcast |
+| `browser_state() -> {tabs: [{id, title, url?, can_go_back, can_go_forward}], active}` | + `browser-state-changed` broadcast; `url` is null on a start-page tab (titled "New tab") |
 | `set_active_asset_project(slug?)` | download filing target (defaults to last touched) |
 | `create_thumbnail(slug, format) -> psd_path` | scaffold + open Photoshop |
 | `open_in_resolve(slug, timeline_version?) -> ()` | scripting bridge |

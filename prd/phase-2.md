@@ -53,7 +53,7 @@ Living checklist — the durable record of what's landed vs. outstanding on `fea
 
 | Feature | Acceptance criteria |
 |---|---|
-| Folder anatomy | `create_project` builds `<StudioRoot>/Projects/<slug>/` with `project.json` + `footage/ audio/ assets/envato assets/vfx assets/graphics thumbnails/ timelines/ exports/` (D6); manifest schema-validated on read and write |
+| Folder anatomy | `create_project` builds `<StudioRoot>/Projects/<slug>/` with `project.json` + `footage/ audio/ assets/envato assets/vfx assets/graphics assets/music assets/sfx thumbnails/ timelines/ exports/` (D6); manifest schema-validated on read and write |
 | Slug contract | `slug = kebab(title) + "-" + YYYY-MM-DD`; collision dedupe inserts `-2-`, `-3-` before the date, byte-compatible with hyper-frames `tools/studio/server/lib/util.ts` `kebabSlug` + `routes/ideas.ts` dedupe; folder name always equals the stored slug / `promoted_slug` exactly |
 | Manifest | `project.json = {schema_version, slug, title, status, target_nle, shoot_date?, publish_date?, created_at, links: {}}`; atomic writes (`.tmp`→rename) |
 | Scan/reconcile | On launch and on demand: scan `<StudioRoot>/Projects/*`; folder with valid manifest → upsert DB row; DB row with no folder → delete row (+ `events` row `project-vanished`); invalid manifest → surfaced in dashboard, row untouched |
