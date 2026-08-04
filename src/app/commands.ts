@@ -43,7 +43,7 @@ export function registerAppCommands(queryClient: QueryClient): void {
 	registerCommand({
 		id: "browser.new-tab",
 		title: "New browser tab",
-		keywords: ["web", "tab", "envato"],
+		keywords: ["web", "tab", "new"],
 		group: "App",
 		run: async () => {
 			useUiStore.getState().setSurface("browser");

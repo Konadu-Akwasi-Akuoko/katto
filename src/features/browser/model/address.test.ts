@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { displayUrl, normalizeAddress } from "./address";
+import {
+	displayUrl,
+	normalizeAddress,
+	searchUrl,
+	toNavigable,
+} from "./address";
 
 describe("normalizeAddress", () => {
 	it("passes full urls through", () => {
@@ -23,6 +28,38 @@ describe("normalizeAddress", () => {
 		expect(normalizeAddress("dust particles")).toBeNull();
 		expect(normalizeAddress("")).toBeNull();
 		expect(normalizeAddress("file:///etc")).toBeNull();
+	});
+});
+
+describe("searchUrl", () => {
+	it("encodes the query", () => {
+		expect(searchUrl("dust particles")).toBe(
+			"https://www.google.com/search?q=dust%20particles",
+		);
+		expect(searchUrl("a & b")).toBe(
+			"https://www.google.com/search?q=a%20%26%20b",
+		);
+	});
+});
+
+describe("toNavigable", () => {
+	it("passes addresses through", () => {
+		expect(toNavigable("example.com")).toBe("https://example.com");
+		expect(toNavigable("https://a.test/x")).toBe("https://a.test/x");
+	});
+	it("searches free text", () => {
+		expect(toNavigable("dust particles")).toBe(
+			"https://www.google.com/search?q=dust%20particles",
+		);
+	});
+	it("returns null only for empty input", () => {
+		expect(toNavigable("")).toBeNull();
+		expect(toNavigable("   ")).toBeNull();
+	});
+	it("searches for a scheme it will not open", () => {
+		expect(toNavigable("file:///etc")).toBe(
+			"https://www.google.com/search?q=file%3A%2F%2F%2Fetc",
+		);
 	});
 });
 

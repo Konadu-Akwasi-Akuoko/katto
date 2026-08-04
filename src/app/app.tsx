@@ -25,6 +25,7 @@ import { ProjectsList } from "@/features/projects/list/projects-list";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { useBroadcastInvalidation } from "@/hooks/use-broadcast-invalidation";
 import { useDeepLinkRouter } from "@/hooks/use-deep-link-router";
+import { browserSetVisible } from "@/lib/ipc/browser";
 import { queryClient } from "@/lib/query-client";
 import { applyTheme, storedTheme } from "@/lib/theme";
 import { windowLabel } from "@/lib/window-label";
@@ -59,6 +60,12 @@ function MainApp() {
 
 	useEffect(() => {
 		registerAppCommands(queryClient);
+		// The host's visibility flag outlives this webview's JS context: a reload
+		// tears React down without running BrowserSurface's unmount cleanup, so
+		// the child webview stays shown at its last rect, painted over whichever
+		// surface the fresh UI boots on. Nothing is mounted yet at this point, so
+		// hidden is the truth.
+		void browserSetVisible(false);
 	}, []);
 
 	function toggleTheme() {

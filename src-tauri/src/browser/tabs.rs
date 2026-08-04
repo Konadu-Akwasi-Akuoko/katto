@@ -27,15 +27,19 @@ pub struct BrowserState {
 }
 
 /// Wire snapshot of one tab; `title` is URL-derived (the webview API exposes
-/// no page title).
+/// no page title). `url` is `None` for a tab that has never navigated — the
+/// start-page state, titled "New tab", owning no webview.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, specta::Type)]
 pub struct TabSnapshot {
     pub id: TabId,
     pub title: String,
-    pub url: String,
+    pub url: Option<String>,
     pub can_go_back: bool,
     pub can_go_forward: bool,
 }
+
+/// Title for a tab whose history is still empty.
+const NEW_TAB_TITLE: &str = "New tab";
 
 impl TabModel {
     pub fn new() -> Self {
@@ -46,13 +50,15 @@ impl TabModel {
         }
     }
 
-    /// Open a new tab on `url`; the new tab becomes active.
-    pub fn open(&mut self, url: String) -> TabId {
+    /// Open a new tab on `url`; the new tab becomes active. `None` opens a
+    /// start-page tab: an empty history, which is what makes `navigated`,
+    /// `go` and the `can_go_*` affordances correct with no special-casing.
+    pub fn open(&mut self, url: Option<String>) -> TabId {
         let id = self.next_id;
         self.next_id += 1;
         self.tabs.push(Tab {
             id,
-            history: vec![url],
+            history: url.map_or_else(Vec::new, |u| vec![u]),
             cursor: 0,
         });
         self.active = Some(id);
@@ -116,6 +122,10 @@ impl TabModel {
         self.active
     }
 
+    pub fn contains(&self, id: TabId) -> bool {
+        self.index_of(id).is_some()
+    }
+
     pub fn current_url(&self, id: TabId) -> Option<&str> {
         let tab = self.tabs.iter().find(|t| t.id == id)?;
         tab.history.get(tab.cursor).map(String::as_str)
@@ -127,10 +137,12 @@ impl TabModel {
                 .tabs
                 .iter()
                 .map(|t| {
-                    let url = t.history.get(t.cursor).cloned().unwrap_or_default();
+                    let url = t.history.get(t.cursor).cloned();
                     TabSnapshot {
                         id: t.id,
-                        title: tab_title(&url),
+                        title: url
+                            .as_deref()
+                            .map_or_else(|| NEW_TAB_TITLE.to_string(), tab_title),
                         url,
                         can_go_back: t.cursor > 0,
                         can_go_forward: t.cursor + 1 < t.history.len(),
@@ -233,9 +245,65 @@ mod tests {
 
     fn model_with_two_tabs() -> (TabModel, TabId, TabId) {
         let mut m = TabModel::new();
-        let a = m.open("https://elements.envato.com/".into());
-        let b = m.open("https://example.com/".into());
+        let a = m.open(Some("https://elements.envato.com/".into()));
+        let b = m.open(Some("https://example.com/".into()));
         (m, a, b)
+    }
+
+    #[test]
+    fn open_without_url_leaves_the_tab_blank() {
+        let mut m = TabModel::new();
+        let t = m.open(None);
+        assert_eq!(m.current_url(t), None);
+        let snap = m.snapshot();
+        assert_eq!(snap.tabs[0].url, None);
+        assert_eq!(snap.tabs[0].title, "New tab");
+        assert!(!snap.tabs[0].can_go_back);
+        assert!(!snap.tabs[0].can_go_forward);
+    }
+
+    #[test]
+    fn navigating_a_blank_tab_sets_its_url() {
+        let mut m = TabModel::new();
+        let t = m.open(None);
+        m.navigated(t, "https://a.test/".into());
+        assert_eq!(m.current_url(t), Some("https://a.test/"));
+        let snap = m.snapshot();
+        assert_eq!(snap.tabs[0].url.as_deref(), Some("https://a.test/"));
+        assert_eq!(snap.tabs[0].title, "a.test");
+    }
+
+    #[test]
+    fn first_navigation_of_a_blank_tab_is_not_a_history_entry() {
+        let mut m = TabModel::new();
+        let t = m.open(None);
+        m.navigated(t, "https://a.test/".into());
+        assert!(!m.snapshot().tabs[0].can_go_back);
+    }
+
+    #[test]
+    fn go_on_a_blank_tab_is_a_noop() {
+        let mut m = TabModel::new();
+        let t = m.open(None);
+        assert_eq!(m.go(t, -1), None);
+        assert_eq!(m.go(t, 1), None);
+        assert_eq!(m.current_url(t), None);
+    }
+
+    #[test]
+    fn close_blank_tab_falls_back_to_neighbor() {
+        let mut m = TabModel::new();
+        let a = m.open(Some("https://a.test/".into()));
+        let blank = m.open(None);
+        assert_eq!(m.close(blank), Some(a));
+    }
+
+    #[test]
+    fn contains_reports_tab_existence() {
+        let mut m = TabModel::new();
+        let a = m.open(None);
+        assert!(m.contains(a));
+        assert!(!m.contains(99));
     }
 
     #[test]
@@ -255,7 +323,7 @@ mod tests {
     #[test]
     fn close_last_tab_leaves_none() {
         let mut m = TabModel::new();
-        let a = m.open("https://x.test/".into());
+        let a = m.open(Some("https://x.test/".into()));
         assert_eq!(m.close(a), None);
         assert_eq!(m.active(), None);
     }
@@ -263,7 +331,7 @@ mod tests {
     #[test]
     fn navigated_pushes_and_truncates_forward() {
         let mut m = TabModel::new();
-        let t = m.open("https://a.test/".into());
+        let t = m.open(Some("https://a.test/".into()));
         m.navigated(t, "https://b.test/".into());
         m.navigated(t, "https://c.test/".into());
         assert_eq!(m.go(t, -1), Some("https://b.test/".to_string()));
@@ -276,7 +344,7 @@ mod tests {
     #[test]
     fn navigated_collapses_consecutive_duplicates() {
         let mut m = TabModel::new();
-        let t = m.open("https://a.test/".into());
+        let t = m.open(Some("https://a.test/".into()));
         m.navigated(t, "https://a.test/".into()); // reload / redirect echo
         assert!(!m.snapshot().tabs[0].can_go_back);
     }
@@ -284,7 +352,7 @@ mod tests {
     #[test]
     fn go_out_of_range_is_none_and_keeps_cursor() {
         let mut m = TabModel::new();
-        let t = m.open("https://a.test/".into());
+        let t = m.open(Some("https://a.test/".into()));
         assert_eq!(m.go(t, -1), None);
         assert_eq!(m.current_url(t), Some("https://a.test/"));
     }
@@ -292,7 +360,7 @@ mod tests {
     #[test]
     fn snapshot_reports_history_affordances() {
         let mut m = TabModel::new();
-        let t = m.open("https://a.test/".into());
+        let t = m.open(Some("https://a.test/".into()));
         m.navigated(t, "https://b.test/".into());
         let snap = m.snapshot();
         assert!(snap.tabs[0].can_go_back);

@@ -26,6 +26,10 @@ beforeEach(() => {
 				return null;
 			case "get_drive_status":
 				return { mounted: true, path: null, free_gb: null };
+			// the shell clears the host's stale visibility flag on boot, before
+			// any surface has mounted
+			case "browser_set_visible":
+				return null;
 			default:
 				throw new Error(`unexpected command ${cmd}`);
 		}

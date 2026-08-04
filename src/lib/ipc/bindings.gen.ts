@@ -382,9 +382,18 @@ export type BoundaryAdjustment = {
 };
 
 /**
- *  CSS-pixel rect of the browser surface's content area, reported by React.
- *  Child webview bounds are relative to the window content area the main
- *  webview also fills, so these map 1:1 to logical position/size.
+ *  Logical-pixel rect of the browser surface's content area, in the coordinate
+ *  space of the main window's **content view** — where wry places child
+ *  webviews (`wkwebview::set_bounds` measures against `superview()`).
+ * 
+ *  React does NOT report `getBoundingClientRect()` untransformed. Tauri gives
+ *  every macOS window `FullSizeContentView`, so the content view spans the whole
+ *  frame including the titlebar strip while WKWebView lays the document out
+ *  below it: measured on the owner's machine, the content view is 869 logical px
+ *  tall against an `innerHeight` of 837. A DOM-relative `y` fed to wry's y-flip
+ *  therefore lands one 32px inset too high, which is what used to bury the
+ *  browser toolbar under the page. `use-browser-bounds.ts` derives that inset
+ *  and adds it before sending; it collapses to 0 where no inset exists.
  */
 export type BrowserRect = {
 	x: number,
@@ -1222,12 +1231,13 @@ export type StudioImportFinished = {
 
 /**
  *  Wire snapshot of one tab; `title` is URL-derived (the webview API exposes
- *  no page title).
+ *  no page title). `url` is `None` for a tab that has never navigated — the
+ *  start-page state, titled "New tab", owning no webview.
  */
 export type TabSnapshot = {
 	id: number,
 	title: string,
-	url: string,
+	url: string | null,
 	can_go_back: boolean,
 	can_go_forward: boolean,
 };

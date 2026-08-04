@@ -13,7 +13,7 @@ export const browserKeys = {
 	activeProject: ["browser", "active-project"] as const,
 };
 
-/** Open a new tab (activates it). No url → Envato Elements. */
+/** Open a new tab (activates it). No url → a start-page tab holding no URL. */
 export const browserOpenTab = (url?: string): Promise<number> =>
 	unwrap(commands.browserOpenTab(url ?? null));
 

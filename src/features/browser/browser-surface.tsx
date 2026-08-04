@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useSonner } from "sonner";
-import { Button } from "@/components/ui/button";
 import {
 	browserCloseTab,
 	browserGo,
@@ -9,14 +8,15 @@ import {
 	browserNavigate,
 	browserOpenTab,
 	browserSelectTab,
-	browserSetBounds,
 	browserSetVisible,
 	browserState,
 } from "@/lib/ipc/browser";
 import { useDownloadsStore } from "@/stores/downloads";
 import { useUiStore } from "@/stores/ui";
-import { DownloadsPopover } from "./downloads-popover";
+import { DownloadsButton, DownloadsPanel } from "./downloads-panel";
+import { useBrowserBounds } from "./hooks/use-browser-bounds";
 import { NeedsProjectSheet } from "./needs-project-sheet";
+import { StartPage } from "./start-page";
 import { TabStrip } from "./tab-strip";
 import { Toolbar } from "./toolbar";
 
@@ -24,28 +24,30 @@ import { Toolbar } from "./toolbar";
  * The in-app browser surface. Tabs render as native child webviews layered
  * over the content host div; React owns the chrome (strip, toolbar,
  * downloads) and reports the host rect so the webviews track the layout.
+ * A tab holding no URL owns no webview, so the start page paints through.
  */
 export function BrowserSurface() {
 	const contentRef = useRef<HTMLDivElement>(null);
-	const openedDefault = useRef(false);
-	const [openFailed, setOpenFailed] = useState(false);
-	const [popoverOpen, setPopoverOpen] = useState(false);
+	const [downloadsOpen, setDownloadsOpen] = useState(false);
 	const queryClient = useQueryClient();
 
 	// the native child webview paints over the DOM, so every overlay that
-	// could cover the page must hide it: palette, dock, downloads popover,
-	// needs-project sheet, active toasts
+	// could cover the page must hide it: palette, dock, needs-project sheet,
+	// active toasts. The downloads panel is deliberately absent — it takes
+	// width from the content host rather than covering it, so the page stays
+	// live beside it.
 	const paletteOpen = useUiStore((s) => s.paletteOpen);
 	const paletteDialog = useUiStore((s) => s.paletteDialog);
 	const dockOpen = useUiStore((s) => s.dockOpen);
+	const switcherOpen = useUiStore((s) => s.switcherOpen);
 	const needsProject = useDownloadsStore((s) => s.needsProject);
 	const { toasts } = useSonner();
 	const overlayOpen =
 		paletteOpen ||
 		paletteDialog !== null ||
 		dockOpen ||
+		switcherOpen ||
 		needsProject !== null ||
-		popoverOpen ||
 		toasts.length > 0;
 
 	const state = useQuery({
@@ -58,11 +60,7 @@ export function BrowserSurface() {
 
 	const openTab = useMutation({
 		mutationFn: (url?: string) => browserOpenTab(url),
-		onSuccess: () => {
-			setOpenFailed(false);
-			void invalidate();
-		},
-		onError: () => setOpenFailed(true),
+		onSuccess: invalidate,
 	});
 	const selectTab = useMutation({
 		mutationFn: (id: number) => browserSelectTab(id),
@@ -82,6 +80,8 @@ export function BrowserSurface() {
 		onSuccess: invalidate,
 	});
 
+	const remeasure = useBrowserBounds(contentRef);
+
 	// surface visibility drives webview visibility; any open overlay hides
 	// the page so DOM chrome actually paints above it
 	useEffect(() => {
@@ -93,52 +93,23 @@ export function BrowserSurface() {
 		};
 	}, []);
 
-	// first mount with no tabs: open the Envato default. Once tabs have
-	// existed this mount, an empty list means the user closed them — land on
-	// the empty state, never silently respawn.
+	// the host moves without resizing whenever chrome above it changes, and a
+	// ResizeObserver never sees that; the re-report is deduped, so this is free
 	const tabs = state.data?.tabs;
-	const sawTabs = useRef(false);
-	if ((tabs?.length ?? 0) > 0) sawTabs.current = true;
-	const openMutate = openTab.mutate;
-	useEffect(() => {
-		if (
-			tabs !== undefined &&
-			tabs.length === 0 &&
-			!sawTabs.current &&
-			!openedDefault.current
-		) {
-			openedDefault.current = true;
-			openMutate(undefined);
-		}
-	}, [tabs, openMutate]);
-
-	// report the content-host rect (CSS px = logical px) on every resize
-	useEffect(() => {
-		const el = contentRef.current;
-		if (el === null) return;
-		const report = () => {
-			const rect = el.getBoundingClientRect();
-			void browserSetBounds({
-				x: rect.x,
-				y: rect.y,
-				width: rect.width,
-				height: rect.height,
-			});
-		};
-		report();
-		const observer = new ResizeObserver(report);
-		observer.observe(el);
-		window.addEventListener("resize", report);
-		return () => {
-			observer.disconnect();
-			window.removeEventListener("resize", report);
-		};
-	}, []);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: tabs and overlayOpen are the layout triggers, not values the effect reads
+	useEffect(() => remeasure(), [tabs, overlayOpen, remeasure]);
 
 	const active =
 		state.data?.tabs.find((t) => t.id === state.data?.active) ?? null;
-	const showEmpty =
-		tabs !== undefined && tabs.length === 0 && (openFailed || sawTabs.current);
+	// nothing until the first snapshot lands, so the start page never flashes
+	// over a tab that is already loading
+	const showStart =
+		state.data !== undefined && (active === null || active.url === null);
+
+	function onNavigate(url: string) {
+		if (active !== null) navigate.mutate({ id: active.id, url });
+		else openTab.mutate(url);
+	}
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
@@ -151,33 +122,21 @@ export function BrowserSurface() {
 			/>
 			<Toolbar
 				activeTab={active}
-				onNavigate={(url) => {
-					if (active !== null) navigate.mutate({ id: active.id, url });
-					else openTab.mutate(url);
-				}}
+				onNavigate={onNavigate}
 				onGo={(delta) => {
 					if (active !== null) go.mutate({ id: active.id, delta });
 				}}
 			>
-				<DownloadsPopover open={popoverOpen} onOpenChange={setPopoverOpen} />
+				<DownloadsButton
+					open={downloadsOpen}
+					onToggle={() => setDownloadsOpen((open) => !open)}
+				/>
 			</Toolbar>
-			<div ref={contentRef} className="min-h-0 flex-1">
-				{showEmpty && (
-					<div className="flex h-full flex-col items-center justify-center gap-2">
-						<h2 className="font-serif text-lg text-fg">The web, filed.</h2>
-						<p className="max-w-sm text-center text-sm text-fg-muted">
-							Downloads from any tab land in the active project's assets folder
-							— never in ~/Downloads.
-						</p>
-						<Button
-							size="sm"
-							className="mt-2"
-							onClick={() => openTab.mutate(undefined)}
-						>
-							Open Envato Elements
-						</Button>
-					</div>
-				)}
+			<div className="flex min-h-0 flex-1">
+				<div ref={contentRef} className="min-h-0 flex-1">
+					{showStart && <StartPage onNavigate={onNavigate} />}
+				</div>
+				{downloadsOpen && <DownloadsPanel />}
 			</div>
 			<NeedsProjectSheet />
 		</div>

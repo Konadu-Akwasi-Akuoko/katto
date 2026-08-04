@@ -15,9 +15,18 @@ use crate::browser::downloads::{PendingDownload, safe_filename};
 use crate::browser::tabs::{BrowserState, TabId, TabModel, allow_navigation};
 use crate::error::{Error, Result};
 
-/// CSS-pixel rect of the browser surface's content area, reported by React.
-/// Child webview bounds are relative to the window content area the main
-/// webview also fills, so these map 1:1 to logical position/size.
+/// Logical-pixel rect of the browser surface's content area, in the coordinate
+/// space of the main window's **content view** — where wry places child
+/// webviews (`wkwebview::set_bounds` measures against `superview()`).
+///
+/// React does NOT report `getBoundingClientRect()` untransformed. Tauri gives
+/// every macOS window `FullSizeContentView`, so the content view spans the whole
+/// frame including the titlebar strip while WKWebView lays the document out
+/// below it: measured on the owner's machine, the content view is 869 logical px
+/// tall against an `innerHeight` of 837. A DOM-relative `y` fed to wry's y-flip
+/// therefore lands one 32px inset too high, which is what used to bury the
+/// browser toolbar under the page. `use-browser-bounds.ts` derives that inset
+/// and adds it before sending; it collapses to 0 where no inset exists.
 #[derive(Clone, Copy, Debug, serde::Deserialize, specta::Type)]
 pub struct BrowserRect {
     pub x: f64,
@@ -29,7 +38,8 @@ pub struct BrowserRect {
 /// The host contract both webview strategies implement. Commands call these;
 /// every mutation broadcasts `BrowserStateChanged`.
 pub trait BrowserTabHost: Send + Sync {
-    fn open_tab(&self, app: &AppHandle, url: &str) -> Result<TabId>;
+    /// `None` opens a start-page tab: no URL, no webview until it navigates.
+    fn open_tab(&self, app: &AppHandle, url: Option<&str>) -> Result<TabId>;
     fn close_tab(&self, app: &AppHandle, id: TabId) -> Result<()>;
     fn select_tab(&self, app: &AppHandle, id: TabId) -> Result<()>;
     fn navigate(&self, app: &AppHandle, id: TabId, url: &str) -> Result<()>;
@@ -158,6 +168,23 @@ struct HostInner {
     titles: Mutex<HashMap<TabId, String>>,
     bounds: Mutex<Option<BrowserRect>>,
     visible: AtomicBool,
+    /// Serialises every read-`visible`-then-show/hide region. Tauri runs
+    /// commands concurrently, so without it `set_bounds` could read
+    /// `visible = true`, be descheduled while `set_visible(false)` hid
+    /// everything, and then resume and `show()` the page back on top of
+    /// whatever surface the user had switched to. Under the lock the losing
+    /// task re-reads `visible` after the winner is done, so the last writer
+    /// decides what is on screen — every guarded region must therefore derive
+    /// its decision *inside* the guard, never carry one in.
+    ///
+    /// Two limits. `add_child` has no hidden-at-creation option in tauri 2.11
+    /// (`WebviewAttributes` carries no `visible`), so a new child is briefly on
+    /// screen before the guard can hide it — a flash the lock cannot close.
+    /// And only command threads may take this: every call made under it is a
+    /// fire-and-forget runtime message today, so if a wry callback (page load,
+    /// title, download) ever starts taking `ops`, the main thread does too, and
+    /// any blocking runtime getter added under the guard would then deadlock.
+    ops: Mutex<()>,
 }
 
 impl HostInner {
@@ -168,7 +195,16 @@ impl HostInner {
             titles: Mutex::new(HashMap::new()),
             bounds: Mutex::new(None),
             visible: AtomicBool::new(false),
+            ops: Mutex::new(()),
         }
+    }
+
+    /// Enter the visibility-application region. Poisoning is recovered rather
+    /// than propagated: the guarded region protects ordering, not an
+    /// invariant, and bailing out would strand a webview on screen over
+    /// another surface — the exact failure the lock exists to prevent.
+    fn ops(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.ops.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn model<T>(&self, f: impl FnOnce(&mut TabModel) -> T) -> Result<T> {
@@ -200,17 +236,33 @@ impl HostInner {
         snap
     }
 
-    fn current_rect(&self) -> BrowserRect {
-        self.bounds
-            .lock()
-            .ok()
-            .and_then(|b| *b)
-            .unwrap_or(BrowserRect {
-                x: 0.0,
-                y: 0.0,
-                width: 0.0,
-                height: 0.0,
-            })
+    fn store_rect(&self, rect: BrowserRect) {
+        if let Ok(mut bounds) = self.bounds.lock() {
+            *bounds = Some(rect);
+        }
+    }
+
+    /// Whether a *usable* rect has landed. Deliberately the same predicate
+    /// [`Self::require_rect`] enforces: a caller that guards on this must never
+    /// go on to trip the error it is guarding against — a stored 0x0 rect
+    /// (measured while an ancestor was collapsed) is not a report.
+    fn bounds_reported(&self) -> bool {
+        self.require_rect().is_ok()
+    }
+
+    /// The last rect React reported. Creating a webview before any report would
+    /// park a 0x0 view at the window origin, so this refuses instead.
+    fn require_rect(&self) -> Result<BrowserRect> {
+        let rect = self.bounds.lock().ok().and_then(|b| *b).ok_or_else(|| {
+            Error::BrowserUnavailable("browser surface bounds not reported yet".into())
+        })?;
+        if rect.width <= 0.0 || rect.height <= 0.0 {
+            return Err(Error::BrowserUnavailable(format!(
+                "browser surface rect is degenerate: {}x{}",
+                rect.width, rect.height
+            )));
+        }
+        Ok(rect)
     }
 }
 
@@ -235,10 +287,21 @@ fn parse_web_url(url: &str) -> Result<url::Url> {
 /// recording, title reporting, and download interception. `fixed_tab` is the
 /// owning tab for the multi host; the single host resolves the active tab at
 /// event time (its one webview serves whichever tab is selected).
+/// WKWebView's stock user agent carries no `Version/… Safari/…` token, so
+/// browser-sniffing sites classify it as unknown and degrade — YouTube Studio
+/// refuses to load past an "unsupported browser" interstitial. This is the
+/// engine's own identity stated properly, not a spoof: the tabs really are
+/// Safari's WebKit. The `10_15_7` and `605.1.15` tokens are frozen values Safari
+/// itself still reports on current macOS; only `Version/` tracks the release, so
+/// that is the part to bump when the interstitials come back.
+const TAB_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+     AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15";
+
 fn build_webview(label: &str, url: url::Url) -> tauri::webview::WebviewBuilder<Wry> {
     let event_label = label.to_string();
     let title_label = label.to_string();
     tauri::webview::WebviewBuilder::new(label, WebviewUrl::External(url))
+        .user_agent(TAB_USER_AGENT)
         .on_navigation(allow_navigation)
         .on_page_load(move |webview, payload| {
             if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
@@ -408,9 +471,22 @@ fn engage_fallback(app: &AppHandle, error: &str) {
     });
 }
 
+/// One atomic bounds message. Splitting it into `set_position` + `set_size`
+/// leaves an intermediate frame where the runtime's y-flip is computed against
+/// the stale height, misplacing the webview for one event-loop turn.
 fn apply_bounds(webview: &Webview<Wry>, rect: BrowserRect) {
-    let _ = webview.set_position(tauri::LogicalPosition::new(rect.x, rect.y));
-    let _ = webview.set_size(tauri::LogicalSize::new(rect.width, rect.height));
+    let _ = webview.set_bounds(tauri::Rect {
+        position: tauri::LogicalPosition::new(rect.x, rect.y).into(),
+        size: tauri::LogicalSize::new(rect.width, rect.height).into(),
+    });
+}
+
+/// Exactly one webview is on screen: the active tab's, and only while the
+/// surface itself is visible. A URL-less tab owns no webview at all, so it
+/// never reaches here and every live webview hides — which is what lets the
+/// DOM start page show through.
+fn should_show(tab: TabId, active: Option<TabId>, surface_visible: bool) -> bool {
+    surface_visible && active == Some(tab)
 }
 
 /// One child webview per tab; only the active tab's webview is shown
@@ -435,23 +511,15 @@ impl MultiWebviewHost {
         app.get_webview(&label)
     }
 
-    /// Create the tab's webview if it isn't live (lazily recreated after the
-    /// window was rebuilt). Returns the webview.
-    fn ensure_webview(&self, app: &AppHandle, id: TabId) -> Result<Webview<Wry>> {
-        if let Some(webview) = self.live_webview(app, id) {
-            return Ok(webview);
-        }
-        let url = self
-            .inner
-            .model(|m| m.current_url(id).map(str::to_string))?
-            .ok_or_else(|| Error::BrowserUnavailable(format!("no tab {id}")))?;
-        let parsed = parse_web_url(&url)?;
+    /// Attach a hidden child webview for `id` at `url`; `sync_visibility`
+    /// shows it.
+    fn create_webview(&self, app: &AppHandle, id: TabId, url: url::Url) -> Result<Webview<Wry>> {
         let label = Self::label_for(id);
         let window = main_window(app)?;
-        let rect = self.inner.current_rect();
+        let rect = self.inner.require_rect()?;
         let webview = window
             .add_child(
-                build_webview(&label, parsed),
+                build_webview(&label, url),
                 tauri::LogicalPosition::new(rect.x, rect.y),
                 tauri::LogicalSize::new(rect.width, rect.height),
             )
@@ -459,16 +527,46 @@ impl MultiWebviewHost {
                 engage_fallback(app, &e.to_string());
                 Error::BrowserUnavailable(format!("webview creation failed: {e}"))
             })?;
-        if let Ok(mut map) = self.inner.webviews.lock() {
-            map.insert(id, label);
+        // registering the label and hiding must be one region: a
+        // `sync_visibility` that observed the label between the two would
+        // `show()` the webview and then have this hide land on top of it,
+        // leaving the active tab blank
+        {
+            let _guard = self.inner.ops();
+            if let Ok(mut map) = self.inner.webviews.lock() {
+                map.insert(id, label);
+            }
+            let _ = webview.hide();
         }
-        let _ = webview.hide();
         Ok(webview)
     }
 
+    /// The tab's live webview, creating it when the tab has a URL (lazily
+    /// recreated after the window was rebuilt). `Ok(None)` = the tab exists but
+    /// holds no URL — the start page, which by design owns no webview, so
+    /// `sync_visibility` hides everything and the DOM page paints.
+    fn ensure_webview(&self, app: &AppHandle, id: TabId) -> Result<Option<Webview<Wry>>> {
+        if let Some(webview) = self.live_webview(app, id) {
+            return Ok(Some(webview));
+        }
+        if !self.inner.model(|m| m.contains(id))? {
+            return Err(Error::BrowserUnavailable(format!("no tab {id}")));
+        }
+        let Some(url) = self
+            .inner
+            .model(|m| m.current_url(id).map(str::to_string))?
+        else {
+            return Ok(None);
+        };
+        self.create_webview(app, id, parse_web_url(&url)?).map(Some)
+    }
+
     /// Show only the active tab's webview (when the surface is visible),
-    /// hide every other.
+    /// hide every other. The whole read-and-apply runs under `ops` so a
+    /// concurrent `set_visible` can't slip its hide between this read of
+    /// `visible` and the `show()` it authorises.
     fn sync_visibility(&self, app: &AppHandle) {
+        let _guard = self.inner.ops();
         let visible = self.inner.visible.load(Ordering::Relaxed);
         let active = self.inner.model(|m| m.active()).ok().flatten();
         let entries: Vec<(TabId, String)> = self
@@ -479,7 +577,7 @@ impl MultiWebviewHost {
             .unwrap_or_default();
         for (id, label) in entries {
             if let Some(webview) = app.get_webview(&label) {
-                if visible && Some(id) == active {
+                if should_show(id, active, visible) {
                     let _ = webview.show();
                     let _ = webview.set_focus();
                 } else {
@@ -501,11 +599,14 @@ impl Default for MultiWebviewHost {
 }
 
 impl BrowserTabHost for MultiWebviewHost {
-    fn open_tab(&self, app: &AppHandle, url: &str) -> Result<TabId> {
-        parse_web_url(url)?;
-        let id = self.inner.model(|m| m.open(url.to_string()))?;
-        if self.inner.visible.load(Ordering::Relaxed) {
-            self.ensure_webview(app, id)?;
+    fn open_tab(&self, app: &AppHandle, url: Option<&str>) -> Result<TabId> {
+        // validate before the model mutates, so a bad URL never creates a tab
+        if let Some(url) = url {
+            parse_web_url(url)?;
+        }
+        let id = self.inner.model(|m| m.open(url.map(str::to_string)))?;
+        if self.inner.visible.load(Ordering::Relaxed) && self.inner.bounds_reported() {
+            let _ = self.ensure_webview(app, id)?;
         }
         self.sync_visibility(app);
         crate::broadcast::browser_state_changed(app);
@@ -532,8 +633,8 @@ impl BrowserTabHost for MultiWebviewHost {
         if !self.inner.model(|m| m.select(id))? {
             return Err(Error::BrowserUnavailable(format!("no tab {id}")));
         }
-        if self.inner.visible.load(Ordering::Relaxed) {
-            self.ensure_webview(app, id)?;
+        if self.inner.visible.load(Ordering::Relaxed) && self.inner.bounds_reported() {
+            let _ = self.ensure_webview(app, id)?;
         }
         self.sync_visibility(app);
         crate::broadcast::browser_state_changed(app);
@@ -542,11 +643,28 @@ impl BrowserTabHost for MultiWebviewHost {
 
     fn navigate(&self, app: &AppHandle, id: TabId, url: &str) -> Result<()> {
         let parsed = parse_web_url(url)?;
-        let webview = self.ensure_webview(app, id)?;
-        webview
-            .navigate(parsed)
-            .map_err(|e| Error::BrowserUnavailable(e.to_string()))?;
-        Ok(())
+        if !self.inner.model(|m| m.contains(id))? {
+            return Err(Error::BrowserUnavailable(format!("no tab {id}")));
+        }
+        if let Some(webview) = self.live_webview(app, id) {
+            return webview
+                .navigate(parsed)
+                .map_err(|e| Error::BrowserUnavailable(e.to_string()));
+        }
+        // No live webview: a start-page tab, or one lost with the window. Seed
+        // the model so the tab leaves the start page the moment this returns,
+        // then create the child at the target — `add_child` loads it, so there
+        // is no second navigate.
+        if self.inner.model(|m| m.current_url(id).is_none())? {
+            self.inner.model(|m| m.navigated(id, url.to_string()))?;
+        }
+        let created = self.create_webview(app, id, parsed);
+        // the model left the start page whether or not the webview came up, so
+        // the broadcast is unconditional; skipping it on failure leaves React
+        // rendering a start page for a tab that now holds a URL
+        self.sync_visibility(app);
+        crate::broadcast::browser_state_changed(app);
+        created.map(|_| ())
     }
 
     fn go(&self, app: &AppHandle, id: TabId, delta: i32) -> Result<()> {
@@ -554,18 +672,25 @@ impl BrowserTabHost for MultiWebviewHost {
             return Ok(());
         };
         let parsed = parse_web_url(&url)?;
-        let webview = self.ensure_webview(app, id)?;
+        let Some(webview) = self.ensure_webview(app, id)? else {
+            return Ok(());
+        };
         webview
             .navigate(parsed)
             .map_err(|e| Error::BrowserUnavailable(e.to_string()))?;
+        // `ensure_webview` may have just created this one, and `create_webview`
+        // attaches hidden by contract — without this, Back/Forward as the first
+        // action after the window was rebuilt leaves it hidden for good
+        self.sync_visibility(app);
         crate::broadcast::browser_state_changed(app);
         Ok(())
     }
 
+    /// Also the convergence point for a first mount: `set_bounds` and
+    /// `set_visible` arrive over independent async commands, so whichever lands
+    /// second materialises the active tab's webview.
     fn set_bounds(&self, app: &AppHandle, rect: BrowserRect) -> Result<()> {
-        if let Ok(mut bounds) = self.inner.bounds.lock() {
-            *bounds = Some(rect);
-        }
+        self.inner.store_rect(rect);
         let entries: Vec<String> = self
             .inner
             .webviews
@@ -577,13 +702,22 @@ impl BrowserTabHost for MultiWebviewHost {
                 apply_bounds(&webview, rect);
             }
         }
+        if self.inner.visible.load(Ordering::Relaxed)
+            && let Some(active) = self.inner.model(|m| m.active())?
+        {
+            let _ = self.ensure_webview(app, active)?;
+            self.sync_visibility(app);
+        }
         Ok(())
     }
 
     fn set_visible(&self, app: &AppHandle, visible: bool) -> Result<()> {
         self.inner.visible.store(visible, Ordering::Relaxed);
-        if visible && let Some(active) = self.inner.model(|m| m.active())? {
-            self.ensure_webview(app, active)?;
+        if visible
+            && self.inner.bounds_reported()
+            && let Some(active) = self.inner.model(|m| m.active())?
+        {
+            let _ = self.ensure_webview(app, active)?;
         }
         self.sync_visibility(app);
         Ok(())
@@ -630,16 +764,46 @@ impl BrowserTabHost for MultiWebviewHost {
 
 const SINGLE_LABEL: &str = "browser-tab";
 
+/// What the single host's one shared webview should do for the current active
+/// tab — the counterpart of [`should_show`], pulled out of the `AppHandle`
+/// plumbing so both gates are testable without a window.
+#[derive(Clone, Debug, PartialEq)]
+enum SharedAction {
+    /// React has not measured the surface yet; `set_bounds` converges later.
+    Wait,
+    /// No active tab, or an active tab holding no URL: hide the shared webview
+    /// so the DOM start page shows through.
+    Hide,
+    /// Load this URL into the shared webview.
+    Load(String),
+}
+
+fn shared_action(bounds_reported: bool, active_url: Option<String>) -> SharedAction {
+    if !bounds_reported {
+        return SharedAction::Wait;
+    }
+    match active_url {
+        Some(url) => SharedAction::Load(url),
+        None => SharedAction::Hide,
+    }
+}
+
 /// One reused child webview; selecting a tab navigates it, history is fully
 /// model-driven. The settings-flag fallback for multi-webview instability.
 pub struct SingleWebviewHost {
     inner: HostInner,
+    /// The URL the shared webview currently holds. Switching to a start-page
+    /// tab only *hides* it — the page stays loaded and keeps running script —
+    /// so a download it fires belongs to this URL, not to whatever tab happens
+    /// to be active when the event arrives.
+    loaded: Mutex<Option<String>>,
 }
 
 impl SingleWebviewHost {
     pub fn new() -> Self {
         Self {
             inner: HostInner::new(),
+            loaded: Mutex::new(None),
         }
     }
 
@@ -647,13 +811,22 @@ impl SingleWebviewHost {
         app.get_webview(SINGLE_LABEL)
     }
 
-    fn ensure_webview(&self, app: &AppHandle, url: &str) -> Result<Webview<Wry>> {
+    fn note_loaded(&self, url: &str) {
+        if let Ok(mut loaded) = self.loaded.lock() {
+            *loaded = Some(url.to_string());
+        }
+    }
+
+    /// The shared webview, creating it at `url` when it isn't live. The flag is
+    /// *created*: `add_child` already loads that URL, so callers must skip the
+    /// navigate they would otherwise issue right after.
+    fn ensure_webview(&self, app: &AppHandle, url: &str) -> Result<(Webview<Wry>, bool)> {
         if let Some(webview) = self.live_webview(app) {
-            return Ok(webview);
+            return Ok((webview, false));
         }
         let parsed = parse_web_url(url)?;
         let window = main_window(app)?;
-        let rect = self.inner.current_rect();
+        let rect = self.inner.require_rect()?;
         let webview = window
             .add_child(
                 build_webview(SINGLE_LABEL, parsed),
@@ -661,33 +834,67 @@ impl SingleWebviewHost {
                 tauri::LogicalSize::new(rect.width, rect.height),
             )
             .map_err(|e| Error::BrowserUnavailable(format!("webview creation failed: {e}")))?;
-        if !self.inner.visible.load(Ordering::Relaxed) {
-            let _ = webview.hide();
-        }
-        Ok(webview)
-    }
-
-    /// Navigate the shared webview to the active tab's current URL.
-    fn show_active(&self, app: &AppHandle) -> Result<()> {
-        let Some(url) = self.inner.model(|m| {
-            m.active()
-                .and_then(|id| m.current_url(id).map(str::to_string))
-        })?
-        else {
-            if let Some(webview) = self.live_webview(app) {
+        {
+            let _guard = self.inner.ops();
+            if !self.inner.visible.load(Ordering::Relaxed) {
                 let _ = webview.hide();
             }
-            return Ok(());
-        };
-        let webview = self.ensure_webview(app, &url)?;
-        let parsed = parse_web_url(&url)?;
-        webview
-            .navigate(parsed)
-            .map_err(|e| Error::BrowserUnavailable(e.to_string()))?;
-        if self.inner.visible.load(Ordering::Relaxed) {
-            let _ = webview.show();
+        }
+        Ok((webview, true))
+    }
+
+    /// Point the shared webview at `url`, creating it when it isn't live, and
+    /// show it while the surface is visible.
+    fn load(&self, app: &AppHandle, url: &str) -> Result<()> {
+        let (webview, created) = self.ensure_webview(app, url)?;
+        if !created {
+            webview
+                .navigate(parse_web_url(url)?)
+                .map_err(|e| Error::BrowserUnavailable(e.to_string()))?;
+        }
+        self.note_loaded(url);
+        // guarded for the same reason as the multi host's `sync_visibility`:
+        // this read and the `show()` it authorises must not straddle a
+        // concurrent `set_visible(false)`
+        {
+            let _guard = self.inner.ops();
+            if self.inner.visible.load(Ordering::Relaxed) {
+                let _ = webview.show();
+            }
         }
         Ok(())
+    }
+
+    /// What the shared webview should be doing for the active tab right now.
+    fn active_action(&self) -> Result<SharedAction> {
+        let active_url = self.inner.model(|m| {
+            m.active()
+                .and_then(|id| m.current_url(id).map(str::to_string))
+        })?;
+        Ok(shared_action(self.inner.bounds_reported(), active_url))
+    }
+
+    /// Navigate the shared webview to the active tab's current URL, hiding it
+    /// when the active tab has none (the start page). No-ops until React has
+    /// reported bounds; `set_bounds` converges once they arrive.
+    fn show_active(&self, app: &AppHandle) -> Result<()> {
+        match self.active_action()? {
+            SharedAction::Wait => Ok(()),
+            SharedAction::Hide => {
+                let _guard = self.inner.ops();
+                // re-derive inside the guard: a navigate that landed in between
+                // has already shown the webview for a tab that now holds a URL,
+                // and hiding on the stale decision would blank a live page
+                if self.active_action()? != SharedAction::Hide {
+                    return Ok(());
+                }
+                if let Some(webview) = self.live_webview(app) {
+                    let _ = webview.hide();
+                }
+                Ok(())
+            }
+            SharedAction::Load(url) => self.load(app, &url),
+        }
     }
 
     /// The single webview always serves the active tab.
@@ -703,9 +910,11 @@ impl Default for SingleWebviewHost {
 }
 
 impl BrowserTabHost for SingleWebviewHost {
-    fn open_tab(&self, app: &AppHandle, url: &str) -> Result<TabId> {
-        parse_web_url(url)?;
-        let id = self.inner.model(|m| m.open(url.to_string()))?;
+    fn open_tab(&self, app: &AppHandle, url: Option<&str>) -> Result<TabId> {
+        if let Some(url) = url {
+            parse_web_url(url)?;
+        }
+        let id = self.inner.model(|m| m.open(url.map(str::to_string)))?;
         self.show_active(app)?;
         crate::broadcast::browser_state_changed(app);
         Ok(id)
@@ -731,7 +940,10 @@ impl BrowserTabHost for SingleWebviewHost {
     }
 
     fn navigate(&self, app: &AppHandle, id: TabId, url: &str) -> Result<()> {
-        let parsed = parse_web_url(url)?;
+        parse_web_url(url)?;
+        if !self.inner.model(|m| m.contains(id))? {
+            return Err(Error::BrowserUnavailable(format!("no tab {id}")));
+        }
         if self.active_tab() != Some(id) {
             // navigating a background tab only moves its model state; the
             // shared webview keeps showing the active tab
@@ -739,34 +951,43 @@ impl BrowserTabHost for SingleWebviewHost {
             crate::broadcast::browser_state_changed(app);
             return Ok(());
         }
-        let webview = self.ensure_webview(app, url)?;
-        webview
-            .navigate(parsed)
-            .map_err(|e| Error::BrowserUnavailable(e.to_string()))?;
-        Ok(())
+        let was_blank = self.inner.model(|m| m.current_url(id).is_none())?;
+        if was_blank {
+            // seed the model first so the tab leaves the start page as soon as
+            // this returns
+            self.inner.model(|m| m.navigated(id, url.to_string()))?;
+        }
+        let loaded = self.load(app, url);
+        if was_blank {
+            // the model moved whether or not the webview came up; skipping the
+            // broadcast on failure leaves React painting the start page over a
+            // tab that now holds a URL
+            crate::broadcast::browser_state_changed(app);
+        }
+        loaded
     }
 
     fn go(&self, app: &AppHandle, id: TabId, delta: i32) -> Result<()> {
         let Some(url) = self.inner.model(|m| m.go(id, delta))? else {
             return Ok(());
         };
-        if self.active_tab() == Some(id) {
-            let parsed = parse_web_url(&url)?;
-            let webview = self.ensure_webview(app, &url)?;
-            webview
-                .navigate(parsed)
-                .map_err(|e| Error::BrowserUnavailable(e.to_string()))?;
-        }
+        let loaded = if self.active_tab() == Some(id) {
+            self.load(app, &url)
+        } else {
+            Ok(())
+        };
         crate::broadcast::browser_state_changed(app);
-        Ok(())
+        loaded
     }
 
+    /// Also the convergence point for a first mount — see the multi host.
     fn set_bounds(&self, app: &AppHandle, rect: BrowserRect) -> Result<()> {
-        if let Ok(mut bounds) = self.inner.bounds.lock() {
-            *bounds = Some(rect);
-        }
+        self.inner.store_rect(rect);
         if let Some(webview) = self.live_webview(app) {
             apply_bounds(&webview, rect);
+        }
+        if self.inner.visible.load(Ordering::Relaxed) {
+            self.show_active(app)?;
         }
         Ok(())
     }
@@ -775,8 +996,16 @@ impl BrowserTabHost for SingleWebviewHost {
         self.inner.visible.store(visible, Ordering::Relaxed);
         if visible {
             self.show_active(app)?;
-        } else if let Some(webview) = self.live_webview(app) {
-            let _ = webview.hide();
+        } else {
+            let _guard = self.inner.ops();
+            // the shared flag, not the parameter: a `set_visible(true)` that
+            // landed behind this one has already shown the webview, and hiding
+            // on our own stale argument would undo the newer decision
+            if !self.inner.visible.load(Ordering::Relaxed)
+                && let Some(webview) = self.live_webview(app)
+            {
+                let _ = webview.hide();
+            }
         }
         Ok(())
     }
@@ -787,9 +1016,13 @@ impl BrowserTabHost for SingleWebviewHost {
 
     fn on_window_destroyed(&self) {
         self.inner.visible.store(false, Ordering::Relaxed);
+        if let Ok(mut loaded) = self.loaded.lock() {
+            *loaded = None;
+        }
     }
 
     fn record_navigated(&self, app: &AppHandle, _label: &str, url: String) {
+        self.note_loaded(&url);
         if let Some(id) = self.active_tab() {
             let _ = self.inner.model(|m| m.navigated(id, url));
             crate::broadcast::browser_state_changed(app);
@@ -805,15 +1038,156 @@ impl BrowserTabHost for SingleWebviewHost {
         }
     }
 
+    /// The one shared webview serves whichever page it last loaded, which is
+    /// not necessarily the active tab's — resolving by active tab would hand
+    /// the license sidecar an empty URL as soon as the user opened a start-page
+    /// tab while a background download was still being negotiated.
     fn page_url_for_label(&self, _label: &str) -> String {
-        self.active_tab()
-            .and_then(|id| {
-                self.inner
-                    .model(|m| m.current_url(id).map(str::to_string))
-                    .ok()
-                    .flatten()
-            })
+        self.loaded
+            .lock()
+            .ok()
+            .and_then(|url| url.clone())
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod host_tests {
+    use super::*;
+
+    fn rect(width: f64, height: f64) -> BrowserRect {
+        BrowserRect {
+            x: 0.0,
+            y: 0.0,
+            width,
+            height,
+        }
+    }
+
+    #[test]
+    fn require_rect_refuses_unreported_bounds() {
+        let inner = HostInner::new();
+        assert!(inner.require_rect().is_err());
+    }
+
+    #[test]
+    fn require_rect_refuses_a_degenerate_rect() {
+        let inner = HostInner::new();
+        inner.store_rect(rect(0.0, 0.0));
+        assert!(inner.require_rect().is_err());
+        inner.store_rect(rect(900.0, 0.0));
+        assert!(inner.require_rect().is_err());
+        inner.store_rect(rect(900.0, 600.0));
+        assert!(inner.require_rect().is_ok());
+    }
+
+    #[test]
+    fn bounds_reported_flips_after_a_report() {
+        let inner = HostInner::new();
+        assert!(!inner.bounds_reported());
+        inner.store_rect(rect(900.0, 600.0));
+        assert!(inner.bounds_reported());
+    }
+
+    #[test]
+    fn bounds_reported_rejects_what_require_rect_rejects() {
+        let inner = HostInner::new();
+        // measured while an ancestor was collapsed: stored, but unusable, and
+        // the guards must not wave it through into require_rect's error path
+        inner.store_rect(rect(900.0, 0.0));
+        assert!(!inner.bounds_reported());
+        assert!(inner.require_rect().is_err());
+    }
+
+    #[test]
+    fn ops_admits_callers_after_a_poisoned_guard() {
+        let inner = std::sync::Arc::new(HostInner::new());
+        let poisoner = std::sync::Arc::clone(&inner);
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let _ = std::thread::spawn(move || {
+            let _guard = poisoner.ops();
+            panic!("poison the ops lock");
+        })
+        .join();
+        std::panic::set_hook(hook);
+        // refusing a poisoned ops lock would skip the show/hide it guards,
+        // stranding a webview on screen over another surface — the exact
+        // failure the lock exists to prevent
+        let _guard = inner.ops();
+    }
+
+    #[test]
+    fn snapshot_titles_a_blank_tab_new_tab() {
+        let inner = HostInner::new();
+        let id = inner.model(|m| m.open(None)).unwrap();
+        let snap = inner.snapshot();
+        assert_eq!(snap.active, Some(id));
+        assert_eq!(snap.tabs[0].url, None);
+        assert_eq!(snap.tabs[0].title, "New tab");
+    }
+
+    #[rstest::rstest]
+    #[case::hidden_surface_active_tab(1, Some(1), false, false)]
+    #[case::hidden_surface_background_tab(2, Some(1), false, false)]
+    #[case::visible_active_tab(1, Some(1), true, true)]
+    #[case::visible_background_tab(2, Some(1), true, false)]
+    #[case::visible_no_active_tab(1, None, true, false)]
+    fn should_show_only_the_active_tab_of_a_visible_surface(
+        #[case] tab: TabId,
+        #[case] active: Option<TabId>,
+        #[case] surface_visible: bool,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(should_show(tab, active, surface_visible), expected);
+    }
+
+    #[rstest::rstest]
+    #[case::unmeasured(false, Some("https://a.test/"), SharedAction::Wait)]
+    #[case::unmeasured_blank(false, None, SharedAction::Wait)]
+    #[case::blank_active_tab(true, None, SharedAction::Hide)]
+    #[case::url_active_tab(
+        true,
+        Some("https://a.test/"),
+        SharedAction::Load(String::from("https://a.test/"))
+    )]
+    fn shared_action_hides_the_webview_for_a_start_page_tab(
+        #[case] bounds_reported: bool,
+        #[case] active_url: Option<&str>,
+        #[case] expected: SharedAction,
+    ) {
+        let action = shared_action(bounds_reported, active_url.map(str::to_string));
+        assert_eq!(action, expected);
+    }
+
+    #[test]
+    fn single_host_attributes_a_download_to_the_loaded_page() {
+        let host = SingleWebviewHost::new();
+        host.inner
+            .model(|m| m.open(Some("https://elements.envato.com/dust".into())))
+            .unwrap();
+        host.note_loaded("https://elements.envato.com/dust");
+        // "+" while the Envato page is still negotiating a download: the page
+        // stays loaded behind the start page and its download is still its own
+        host.inner.model(|m| m.open(None)).unwrap();
+        assert_eq!(
+            host.page_url_for_label(SINGLE_LABEL),
+            "https://elements.envato.com/dust"
+        );
+    }
+
+    #[test]
+    fn multi_host_attributes_a_download_to_the_reporting_tab() {
+        let host = MultiWebviewHost::new();
+        let envato = host
+            .inner
+            .model(|m| m.open(Some("https://elements.envato.com/dust".into())))
+            .unwrap();
+        host.inner.model(|m| m.open(None)).unwrap();
+        assert_eq!(
+            host.page_url_for_label(&MultiWebviewHost::label_for(envato)),
+            "https://elements.envato.com/dust"
+        );
     }
 }
 

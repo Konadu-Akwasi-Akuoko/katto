@@ -30,6 +30,13 @@ function makeState(): BrowserState {
 				can_go_back: true,
 				can_go_forward: false,
 			},
+			{
+				id: 3,
+				title: "New tab",
+				url: null,
+				can_go_back: false,
+				can_go_forward: false,
+			},
 		],
 		active: 2,
 	};
@@ -73,7 +80,7 @@ describe("BrowserSurface", () => {
 	it("renders the tab strip and marks the active tab", async () => {
 		renderSurface(makeState());
 		const tabs = await screen.findAllByRole("tab");
-		expect(tabs).toHaveLength(2);
+		expect(tabs).toHaveLength(3);
 		expect(tabs[1]).toHaveAttribute("aria-selected", "true");
 		expect(tabs[0]).toHaveAttribute("aria-selected", "false");
 	});
@@ -92,11 +99,31 @@ describe("BrowserSurface", () => {
 		});
 	});
 
-	it("opens the Envato default tab when no tabs exist", async () => {
+	it("renders the start page when there are no tabs", async () => {
 		const { calls } = renderSurface({ tabs: [], active: null });
-		await waitFor(() => {
-			expect(calls).toHaveBeenCalledWith("browser_open_tab", { url: null });
-		});
+		expect(
+			await screen.findByRole("button", { name: "Envato Elements" }),
+		).toBeInTheDocument();
+		expect(calls).not.toHaveBeenCalledWith("browser_open_tab", { url: null });
+	});
+
+	it("renders the start page for a url-less active tab", async () => {
+		const state = makeState();
+		state.active = 3;
+		renderSurface(state);
+		expect(
+			await screen.findByRole("button", { name: "Freesound" }),
+		).toBeInTheDocument();
+	});
+
+	it("reports bounds before visibility on mount", async () => {
+		const { calls } = renderSurface(makeState());
+		await screen.findAllByRole("tab");
+		const cmds = calls.mock.calls.map(([cmd]) => cmd as string);
+		const bounds = cmds.indexOf("browser_set_bounds");
+		const visible = cmds.indexOf("browser_set_visible");
+		expect(bounds).toBeGreaterThanOrEqual(0);
+		expect(visible).toBeGreaterThan(bounds);
 	});
 
 	it("hides the webview while the dock overlay is open, restores on close", async () => {
@@ -109,7 +136,20 @@ describe("BrowserSurface", () => {
 		await waitFor(() => expect(lastVisibleCall(calls)).toBe(true));
 	});
 
-	it("closing the last tab lands on the empty state, not a respawn", async () => {
+	// the switcher popover hangs over the content rect, and the native webview
+	// paints above the DOM — this read is the whole reason `switcherOpen` lives
+	// in the ui store rather than inside the switcher
+	it("hides the webview while the surface switcher is open", async () => {
+		const { calls } = renderSurface(makeState());
+		await screen.findAllByRole("tab");
+		await waitFor(() => expect(lastVisibleCall(calls)).toBe(true));
+		act(() => useUiStore.setState({ switcherOpen: true }));
+		await waitFor(() => expect(lastVisibleCall(calls)).toBe(false));
+		act(() => useUiStore.setState({ switcherOpen: false }));
+		await waitFor(() => expect(lastVisibleCall(calls)).toBe(true));
+	});
+
+	it("closing the last tab lands on the start page, not a respawn", async () => {
 		const state = makeState();
 		state.tabs = [state.tabs[0] as (typeof state.tabs)[number]];
 		state.active = 1;
@@ -122,7 +162,13 @@ describe("BrowserSurface", () => {
 		state.active = null;
 		fireEvent.click(closeButtons[0] as HTMLElement);
 		expect(
-			await screen.findByText("The web, filed.", undefined, { timeout: 3000 }),
+			await screen.findByRole(
+				"button",
+				{ name: "Envato Elements" },
+				{
+					timeout: 3000,
+				},
+			),
 		).toBeInTheDocument();
 		expect(calls).not.toHaveBeenCalledWith("browser_open_tab", { url: null });
 	});

@@ -1,6 +1,7 @@
 //! Browser surface commands: thin shells over the tab host, the download
 //! registry, and the filing job. Address normalization lives in the frontend
-//! (`address.ts`); these pass URLs through.
+//! (`address.ts`); these pass URLs through. A tab opened with no URL is a
+//! start-page tab — there is no default site.
 
 use std::path::{Path, PathBuf};
 
@@ -12,8 +13,6 @@ use crate::browser::tabs::{BrowserState, TabId};
 use crate::error::{Error, Result};
 use crate::state::AppState;
 
-const DEFAULT_TAB_URL: &str = "https://elements.envato.com/";
-
 #[tauri::command]
 #[specta::specta]
 pub async fn browser_open_tab(
@@ -21,8 +20,7 @@ pub async fn browser_open_tab(
     state: State<'_, AppState>,
     url: Option<String>,
 ) -> Result<TabId> {
-    let url = url.unwrap_or_else(|| DEFAULT_TAB_URL.to_string());
-    state.browser.open_tab(&app, &url)
+    state.browser.open_tab(&app, url.as_deref())
 }
 
 #[tauri::command]

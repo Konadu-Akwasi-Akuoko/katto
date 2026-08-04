@@ -44,7 +44,7 @@ export function TabStrip({
 							aria-selected={active}
 							onClick={() => onSelect(tab.id)}
 							className="min-w-0 flex-1 truncate text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember focus-visible:ring-offset-2"
-							title={tab.url}
+							title={tab.url ?? undefined}
 						>
 							{tab.title}
 						</button>
