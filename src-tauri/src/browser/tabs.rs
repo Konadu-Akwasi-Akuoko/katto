@@ -239,6 +239,28 @@ pub fn allow_navigation(url: &url::Url) -> bool {
     matches!(url.scheme(), "http" | "https" | "about" | "blob" | "data")
 }
 
+/// What a new-window request (`target="_blank"`, `window.open`) becomes.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PopupDecision {
+    /// Open this URL as a new foreground tab.
+    OpenTab(String),
+    /// Drop the request; the string is the reason for the events row.
+    Refuse(String),
+}
+
+/// Stricter than [`allow_navigation`] on purpose. katto denies the request and
+/// opens its own tab instead, so the opener's `window.open()` handle is null and
+/// it can never write into that tab. `about:`/`blob:`/`data:` popups exist only
+/// to be written into by that handle — re-opening one as a tab would leave a
+/// dead blank tab, so refuse it and leave a trail.
+pub fn popup_decision(raw: &str) -> PopupDecision {
+    match url::Url::parse(raw) {
+        Ok(url) if matches!(url.scheme(), "http" | "https") => PopupDecision::OpenTab(raw.into()),
+        Ok(url) => PopupDecision::Refuse(format!("refused scheme: {}", url.scheme())),
+        Err(_) => PopupDecision::Refuse(format!("invalid url: {raw}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,6 +411,46 @@ mod tests {
             "elements.envato.com — dust particles overlay ABC123"
         );
         assert_eq!(tab_title("not a url"), "not a url");
+    }
+
+    #[test]
+    fn popup_decision_opens_web_urls() {
+        assert_eq!(
+            popup_decision("https://elements.envato.com/dust"),
+            PopupDecision::OpenTab("https://elements.envato.com/dust".to_string())
+        );
+        assert_eq!(
+            popup_decision("http://a.test/x"),
+            PopupDecision::OpenTab("http://a.test/x".to_string())
+        );
+    }
+
+    #[test]
+    fn popup_decision_refuses_scriptable_blank_popups() {
+        for raw in ["about:blank", "blob:https://a.test/x", "data:text/html,hi"] {
+            assert!(
+                matches!(popup_decision(raw), PopupDecision::Refuse(_)),
+                "{raw}"
+            );
+        }
+    }
+
+    #[test]
+    fn popup_decision_refuses_non_web_schemes() {
+        for raw in ["file:///etc/passwd", "katto://ideas", "javascript:alert(1)"] {
+            assert!(
+                matches!(popup_decision(raw), PopupDecision::Refuse(_)),
+                "{raw}"
+            );
+        }
+    }
+
+    #[test]
+    fn popup_decision_refuses_unparseable_input() {
+        assert!(matches!(
+            popup_decision("not a url"),
+            PopupDecision::Refuse(_)
+        ));
     }
 
     #[test]

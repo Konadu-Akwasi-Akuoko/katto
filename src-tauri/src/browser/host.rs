@@ -12,7 +12,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Manager, Webview, WebviewUrl, Wry};
 
 use crate::browser::downloads::{PendingDownload, safe_filename};
-use crate::browser::tabs::{BrowserState, TabId, TabModel, allow_navigation};
+use crate::browser::tabs::{
+    BrowserState, PopupDecision, TabId, TabModel, allow_navigation, popup_decision,
+};
 use crate::error::{Error, Result};
 
 /// Logical-pixel rect of the browser surface's content area, in the coordinate
@@ -182,8 +184,13 @@ struct HostInner {
     /// screen before the guard can hide it — a flash the lock cannot close.
     /// And only command threads may take this: every call made under it is a
     /// fire-and-forget runtime message today, so if a wry callback (page load,
-    /// title, download) ever starts taking `ops`, the main thread does too, and
-    /// any blocking runtime getter added under the guard would then deadlock.
+    /// title, download, new window) ever starts taking `ops`, the main thread
+    /// does too, and any blocking runtime getter added under the guard would
+    /// then deadlock. `on_new_window` is the near miss to keep in mind — it
+    /// reaches `open_tab`, which does take `ops` and does call the blocking
+    /// `add_child`, and stays safe only because it defers that onto the async
+    /// runtime rather than running it in the delegate. Any new callback that
+    /// touches a host method must defer the same way.
     ops: Mutex<()>,
 }
 
@@ -297,9 +304,14 @@ fn parse_web_url(url: &str) -> Result<url::Url> {
 const TAB_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
      AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15";
 
-fn build_webview(label: &str, url: url::Url) -> tauri::webview::WebviewBuilder<Wry> {
+fn build_webview(
+    app: &AppHandle,
+    label: &str,
+    url: url::Url,
+) -> tauri::webview::WebviewBuilder<Wry> {
     let event_label = label.to_string();
     let title_label = label.to_string();
+    let popup_app = app.clone();
     tauri::webview::WebviewBuilder::new(label, WebviewUrl::External(url))
         .user_agent(TAB_USER_AGENT)
         .on_navigation(allow_navigation)
@@ -318,6 +330,29 @@ fn build_webview(label: &str, url: url::Url) -> tauri::webview::WebviewBuilder<W
             state.browser.record_title(&app, &title_label, title);
         })
         .on_download(move |webview, event| on_download(&webview, event))
+        .on_new_window(move |url, _features| {
+            match popup_decision(url.as_str()) {
+                PopupDecision::OpenTab(target) => {
+                    // this runs on the main thread inside WKWebView's UI
+                    // delegate, and `add_child` posts to the event loop then
+                    // blocks on the reply — opening the tab here would deadlock
+                    // the app. Defer to the runtime and answer immediately.
+                    let app = popup_app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let state = app.state::<crate::state::AppState>();
+                        if let Err(e) = state.browser.open_tab(&app, Some(&target)) {
+                            record_popup_refused(&app, &target, &e.to_string());
+                        }
+                    });
+                }
+                PopupDecision::Refuse(reason) => {
+                    record_popup_refused(&popup_app, url.as_str(), &reason);
+                }
+            }
+            // katto has a tab strip, not a window manager: never let WebKit
+            // make a real macOS window.
+            tauri::webview::NewWindowResponse::Deny
+        })
 }
 
 /// Shared download interception. `Requested` rewrites the destination into
@@ -439,6 +474,24 @@ fn record_fallback(app: &AppHandle, filename: &str) {
     });
 }
 
+/// A new-window request katto would not turn into a tab. Silent in the UI — a
+/// blocked popup is nothing the owner acts on — but the events log still gets
+/// the trail, so "nothing fails silently" holds.
+fn record_popup_refused(app: &AppHandle, url: &str, reason: &str) {
+    let app = app.clone();
+    let payload = serde_json::json!({ "url": url, "reason": reason }).to_string();
+    tauri::async_runtime::spawn(async move {
+        let state = app.state::<crate::state::AppState>();
+        let _ = state
+            .db
+            .call(move |conn| {
+                crate::db::events::record(conn, "browser_popup_refused", None, Some(&payload))
+            })
+            .await;
+        crate::broadcast::events_appended(&app);
+    });
+}
+
 fn filename_guess(url: &url::Url) -> String {
     url.path_segments()
         .into_iter()
@@ -519,7 +572,7 @@ impl MultiWebviewHost {
         let rect = self.inner.require_rect()?;
         let webview = window
             .add_child(
-                build_webview(&label, url),
+                build_webview(app, &label, url),
                 tauri::LogicalPosition::new(rect.x, rect.y),
                 tauri::LogicalSize::new(rect.width, rect.height),
             )
@@ -829,7 +882,7 @@ impl SingleWebviewHost {
         let rect = self.inner.require_rect()?;
         let webview = window
             .add_child(
-                build_webview(SINGLE_LABEL, parsed),
+                build_webview(app, SINGLE_LABEL, parsed),
                 tauri::LogicalPosition::new(rect.x, rect.y),
                 tauri::LogicalSize::new(rect.width, rect.height),
             )
