@@ -61,7 +61,7 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 notify = "8.2"
 # Phase 7 browser downloads: Envato Elements delivers deflate zips; bzip2/zstd/
 # lzma stay off. An exotic method surfaces as an unzip error in the sidecar.
-zip = { version = "8.6", default-features = false, features = ["deflate"] }
+zip = { version = "9.0", default-features = false, features = ["deflate"] }
 # Already in the graph via tauri; direct dep because browser code names its types.
 url = "2"
 # Runtime dep (not just dev): unzip extracts into a same-volume temp dir before
